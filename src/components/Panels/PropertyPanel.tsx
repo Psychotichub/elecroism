@@ -1,7 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
-import type { ComponentProperties, WireColor } from '../../types';
+import type {
+  ComponentProperties,
+  WireColor,
+  ComponentType,
+  PhaseSystem,
+} from '../../types';
 import { getWireColor } from '../../utils/geometry';
 
 const WIRE_COLORS: { value: WireColor; label: string }[] = [
@@ -15,6 +20,20 @@ const WIRE_COLORS: { value: WireColor; label: string }[] = [
 
 const CROSS_SECTIONS = [1.5, 2.5, 4, 6, 10];
 
+function defaultPhaseSystemForType(t: ComponentType): PhaseSystem {
+  switch (t) {
+    case 'three_phase_source':
+    case 'three_phase_motor':
+    case 'three_phase_mcb':
+    case 'four_phase_mcb':
+    case 'three_phase_contactor':
+    case 'four_phase_contactor':
+      return 'three_phase';
+    default:
+      return 'single_phase';
+  }
+}
+
 const PropertyPanel: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
@@ -24,6 +43,8 @@ const PropertyPanel: React.FC = () => {
     selectedId,
     simulationResult,
     updateComponent,
+    setComponentPhaseSystem,
+    setMcbPoleLayout,
     updateWire,
     toggleComponent,
     resetTripped,
@@ -36,6 +57,21 @@ const PropertyPanel: React.FC = () => {
     (c) => c.id === selectedId
   );
   const selectedWire = circuit.wires.find((w) => w.id === selectedId);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const c = useCircuitStore
+      .getState()
+      .circuit.components.find((x) => x.id === selectedId);
+    if (!c || c.type !== 'mcb') return;
+    const p = c.properties.poles;
+    if (p !== undefined && p > 2) {
+      useCircuitStore.getState().updateComponent(c.id, {
+        properties: { ...c.properties, poles: 2 },
+      });
+    }
+  }, [selectedId]);
+
   const nodeResult = selectedComp
     ? simulationResult?.nodes[selectedComp.id]
     : null;
@@ -134,12 +170,15 @@ const PropertyPanel: React.FC = () => {
       {variant === '1p' && (
         <Label text="Poles">
           <div className="flex gap-1">
-            {[1, 2, 3].map((p) => (
+            {[1, 2].map((p) => (
               <button
                 key={p}
-                onClick={() => updateProp({ poles: p })}
+                type="button"
+                onClick={() =>
+                  setMcbPoleLayout(selectedComp!.id, p as 1 | 2)
+                }
                 className={`px-2 py-1 rounded text-xs ${
-                  selectedComp!.properties.poles === p
+                  Math.min(2, selectedComp!.properties.poles || 1) === p
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-600 text-gray-300'
                 }`}
@@ -148,6 +187,9 @@ const PropertyPanel: React.FC = () => {
               </button>
             ))}
           </div>
+          <p className={`text-[10px] ${tc.textMuted} mt-1`}>
+            1P: line only · 2P: line + neutral. Three-pole use the 3P MCB device.
+          </p>
         </Label>
       )}
       {(variant === '3p' || variant === '4p') && (
@@ -406,20 +448,6 @@ const PropertyPanel: React.FC = () => {
           min={0}
         />
       </Label>
-      <Label text="Phase">
-        <select
-          value={selectedComp!.properties.phaseSystem || 'single_phase'}
-          onChange={(e) =>
-            updateProp({
-              phaseSystem: e.target.value as 'single_phase' | 'three_phase',
-            })
-          }
-          className="input-field"
-        >
-          <option value="single_phase">Single Phase</option>
-          <option value="three_phase">Three Phase</option>
-        </select>
-      </Label>
     </>
   );
 
@@ -440,7 +468,6 @@ const PropertyPanel: React.FC = () => {
                 lineVoltage: v,
                 voltage: v,
                 phaseVoltage: v / Math.sqrt(3),
-                phaseSystem: 'three_phase',
               });
             }}
             className="input-field"
@@ -451,9 +478,6 @@ const PropertyPanel: React.FC = () => {
           <span className={`text-xs ${tc.text}`}>
             {(ll / Math.sqrt(3)).toFixed(1)} (balanced wye)
           </span>
-        </Label>
-        <Label text="System">
-          <span className={`text-xs ${tc.textMuted}`}>Three-phase (no control logic)</span>
         </Label>
       </>
     );
@@ -514,9 +538,7 @@ const PropertyPanel: React.FC = () => {
               <button
                 key={v}
                 type="button"
-                onClick={() =>
-                  updateProp({ lineVoltage: v, phaseSystem: 'three_phase' })
-                }
+                onClick={() => updateProp({ lineVoltage: v })}
                 className={`px-2 py-1 rounded text-xs ${
                   ll === v
                     ? 'bg-blue-600 text-white'
@@ -801,6 +823,32 @@ const PropertyPanel: React.FC = () => {
               </span>
             </Label>
 
+            <Label text="Phase system">
+              <select
+                value={
+                  (selectedComp.properties.phaseSystem ??
+                    defaultPhaseSystemForType(selectedComp.type)) as PhaseSystem
+                }
+                onChange={(e) =>
+                  setComponentPhaseSystem(
+                    selectedComp.id,
+                    e.target.value as PhaseSystem
+                  )
+                }
+                className="input-field"
+              >
+                <option value="single_phase">Single-phase</option>
+                <option value="three_phase">Three-phase</option>
+              </select>
+            </Label>
+            <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+              Supply / MCB / contactor: switching phase may replace the symbol
+              and remap L1/N (extra phase wires removed). Motors: with
+              three-phase set, line current uses P/(√3·U<sub>L-L</sub>·PF); a
+              1φ motor symbol uses ×1.25. A 3φ motor set to single-phase uses
+              P/(U<sub>L-N</sub>·PF)·1.25.
+            </p>
+
             {renderTypeSpecificProps()}
 
             <div className="flex gap-1 pt-2">
@@ -835,6 +883,18 @@ const PropertyPanel: React.FC = () => {
             Simulation
           </h3>
           <div className="grid grid-cols-2 gap-1 text-xs">
+            {selectedComp && (
+              <>
+                <span className={tc.textMuted}>Phase (set):</span>
+                <span>
+                  {(selectedComp.properties.phaseSystem ??
+                    defaultPhaseSystemForType(selectedComp.type)) ===
+                  'three_phase'
+                    ? 'Three-phase'
+                    : 'Single-phase'}
+                </span>
+              </>
+            )}
             <span className={tc.textMuted}>Voltage:</span>
             <span>{nodeResult.voltageV.toFixed(1)}V</span>
             <span className={tc.textMuted}>Current:</span>

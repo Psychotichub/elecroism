@@ -1,4 +1,10 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, {
+  useRef,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+} from 'react';
 import { Stage, Layer, Circle } from 'react-konva';
 import Konva from 'konva';
 import { useCircuitStore } from '../../store/circuitStore';
@@ -20,6 +26,7 @@ import JunctionSymbol from '../Components/JunctionSymbol';
 import ControlSymbol from '../Components/ControlSymbol';
 import type { CircuitComponent, ComponentType, WireColor } from '../../types';
 import { snapToGrid, rotatePoint } from '../../utils/geometry';
+import { inferWireColor } from '../../utils/inferWireColor';
 
 const CircuitCanvas: React.FC = () => {
   const stageRef = useRef<Konva.Stage>(null);
@@ -58,6 +65,34 @@ const CircuitCanvas: React.FC = () => {
     addComponent,
     setPushButtonPressed,
   } = useCircuitStore();
+
+  const wireDraftColor = useMemo((): WireColor => {
+    if (!wireInProgress?.fromComponentId || !wireInProgress.fromPointId) {
+      return 'brown';
+    }
+    const fromComp = circuit.components.find(
+      (c) => c.id === wireInProgress.fromComponentId
+    );
+    const fromPt = fromComp?.connectionPoints.find(
+      (p) => p.id === wireInProgress.fromPointId
+    );
+    const fromLabel = fromPt?.label ?? '';
+    if (hoveredConnectionPoint) {
+      const hComp = circuit.components.find(
+        (c) => c.id === hoveredConnectionPoint.componentId
+      );
+      const hPt = hComp?.connectionPoints.find(
+        (p) => p.id === hoveredConnectionPoint.pointId
+      );
+      if (hPt) {
+        return inferWireColor(fromLabel, hPt.label);
+      }
+    }
+    return (
+      (wireInProgress.color as WireColor | undefined) ||
+      inferWireColor(fromLabel, '')
+    );
+  }, [wireInProgress, circuit.components, hoveredConnectionPoint]);
 
   useEffect(() => {
     const updateSize = () => {
@@ -161,6 +196,7 @@ const CircuitCanvas: React.FC = () => {
         | 'NO'
         | 'NC'
         | '';
+      const mcbPolesRaw = e.dataTransfer.getData('mcbInitialPoles');
 
       addComponent(
         type,
@@ -170,7 +206,9 @@ const CircuitCanvas: React.FC = () => {
           ? {
               pushButtonVariant: pbVariant === 'NC' ? 'NC' : 'NO',
             }
-          : undefined
+          : type === 'mcb' && mcbPolesRaw === '2'
+            ? { mcbInitialPoles: 2 }
+            : undefined
       );
     },
     [addComponent, circuit.panX, circuit.panY, circuit.zoom, circuit.gridSize]
@@ -376,6 +414,7 @@ const CircuitCanvas: React.FC = () => {
           wireInProgress={!!wireInProgress}
           wirePoints={wirePoints}
           cursorPos={cursorPos}
+          draftWireColor={wireDraftColor}
         />
 
         <Layer>

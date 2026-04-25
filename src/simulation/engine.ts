@@ -56,19 +56,32 @@ export class CircuitEngine {
       if (!isOpen) {
         if (this.isLoadComponent(component)) {
           energized = this.hasPolarityCorrectSupply(component, potentials);
-          if (component.type === 'three_phase_motor') {
-            const vLL =
-              component.properties.lineVoltage ||
-              this.getDefaultThreePhaseLineVoltage(circuit);
-            const pf = this.getPowerFactor(component);
-            const p = component.properties.powerWatts || 3000;
-            currentA = energized
-              ? p / (Math.sqrt(3) * vLL * pf)
-              : 0;
-            voltageV = energized ? vLL : 0;
-            lineVoltageRmsV = vLL;
-            lineCurrentRmsA = currentA;
-            phaseVoltageRmsV = vLL / Math.sqrt(3);
+          if (this.loadUsesBalancedThreePhaseMath(component)) {
+            const serviceFactor = component.type === 'motor' ? 1.25 : 1;
+            const r = this.balancedThreePhaseLineCurrentA(
+              component,
+              circuit,
+              energized,
+              serviceFactor
+            );
+            currentA = r.currentA;
+            voltageV = r.voltageV;
+            lineVoltageRmsV = r.vLL;
+            lineCurrentRmsA = r.currentA;
+            phaseVoltageRmsV = r.vPh;
+          } else if (
+            component.type === 'three_phase_motor' &&
+            component.properties.phaseSystem === 'single_phase'
+          ) {
+            const r = this.singleSuppliedThreePhaseMotorCurrentA(
+              component,
+              defaultSingleVoltage,
+              energized
+            );
+            currentA = r.currentA;
+            voltageV = r.voltageV;
+            phaseVoltageRmsV = r.phaseVoltageRmsV;
+            lineVoltageRmsV = component.properties.lineVoltage;
           } else {
             currentA = energized
               ? this.calculateCurrent(component, defaultSingleVoltage)
@@ -105,10 +118,9 @@ export class CircuitEngine {
       }
 
       const pf = this.getPowerFactor(component);
-      const powerVA =
-        component.type === 'three_phase_motor'
-          ? (voltageV || 0) * currentA * Math.sqrt(3)
-          : voltageV * currentA;
+      const powerVA = this.loadUsesBalancedThreePhaseMath(component)
+        ? (voltageV || 0) * currentA * Math.sqrt(3)
+        : voltageV * currentA;
       const powerW = powerVA * pf;
 
       nodes[component.id] = {
@@ -195,17 +207,18 @@ export class CircuitEngine {
 
     let anyMotorThermal = false;
     for (const component of circuit.components) {
-      if (component.type !== 'three_phase_motor') continue;
+      if (!this.shouldCheckMotorThermalNameplate(component)) continue;
       if (!nodes[component.id]?.energized) continue;
-      const rated = component.properties.ratedLineAmps;
-      if (!rated || rated <= 0) continue;
+      const rated = component.properties.ratedLineAmps!;
       const iLine = nodes[component.id].currentA;
       if (iLine <= rated * 1.15) continue;
+      const tag =
+        component.type === 'motor' ? 'Motor' : 'Three-phase motor';
       faults.push({
         id: crypto.randomUUID(),
         type: 'overload',
         affectedComponentId: component.id,
-        message: `Three-phase motor "${component.label}" overload: ${iLine.toFixed(2)}A exceeds ${rated}A nameplate`,
+        message: `${tag} "${component.label}" overload: ${iLine.toFixed(2)}A exceeds ${rated}A nameplate`,
         severity: 'critical',
         timestamp: Date.now(),
       });
@@ -253,6 +266,86 @@ export class CircuitEngine {
     };
   }
 
+  /**
+   * Balanced three-phase active power P = √3 V_L-L I_L PF → I_L = P/(√3 V_L-L PF).
+   * Driven by `phaseSystem` on `motor`; `three_phase_motor` uses this unless
+   * explicitly set to single-phase (single-winding / single-supply model).
+   */
+  private loadUsesBalancedThreePhaseMath(c: CircuitComponent): boolean {
+    const ps = c.properties.phaseSystem;
+    if (c.type === 'three_phase_motor') return ps !== 'single_phase';
+    if (c.type === 'motor') return ps === 'three_phase';
+    return false;
+  }
+
+  /** Use L1/L2/L3 reachability for branch-current sums (true 3φ motor symbol). */
+  private loadUsesThreePhaseBranchReachability(c: CircuitComponent): boolean {
+    return (
+      c.type === 'three_phase_motor' &&
+      c.properties.phaseSystem !== 'single_phase'
+    );
+  }
+
+  private balancedThreePhaseLineCurrentA(
+    c: CircuitComponent,
+    circuit: Circuit,
+    energized: boolean,
+    serviceFactor: number
+  ): {
+    currentA: number;
+    voltageV: number;
+    vLL: number;
+    vPh: number;
+  } {
+    if (!energized)
+      return { currentA: 0, voltageV: 0, vLL: 0, vPh: 0 };
+    const vLL =
+      c.properties.lineVoltage ||
+      this.getDefaultThreePhaseLineVoltage(circuit);
+    const pf = this.getPowerFactor(c);
+    const p = c.properties.powerWatts || 0;
+    const iLine =
+      p > 0 ? (p / (Math.sqrt(3) * vLL * pf)) * serviceFactor : 0;
+    return {
+      currentA: iLine,
+      voltageV: vLL,
+      vLL,
+      vPh: vLL / Math.sqrt(3),
+    };
+  }
+
+  /** 3φ motor modeled on single-phase supply (one effective winding voltage). */
+  private singleSuppliedThreePhaseMotorCurrentA(
+    c: CircuitComponent,
+    defaultSingleVoltage: number,
+    energized: boolean
+  ): {
+    currentA: number;
+    voltageV: number;
+    phaseVoltageRmsV: number;
+  } {
+    if (!energized)
+      return { currentA: 0, voltageV: 0, phaseVoltageRmsV: 0 };
+    const vPh =
+      c.properties.phaseVoltage ??
+      (c.properties.lineVoltage != null
+        ? c.properties.lineVoltage / Math.sqrt(3)
+        : defaultSingleVoltage);
+    const pf = this.getPowerFactor(c);
+    const p = c.properties.powerWatts || 3000;
+    const i = p > 0 ? (p / (vPh * pf)) * 1.25 : 0;
+    return { currentA: i, voltageV: vPh, phaseVoltageRmsV: vPh };
+  }
+
+  private shouldCheckMotorThermalNameplate(c: CircuitComponent): boolean {
+    const r = c.properties.ratedLineAmps;
+    if (r === undefined || r <= 0) return false;
+    if (c.type === 'three_phase_motor')
+      return c.properties.phaseSystem !== 'single_phase';
+    if (c.type === 'motor') return c.properties.phaseSystem === 'three_phase';
+    return false;
+  }
+
   private buildDegradedResult(circuit: Circuit): SimulationResult {
     const nodes: Record<string, NodeResult> = {};
     for (const c of circuit.components) {
@@ -293,8 +386,9 @@ export class CircuitEngine {
   private pushButtonConducting(c: CircuitComponent): boolean {
     if (c.type !== 'push_button') return false;
     const nc = c.properties.buttonType === 'NC';
-    if (c.pressed !== undefined) {
-      const p = !!c.pressed;
+    const pb = c as CircuitComponent & { pressed?: boolean };
+    if (pb.pressed !== undefined) {
+      const p = !!pb.pressed;
       return nc ? !p : p;
     }
     // Legacy saves without `pressed`: NC rests closed; NO used latched state.
@@ -364,7 +458,7 @@ export class CircuitEngine {
       if (!this.isLoadComponent(comp)) continue;
       const loadI = nodes[comp.id]?.currentA || 0;
       if (loadI <= 0) continue;
-      if (comp.type === 'three_phase_motor') {
+      if (this.loadUsesThreePhaseBranchReachability(comp)) {
         const k1 = this.findTerminalByLabel(comp, 'L1');
         const k2 = this.findTerminalByLabel(comp, 'L2');
         const k3 = this.findTerminalByLabel(comp, 'L3');
@@ -625,13 +719,35 @@ export class CircuitEngine {
           }
           break;
         case 'switch':
-        case 'mcb':
         case 'rcd':
         case 'overload_relay':
           if (component.state === 'on' && !skipInternalBridge) {
             const inKey = this.findTerminalByLabel(component, 'IN');
             const outKey = this.findTerminalByLabel(component, 'OUT');
             if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+          }
+          break;
+        case 'mcb':
+          if (component.state === 'on' && !skipInternalBridge) {
+            const poles = component.properties.poles ?? 1;
+            const is2p =
+              poles >= 2 ||
+              !!this.findTerminalByLabel(component, 'IN_L');
+            if (is2p) {
+              const polePairs: [string, string][] = [
+                ['IN_L', 'OUT_L'],
+                ['IN_N', 'OUT_N'],
+              ];
+              for (const [a, b] of polePairs) {
+                const ak = this.findTerminalByLabel(component, a);
+                const bk = this.findTerminalByLabel(component, b);
+                if (ak && bk) this.addEdge(graph, ak, bk);
+              }
+            } else {
+              const inKey = this.findTerminalByLabel(component, 'IN');
+              const outKey = this.findTerminalByLabel(component, 'OUT');
+              if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+            }
           }
           break;
         case 'contactor':
@@ -1018,7 +1134,11 @@ export class CircuitEngine {
           ? '3P MCB'
           : component.type === 'four_phase_mcb'
             ? '4P MCB'
-            : 'MCB';
+            : component.type === 'mcb' &&
+                ((component.properties.poles ?? 1) >= 2 ||
+                  this.findTerminalByLabel(component, 'IN_L'))
+              ? '2P MCB'
+              : 'MCB';
       if (currentA > 1000) {
         return {
           id: crypto.randomUUID(),

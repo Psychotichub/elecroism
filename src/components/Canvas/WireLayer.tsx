@@ -11,6 +11,8 @@ interface Props {
   wireInProgress: boolean;
   wirePoints: number[];
   cursorPos: { x: number; y: number } | null;
+  /** In-progress polyline stroke (matches finished wire inference). */
+  draftWireColor: Wire['color'];
 }
 
 const WireLayer: React.FC<Props> = ({
@@ -20,6 +22,7 @@ const WireLayer: React.FC<Props> = ({
   wireInProgress,
   wirePoints,
   cursorPos,
+  draftWireColor,
 }) => {
   return (
     <Layer>
@@ -39,7 +42,7 @@ const WireLayer: React.FC<Props> = ({
               ? [...wirePoints, cursorPos.x, cursorPos.y]
               : wirePoints
           }
-          stroke={getWireColor('brown')}
+          stroke={getWireColor(draftWireColor)}
           strokeWidth={3}
           opacity={0.9}
           dash={[6, 3]}

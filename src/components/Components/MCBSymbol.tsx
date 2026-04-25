@@ -26,6 +26,12 @@ const MCBSymbol: React.FC<Props> = ({
   const isOn = component.state === 'on';
   const energized = nodeResult?.energized || false;
 
+  const is2P =
+    component.properties.poles === 2 ||
+    component.connectionPoints.some((cp) =>
+      cp.label.toUpperCase().includes('IN_L')
+    );
+
   useEffect(() => {
     if (!isTripped) return;
     const interval = setInterval(() => setFlashVisible((v) => !v), 500);
@@ -37,8 +43,13 @@ const MCBSymbol: React.FC<Props> = ({
       ? '#EF4444'
       : '#7F1D1D'
     : isOn
-    ? '#22C55E'
-    : '#9CA3AF';
+      ? '#22C55E'
+      : '#9CA3AF';
+
+  const bodyW = is2P ? 30 : 28;
+  const bodyH = 50;
+  const selPadX = is2P ? 4 : 4;
+  const selPadY = 4;
 
   return (
     <Group
@@ -58,10 +69,10 @@ const MCBSymbol: React.FC<Props> = ({
     >
       {selected && (
         <Rect
-          x={-18}
-          y={-29}
-          width={36}
-          height={58}
+          x={-bodyW / 2 - selPadX}
+          y={-bodyH / 2 - selPadY - 4}
+          width={bodyW + selPadX * 2}
+          height={bodyH + selPadY * 2 + 8}
           stroke="#3B82F6"
           strokeWidth={2}
           dash={[4, 4]}
@@ -70,29 +81,72 @@ const MCBSymbol: React.FC<Props> = ({
       )}
 
       <Rect
-        x={-14}
-        y={-25}
-        width={28}
-        height={50}
+        x={-bodyW / 2}
+        y={-bodyH / 2}
+        width={bodyW}
+        height={bodyH}
         fill={energized ? '#F3F4F6' : '#E5E7EB'}
         stroke="#374151"
         strokeWidth={1.5}
         cornerRadius={4}
       />
 
-      <Rect
-        x={-5}
-        y={-22}
-        width={10}
-        height={16}
-        fill={handleColor}
-        cornerRadius={2}
-      />
+      {is2P ? (
+        <>
+          <Rect
+            x={-11}
+            y={-22}
+            width={8}
+            height={16}
+            fill={handleColor}
+            cornerRadius={2}
+          />
+          <Rect
+            x={3}
+            y={-22}
+            width={8}
+            height={16}
+            fill={handleColor}
+            cornerRadius={2}
+          />
+          <Text
+            text="L"
+            x={-11}
+            y={-4}
+            width={8}
+            align="center"
+            fontSize={7}
+            fill="#6B7280"
+            listening={false}
+          />
+          <Text
+            text="N"
+            x={3}
+            y={-4}
+            width={8}
+            align="center"
+            fontSize={7}
+            fill="#6B7280"
+            listening={false}
+          />
+        </>
+      ) : (
+        <Rect
+          x={-5}
+          y={-22}
+          width={10}
+          height={16}
+          fill={handleColor}
+          cornerRadius={2}
+        />
+      )}
 
       <Text
         text="MCB"
-        x={-10}
-        y={-2}
+        x={-12}
+        y={is2P ? 6 : -2}
+        width={24}
+        align="center"
         fontSize={8}
         fill="#374151"
         fontStyle="bold"
@@ -101,8 +155,10 @@ const MCBSymbol: React.FC<Props> = ({
 
       <Text
         text={`${component.properties.ratingAmps || 16}A`}
-        x={-10}
-        y={8}
+        x={-12}
+        y={is2P ? 16 : 8}
+        width={24}
+        align="center"
         fontSize={8}
         fill="#6B7280"
         listening={false}
@@ -112,18 +168,35 @@ const MCBSymbol: React.FC<Props> = ({
         <Text
           text={component.properties.tripCurve}
           x={-10}
-          y={16}
+          y={is2P ? 26 : 16}
           fontSize={7}
           fill="#9CA3AF"
           listening={false}
         />
       )}
 
-      <Line points={[0, -25, 0, -30]} stroke="#374151" strokeWidth={2} />
-      <Line points={[0, 25, 0, 30]} stroke="#374151" strokeWidth={2} />
+      {is2P ? (
+        <>
+          <Line points={[-10, -25, -10, -30]} stroke="#374151" strokeWidth={2} />
+          <Line points={[-10, 25, -10, 30]} stroke="#374151" strokeWidth={2} />
+          <Line points={[10, -25, 10, -30]} stroke="#374151" strokeWidth={2} />
+          <Line points={[10, 25, 10, 30]} stroke="#374151" strokeWidth={2} />
+        </>
+      ) : (
+        <>
+          <Line points={[0, -25, 0, -30]} stroke="#374151" strokeWidth={2} />
+          <Line points={[0, 25, 0, 30]} stroke="#374151" strokeWidth={2} />
+        </>
+      )}
 
       {isTripped && (
-        <Circle x={0} y={-18} radius={3} fill="#EF4444" opacity={flashVisible ? 1 : 0.3} />
+        <Circle
+          x={is2P ? -6 : 0}
+          y={-18}
+          radius={3}
+          fill="#EF4444"
+          opacity={flashVisible ? 1 : 0.3}
+        />
       )}
 
       {showConnectionPoints &&

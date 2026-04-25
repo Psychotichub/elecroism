@@ -16,6 +16,8 @@ interface ComponentItem {
   label: string;
   icon: React.ReactNode;
   detail?: string;
+  /** Single-phase MCB palette: drop as 2-pole (L+N) layout. */
+  mcbInitialPoles?: 1 | 2;
 }
 
 interface ComponentGroup {
@@ -45,23 +47,25 @@ const GROUPS: ComponentGroup[] = [
     name: 'Protection',
     emoji: '🛡️',
     items: [
-      { type: 'mcb', label: 'MCB 6A', icon: <FiShield />, detail: '6A' },
-      { type: 'mcb', label: 'MCB 10A', icon: <FiShield />, detail: '10A' },
-      { type: 'mcb', label: 'MCB 16A', icon: <FiShield />, detail: '16A' },
-      { type: 'mcb', label: 'MCB 32A', icon: <FiShield />, detail: '32A' },
-      { type: 'rcd', label: 'RCD 30mA', icon: <FiShield />, detail: '30mA' },
+      {
+        type: 'mcb',
+        label: 'MCB',
+        icon: <FiShield />,
+        detail: '1P · set rating in properties',
+      },
+      { type: 'rcd', label: 'RCD', icon: <FiShield />, detail: 'Set sensitivity in properties' },
       { type: 'overload_relay', label: 'Overload Relay', icon: <FiShield /> },
       {
         type: 'three_phase_mcb',
-        label: '3P MCB 16A',
+        label: '3P MCB',
         icon: <FiShield />,
-        detail: 'L1–L3, IN top / OUT bottom',
+        detail: 'L1–L3 · rating in properties',
       },
       {
         type: 'four_phase_mcb',
-        label: '4P MCB 16A',
+        label: '4P MCB',
         icon: <FiShield />,
-        detail: 'L1–L3 + N',
+        detail: 'L1–L3 + N · rating in properties',
       },
     ],
   },
@@ -69,10 +73,18 @@ const GROUPS: ComponentGroup[] = [
     name: 'Controls',
     emoji: '🎛️',
     items: [
-      { type: 'switch', label: 'Switch (SPST)', icon: <FiToggleLeft /> },
-      { type: 'switch', label: 'Switch (DPST)', icon: <FiToggleLeft />, detail: 'DPST' },
-      { type: 'push_button', label: 'Push Button NO', icon: <FiCircle />, detail: 'NO' },
-      { type: 'push_button', label: 'Push Button NC', icon: <FiCircle />, detail: 'NC' },
+      {
+        type: 'switch',
+        label: 'Switch',
+        icon: <FiToggleLeft />,
+        detail: 'SPST / DPST in properties',
+      },
+      {
+        type: 'push_button',
+        label: 'Push button',
+        icon: <FiCircle />,
+        detail: 'NO / NC in properties',
+      },
       { type: 'contactor', label: 'Contactor', icon: <FiToggleLeft /> },
       { type: 'relay', label: 'Relay', icon: <FiToggleLeft /> },
       { type: 'timer', label: 'Timer', icon: <FiToggleLeft /> },
@@ -94,24 +106,28 @@ const GROUPS: ComponentGroup[] = [
     name: 'Outlets',
     emoji: '🔌',
     items: [
-      { type: 'socket', label: 'Socket 16A', icon: <FiCircle /> },
-      { type: 'socket', label: 'Socket 32A', icon: <FiCircle />, detail: 'Heavy Duty' },
+      {
+        type: 'socket',
+        label: 'Socket',
+        icon: <FiCircle />,
+        detail: 'Schuko · rating in properties',
+      },
     ],
   },
   {
     name: 'Loads',
     emoji: '💡',
     items: [
-      { type: 'lamp', label: 'Lamp 60W', icon: <FiSun /> },
-      { type: 'motor', label: 'Motor 1kW', icon: <FiActivity /> },
+      { type: 'lamp', label: 'Lamp', icon: <FiSun />, detail: 'Power in properties' },
+      { type: 'motor', label: 'Motor', icon: <FiActivity />, detail: '1φ · power in properties' },
       {
         type: 'three_phase_motor',
-        label: '3φ Motor 3kW',
+        label: '3φ Motor',
         icon: <FiActivity />,
-        detail: 'Wye 400V',
+        detail: 'Wye · power in properties',
       },
-      { type: 'heater', label: 'Heater 2kW', icon: <FiSun /> },
-      { type: 'generic_load', label: 'Generic Load', icon: <FiCircle /> },
+      { type: 'heater', label: 'Heater', icon: <FiSun />, detail: 'Power in properties' },
+      { type: 'generic_load', label: 'Generic load', icon: <FiCircle /> },
     ],
   },
   {
@@ -127,19 +143,17 @@ const Sidebar: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
 
-  const handleDragStart = (
-    e: React.DragEvent,
-    type: ComponentType,
-    extras?: { pushButtonVariant?: 'NO' | 'NC' }
-  ) => {
-    e.dataTransfer.setData('componentType', type);
-    if (type === 'push_button') {
-      e.dataTransfer.setData(
-        'pushButtonVariant',
-        extras?.pushButtonVariant === 'NC' ? 'NC' : 'NO'
-      );
+  const handleDragStart = (e: React.DragEvent, item: ComponentItem) => {
+    e.dataTransfer.setData('componentType', item.type);
+    if (item.type === 'push_button') {
+      e.dataTransfer.setData('pushButtonVariant', 'NO');
     } else {
       e.dataTransfer.setData('pushButtonVariant', '');
+    }
+    if (item.type === 'mcb' && item.mcbInitialPoles === 2) {
+      e.dataTransfer.setData('mcbInitialPoles', '2');
+    } else {
+      e.dataTransfer.setData('mcbInitialPoles', '');
     }
     e.dataTransfer.effectAllowed = 'copy';
   };
@@ -161,18 +175,7 @@ const Sidebar: React.FC = () => {
               <div
                 key={`${item.type}-${idx}`}
                 draggable
-                onDragStart={(e) =>
-                  handleDragStart(
-                    e,
-                    item.type,
-                    item.type === 'push_button'
-                      ? {
-                          pushButtonVariant:
-                            item.detail === 'NC' ? 'NC' : 'NO',
-                        }
-                      : undefined
-                  )
-                }
+                onDragStart={(e) => handleDragStart(e, item)}
                 className={`flex items-center gap-2 px-3 py-1.5 mx-1 rounded cursor-grab ${tc.itemHover} transition-colors active:cursor-grabbing`}
               >
                 <span className={`text-base ${tc.groupLabel}`}>

@@ -10,48 +10,15 @@ import type {
   ComponentType,
   ComponentProperties,
   FaultEvent,
+  PhaseSystem,
 } from '../types';
 import { engine } from '../simulation/engine';
 import { v4 as uuid } from 'uuid';
 import { rotatePoint } from '../utils/geometry';
-
-function inferWireColor(
-  fromLabel: string,
-  toLabel: string
-): Wire['color'] {
-  const tokenize = (label: string): string[] =>
-    label
-      .toUpperCase()
-      .split(/[^A-Z0-9]+/)
-      .filter(Boolean);
-
-  const tokens = [...tokenize(fromLabel), ...tokenize(toLabel)];
-  const hasToken = (token: string) => tokens.includes(token);
-
-  if (hasToken('PE') || hasToken('EARTH') || hasToken('GROUND')) {
-    return 'green_yellow';
-  }
-
-  if (hasToken('N') || hasToken('NEUTRAL')) {
-    return 'blue';
-  }
-
-  if (hasToken('L1') || hasToken('PHASE1')) {
-    return 'brown';
-  }
-  if (hasToken('L2') || hasToken('PHASE2')) {
-    return 'black';
-  }
-  if (hasToken('L3') || hasToken('PHASE3')) {
-    return 'grey';
-  }
-
-  if (hasToken('L') || hasToken('PHASE') || hasToken('LINE')) {
-    return 'brown';
-  }
-
-  return 'brown';
-}
+import {
+  inferWireColor,
+  inferWireColorFromSingleTerminal,
+} from '../utils/inferWireColor';
 
 function getConnectionPointAbsolutePosition(
   circuit: Circuit,
@@ -64,6 +31,29 @@ function getConnectionPointAbsolutePosition(
   if (!point) return null;
   const rotated = rotatePoint(point.x, point.y, comp.rotation);
   return { x: comp.x + rotated.x, y: comp.y + rotated.y };
+}
+
+type CreateConnectionPointsOptions = {
+  /** Single-phase MCB: 1 pole (IN/OUT) or 2 pole (IN_L/OUT_L + IN_N/OUT_N). */
+  mcbPoles?: 1 | 2;
+};
+
+function createMcbConnectionPoints(
+  componentId: string,
+  poles: 1 | 2
+): ConnectionPoint[] {
+  if (poles === 2) {
+    return [
+      { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L' },
+      { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L' },
+      { id: uuid(), componentId, x: 10, y: -25, label: 'IN_N' },
+      { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_N' },
+    ];
+  }
+  return [
+    { id: uuid(), componentId, x: 0, y: -25, label: 'IN' },
+    { id: uuid(), componentId, x: 0, y: 25, label: 'OUT' },
+  ];
 }
 
 function syncWireEndpoints(circuit: Circuit): Circuit {
@@ -100,13 +90,14 @@ function syncWireEndpoints(circuit: Circuit): Circuit {
 
 function createConnectionPoints(
   componentId: string,
-  type: ComponentType
+  type: ComponentType,
+  options?: CreateConnectionPointsOptions
 ): ConnectionPoint[] {
   switch (type) {
     case 'power_source':
       return [
-        { id: uuid(), componentId, x: 0, y: 30, label: 'L_OUT' },
-        { id: uuid(), componentId, x: -15, y: 30, label: 'N_OUT' },
+        { id: uuid(), componentId, x: -16, y: 32, label: 'L_OUT' },
+        { id: uuid(), componentId, x: 16, y: 32, label: 'N_OUT' },
       ];
     case 'three_phase_source':
       return [
@@ -149,6 +140,10 @@ function createConnectionPoints(
         { id: uuid(), componentId, x: 0, y: 20, label: 'OUT' },
       ];
     case 'mcb':
+      return createMcbConnectionPoints(
+        componentId,
+        options?.mcbPoles === 2 ? 2 : 1
+      );
     case 'rcd':
     case 'overload_relay':
       return [
@@ -225,6 +220,298 @@ function createConnectionPoints(
   }
 }
 
+function labelNorm(s: string): string {
+  return s.replace(/\s+/g, '').toUpperCase();
+}
+
+/** Effective 1P vs 2P layout for an MCB (from properties or legacy connection labels). */
+function mcbLayoutPoles(comp: CircuitComponent): 1 | 2 {
+  if (comp.type !== 'mcb') return 1;
+  if (comp.properties.poles === 2) return 2;
+  if (
+    comp.connectionPoints.some((cp) => labelNorm(cp.label) === 'IN_L')
+  ) {
+    return 2;
+  }
+  return 1;
+}
+
+function remapWireEndpointsForMorph(
+  wires: Wire[],
+  componentId: string,
+  oldToNewPointId: Map<string, string>
+): Wire[] {
+  return wires
+    .map((w) => {
+      let fromPointId = w.fromPointId;
+      let toPointId = w.toPointId;
+      if (w.fromComponentId === componentId) {
+        const n = oldToNewPointId.get(w.fromPointId);
+        if (n === undefined) return null;
+        fromPointId = n;
+      }
+      if (w.toComponentId === componentId) {
+        const n = oldToNewPointId.get(w.toPointId);
+        if (n === undefined) return null;
+        toPointId = n;
+      }
+      return { ...w, fromPointId, toPointId };
+    })
+    .filter((w): w is Wire => w !== null);
+}
+
+function buildPointRemapByLabels(
+  oldComp: CircuitComponent,
+  newCps: ConnectionPoint[],
+  pairs: [string, string][]
+): Map<string, string> {
+  const newByLabel = new Map(
+    newCps.map((cp) => [labelNorm(cp.label), cp.id] as const)
+  );
+  const m = new Map<string, string>();
+  for (const cp of oldComp.connectionPoints) {
+    const hit = pairs.find(
+      ([from]) => labelNorm(from) === labelNorm(cp.label)
+    );
+    if (!hit) continue;
+    const newId = newByLabel.get(labelNorm(hit[1]));
+    if (newId) m.set(cp.id, newId);
+  }
+  return m;
+}
+
+/** Target canvas `type` when user sets phase system (may equal current). */
+function resolveTypeFromPhasePreference(
+  type: ComponentType,
+  phase: PhaseSystem
+): ComponentType {
+  if (phase === 'three_phase') {
+    switch (type) {
+      case 'power_source':
+        return 'three_phase_source';
+      case 'motor':
+        return 'three_phase_motor';
+      case 'mcb':
+        return 'three_phase_mcb';
+      case 'contactor':
+      case 'relay':
+      case 'timer':
+        return 'three_phase_contactor';
+      default:
+        return type;
+    }
+  }
+  switch (type) {
+    case 'three_phase_source':
+      return 'power_source';
+    case 'three_phase_motor':
+      return 'motor';
+    case 'three_phase_mcb':
+    case 'four_phase_mcb':
+      return 'mcb';
+    case 'three_phase_contactor':
+    case 'four_phase_contactor':
+      return 'contactor';
+    default:
+      return type;
+  }
+}
+
+function morphLabelPairs(
+  fromComp: CircuitComponent,
+  toType: ComponentType
+): [string, string][] | null {
+  const fromType = fromComp.type;
+  if (fromType === 'power_source' && toType === 'three_phase_source') {
+    return [
+      ['L_OUT', 'L1_OUT'],
+      ['N_OUT', 'N_OUT'],
+    ];
+  }
+  if (fromType === 'three_phase_source' && toType === 'power_source') {
+    return [
+      ['L1_OUT', 'L_OUT'],
+      ['N_OUT', 'N_OUT'],
+    ];
+  }
+  if (fromType === 'motor' && toType === 'three_phase_motor') {
+    return [
+      ['T1', 'L1'],
+      ['T2', 'N'],
+    ];
+  }
+  if (fromType === 'three_phase_motor' && toType === 'motor') {
+    return [
+      ['L1', 'T1'],
+      ['N', 'T2'],
+    ];
+  }
+  if (fromType === 'mcb' && toType === 'three_phase_mcb') {
+    if (mcbLayoutPoles(fromComp) === 2) {
+      return [
+        ['IN_L', 'IN_L1'],
+        ['OUT_L', 'OUT_L1'],
+      ];
+    }
+    return [
+      ['IN', 'IN_L1'],
+      ['OUT', 'OUT_L1'],
+    ];
+  }
+  if (
+    (fromType === 'three_phase_mcb' || fromType === 'four_phase_mcb') &&
+    toType === 'mcb'
+  ) {
+    if (fromType === 'four_phase_mcb') {
+      return [
+        ['IN_L1', 'IN_L'],
+        ['OUT_L1', 'OUT_L'],
+        ['IN_N', 'IN_N'],
+        ['OUT_N', 'OUT_N'],
+      ];
+    }
+    return [
+      ['IN_L1', 'IN'],
+      ['OUT_L1', 'OUT'],
+    ];
+  }
+  if (
+    (fromType === 'contactor' ||
+      fromType === 'relay' ||
+      fromType === 'timer') &&
+    toType === 'three_phase_contactor'
+  ) {
+    return [
+      ['IN', 'IN_L1'],
+      ['OUT', 'OUT_L1'],
+      ['A1', 'A1'],
+      ['A2', 'A2'],
+    ];
+  }
+  if (
+    (fromType === 'three_phase_contactor' ||
+      fromType === 'four_phase_contactor') &&
+    toType === 'contactor'
+  ) {
+    return [
+      ['IN_L1', 'IN'],
+      ['OUT_L1', 'OUT'],
+      ['A1', 'A1'],
+      ['A2', 'A2'],
+    ];
+  }
+  return null;
+}
+
+function mergedPropsMorph(
+  comp: CircuitComponent,
+  toType: ComponentType
+): ComponentProperties {
+  const base = getDefaultProperties(toType);
+  const p = comp.properties;
+
+  if (comp.type === 'power_source' && toType === 'three_phase_source') {
+    const vLn = p.voltage || 230;
+    const vLL = vLn * Math.sqrt(3);
+    return {
+      ...base,
+      phaseSystem: 'three_phase',
+      lineVoltage: vLL,
+      voltage: vLL,
+      phaseVoltage: vLn,
+    };
+  }
+  if (comp.type === 'three_phase_source' && toType === 'power_source') {
+    const vLn =
+      p.phaseVoltage ?? (p.lineVoltage ?? 400) / Math.sqrt(3);
+    return {
+      ...base,
+      phaseSystem: 'single_phase',
+      voltage: Math.round(vLn * 10) / 10,
+    };
+  }
+  if (comp.type === 'motor' && toType === 'three_phase_motor') {
+    return {
+      ...base,
+      powerWatts: p.powerWatts ?? base.powerWatts,
+      loadType: p.loadType ?? base.loadType,
+      powerFactor: p.powerFactor ?? base.powerFactor,
+      ratedLineAmps: p.ratedLineAmps,
+      lineVoltage: p.lineVoltage ?? base.lineVoltage,
+      phaseSystem: 'three_phase',
+    };
+  }
+  if (comp.type === 'three_phase_motor' && toType === 'motor') {
+    const vLn =
+      p.phaseVoltage ??
+      (p.lineVoltage ? p.lineVoltage / Math.sqrt(3) : undefined);
+    return {
+      ...base,
+      powerWatts: p.powerWatts ?? base.powerWatts,
+      loadType: p.loadType ?? base.loadType,
+      powerFactor: p.powerFactor ?? base.powerFactor,
+      voltage: vLn !== undefined ? Math.round(vLn * 10) / 10 : 230,
+      phaseSystem: 'single_phase',
+    };
+  }
+  if (comp.type === 'mcb' && toType === 'three_phase_mcb') {
+    return {
+      ...base,
+      ratingAmps: p.ratingAmps ?? base.ratingAmps,
+      tripCurve: p.tripCurve ?? base.tripCurve,
+      breakingCapacity: p.breakingCapacity ?? base.breakingCapacity,
+      lineVoltage: p.lineVoltage ?? base.lineVoltage,
+      phaseSystem: 'three_phase',
+    };
+  }
+  if (comp.type === 'four_phase_mcb' && toType === 'mcb') {
+    return {
+      ...base,
+      ratingAmps: p.ratingAmps ?? base.ratingAmps,
+      tripCurve: p.tripCurve ?? base.tripCurve,
+      breakingCapacity: p.breakingCapacity ?? base.breakingCapacity,
+      poles: 2,
+      lineVoltage: p.lineVoltage ?? base.lineVoltage,
+      phaseSystem: 'single_phase',
+    };
+  }
+  if (comp.type === 'three_phase_mcb' && toType === 'mcb') {
+    return {
+      ...base,
+      ratingAmps: p.ratingAmps ?? base.ratingAmps,
+      tripCurve: p.tripCurve ?? base.tripCurve,
+      breakingCapacity: p.breakingCapacity ?? base.breakingCapacity,
+      poles: 1,
+      phaseSystem: 'single_phase',
+    };
+  }
+  if (
+    (comp.type === 'contactor' ||
+      comp.type === 'relay' ||
+      comp.type === 'timer') &&
+    toType === 'three_phase_contactor'
+  ) {
+    return {
+      ...base,
+      ratingAmps: p.ratingAmps ?? base.ratingAmps,
+      lineVoltage: p.lineVoltage ?? base.lineVoltage,
+      phaseSystem: 'three_phase',
+    };
+  }
+  if (
+    (comp.type === 'three_phase_contactor' ||
+      comp.type === 'four_phase_contactor') &&
+    toType === 'contactor'
+  ) {
+    return {
+      ...base,
+      ratingAmps: p.ratingAmps ?? base.ratingAmps,
+      phaseSystem: 'single_phase',
+    };
+  }
+  return { ...base, ...p, phaseSystem: p.phaseSystem ?? base.phaseSystem };
+}
+
 function getDefaultProperties(type: ComponentType): ComponentProperties {
   switch (type) {
     case 'power_source':
@@ -252,6 +539,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         breakingCapacity: 6000,
         poles: 3,
         lineVoltage: 400,
+        phaseSystem: 'three_phase',
       };
     case 'four_phase_mcb':
       return {
@@ -260,6 +548,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         breakingCapacity: 6000,
         poles: 4,
         lineVoltage: 400,
+        phaseSystem: 'three_phase',
       };
     case 'three_phase_contactor':
       return {
@@ -276,48 +565,71 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         phaseSystem: 'three_phase',
       };
     case 'switch':
-      return { switchType: 'SPST', poles: 1 };
+      return { switchType: 'SPST', poles: 1, phaseSystem: 'single_phase' };
     case 'push_button':
-      return { buttonType: 'NO' };
+      return { buttonType: 'NO', phaseSystem: 'single_phase' };
     case 'mcb':
       return {
         ratingAmps: 16,
         tripCurve: 'C',
         breakingCapacity: 6000,
         poles: 1,
+        phaseSystem: 'single_phase',
       };
     case 'rcd':
-      return { ratingAmps: 40, rcdSensitivity: 30, poles: 2 };
+      return {
+        ratingAmps: 40,
+        rcdSensitivity: 30,
+        poles: 2,
+        phaseSystem: 'single_phase',
+      };
     case 'overload_relay':
-      return { ratingAmps: 16 };
+      return { ratingAmps: 16, phaseSystem: 'single_phase' };
     case 'socket':
-      return { socketType: 'schuko', voltage: 230, ratingAmps: 16 };
+      return {
+        socketType: 'schuko',
+        voltage: 230,
+        ratingAmps: 16,
+        phaseSystem: 'single_phase',
+      };
     case 'lamp':
-      return { powerWatts: 60, loadType: 'resistive', powerFactor: 1 };
+      return {
+        powerWatts: 60,
+        loadType: 'resistive',
+        powerFactor: 1,
+        phaseSystem: 'single_phase',
+      };
     case 'motor':
       return {
         powerWatts: 1000,
         loadType: 'inductive',
         powerFactor: 0.8,
+        phaseSystem: 'single_phase',
       };
     case 'heater':
       return {
         powerWatts: 2000,
         loadType: 'resistive',
         powerFactor: 1,
+        phaseSystem: 'single_phase',
       };
     case 'generic_load':
       return {
         powerWatts: 100,
         loadType: 'resistive',
         powerFactor: 1,
+        phaseSystem: 'single_phase',
       };
     case 'busbar':
-      return { wireColor: 'brown' };
+      return { wireColor: 'brown', phaseSystem: 'single_phase' };
     case 'contactor':
     case 'relay':
     case 'timer':
-      return { ratingAmps: 25 };
+      return { ratingAmps: 25, phaseSystem: 'single_phase' };
+    case 'junction':
+      return { phaseSystem: 'single_phase' };
+    case 'wire':
+      return { phaseSystem: 'single_phase' };
     default:
       return {};
   }
@@ -402,13 +714,15 @@ interface CircuitStore {
     type: ComponentType,
     x: number,
     y: number,
-    options?: { pushButtonVariant?: 'NO' | 'NC' }
+    options?: { pushButtonVariant?: 'NO' | 'NC'; mcbInitialPoles?: 1 | 2 }
   ) => void;
+  setMcbPoleLayout: (id: string, poles: 1 | 2) => void;
   setPushButtonPressed: (id: string, pressed: boolean) => void;
   updateComponent: (
     id: string,
     updates: Partial<CircuitComponent>
   ) => void;
+  setComponentPhaseSystem: (id: string, phase: PhaseSystem) => void;
   removeComponent: (id: string) => void;
   toggleComponent: (id: string) => void;
   resetTripped: (id: string) => void;
@@ -452,8 +766,18 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   historyIndex: -1,
   faultDialogEvent: null,
 
-  addComponent: (type, x, y) => {
+  addComponent: (type, x, y, options) => {
     const id = uuid();
+    const baseProps = getDefaultProperties(type);
+    let properties =
+      type === 'push_button' && options?.pushButtonVariant === 'NC'
+        ? { ...baseProps, buttonType: 'NC' as const }
+        : baseProps;
+    if (type === 'mcb' && options?.mcbInitialPoles === 2) {
+      properties = { ...properties, poles: 2 };
+    }
+    const mcbPolesForCp =
+      type === 'mcb' ? (properties.poles === 2 ? 2 : 1) : undefined;
     const newComp: CircuitComponent = {
       id,
       type,
@@ -462,9 +786,12 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       y,
       rotation: 0,
       state: getInitialState(type),
+      ...(type === 'push_button' ? { pressed: false } : {}),
       selected: false,
-      connectionPoints: createConnectionPoints(id, type),
-      properties: getDefaultProperties(type),
+      connectionPoints: createConnectionPoints(id, type, {
+        mcbPoles: mcbPolesForCp,
+      }),
+      properties,
     };
     set((state) => ({
       circuit: {
@@ -474,6 +801,60 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       },
     }));
     get().pushHistory(`Added ${type}`);
+    get().runSimulation();
+  },
+
+  setMcbPoleLayout: (id, poles) => {
+    const circuit = get().circuit;
+    const comp = circuit.components.find((c) => c.id === id);
+    if (!comp || comp.type !== 'mcb') return;
+    const clamped: 1 | 2 = poles === 2 ? 2 : 1;
+    const prevLayout = mcbLayoutPoles(comp);
+    if (prevLayout === clamped) {
+      if (comp.properties.poles !== clamped) {
+        get().updateComponent(id, {
+          properties: { ...comp.properties, poles: clamped },
+        });
+        get().pushHistory(`MCB poles: ${clamped}P`);
+      }
+      return;
+    }
+    const newCps = createConnectionPoints(comp.id, 'mcb', {
+      mcbPoles: clamped,
+    });
+    const pairs: [string, string][] =
+      prevLayout === 1 && clamped === 2
+        ? [
+            ['IN', 'IN_L'],
+            ['OUT', 'OUT_L'],
+          ]
+        : [
+            ['IN_L', 'IN'],
+            ['OUT_L', 'OUT'],
+            ['IN_N', 'IN'],
+            ['OUT_N', 'OUT'],
+          ];
+    const remap = buildPointRemapByLabels(comp, newCps, pairs);
+    const newWires = remapWireEndpointsForMorph(
+      circuit.wires,
+      comp.id,
+      remap
+    );
+    const newComp: CircuitComponent = {
+      ...comp,
+      properties: { ...comp.properties, poles: clamped },
+      connectionPoints: newCps,
+    };
+    const updatedCircuit = syncWireEndpoints({
+      ...circuit,
+      components: circuit.components.map((c) =>
+        c.id === id ? newComp : c
+      ),
+      wires: newWires,
+      updatedAt: new Date().toISOString(),
+    });
+    set({ circuit: updatedCircuit });
+    get().pushHistory(`MCB ${clamped}P layout`);
     get().runSimulation();
   },
 
@@ -500,6 +881,67 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         updatedAt: new Date().toISOString(),
       },
     }));
+    get().runSimulation();
+  },
+
+  setComponentPhaseSystem: (id, phase) => {
+    const circuit = get().circuit;
+    const comp = circuit.components.find((c) => c.id === id);
+    if (!comp) return;
+    const nextType = resolveTypeFromPhasePreference(comp.type, phase);
+    if (nextType === comp.type) {
+      get().updateComponent(id, {
+        properties: { ...comp.properties, phaseSystem: phase },
+      });
+      get().pushHistory(`Phase system: ${phase}`);
+      return;
+    }
+    const newProps = mergedPropsMorph(comp, nextType);
+    const mcbPolesForCp =
+      nextType === 'mcb'
+        ? newProps.poles === 2
+          ? 2
+          : 1
+        : undefined;
+    const newCps = createConnectionPoints(comp.id, nextType, {
+      mcbPoles: mcbPolesForCp,
+    });
+    const pairs = morphLabelPairs(comp, nextType);
+    if (!pairs) {
+      get().updateComponent(id, {
+        properties: { ...comp.properties, phaseSystem: phase },
+      });
+      get().pushHistory(`Phase system: ${phase}`);
+      return;
+    }
+    const remap = buildPointRemapByLabels(comp, newCps, pairs);
+    const newComp: CircuitComponent = {
+      id: comp.id,
+      type: nextType,
+      label: comp.label,
+      x: comp.x,
+      y: comp.y,
+      rotation: comp.rotation,
+      state: comp.state,
+      selected: comp.selected,
+      connectionPoints: newCps,
+      properties: newProps,
+    };
+    const newWires = remapWireEndpointsForMorph(
+      circuit.wires,
+      comp.id,
+      remap
+    );
+    const updatedCircuit = syncWireEndpoints({
+      ...circuit,
+      components: circuit.components.map((c) =>
+        c.id === id ? newComp : c
+      ),
+      wires: newWires,
+      updatedAt: new Date().toISOString(),
+    });
+    set({ circuit: updatedCircuit });
+    get().pushHistory(`Phase ${phase}: ${comp.type} → ${nextType}`);
     get().runSimulation();
   },
 
@@ -549,23 +991,53 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const gridSize = get().circuit.gridSize;
     const snappedX = Math.round(x / gridSize) * gridSize;
     const snappedY = Math.round(y / gridSize) * gridSize;
-    set((state) => ({
+    const circuit = get().circuit;
+    const prev = circuit.components.find((c) => c.id === id);
+    if (!prev) return;
+    const dx = snappedX - prev.x;
+    const dy = snappedY - prev.y;
+
+    let wires = circuit.wires;
+    if (dx !== 0 || dy !== 0) {
+      wires = circuit.wires.map((w) => {
+        const touches =
+          w.fromComponentId === id || w.toComponentId === id;
+        if (!touches || w.points.length <= 4) return w;
+        const pts = [...w.points];
+        for (let i = 2; i < pts.length - 2; i += 2) {
+          pts[i] += dx;
+          pts[i + 1] += dy;
+        }
+        return { ...w, points: pts };
+      });
+    }
+
+    set({
       circuit: syncWireEndpoints({
-        ...state.circuit,
-        components: state.circuit.components.map((c) =>
+        ...circuit,
+        components: circuit.components.map((c) =>
           c.id === id ? { ...c, x: snappedX, y: snappedY } : c
         ),
+        wires,
       }),
-    }));
+    });
   },
 
   rotateComponent: (id) => {
     const comp = get().circuit.components.find((c) => c.id === id);
     if (!comp) return;
-    get().updateComponent(id, {
-      rotation: (comp.rotation + 90) % 360,
-    });
+    const nextRot = (comp.rotation + 90) % 360;
+    set((state) => ({
+      circuit: syncWireEndpoints({
+        ...state.circuit,
+        components: state.circuit.components.map((c) =>
+          c.id === id ? { ...c, rotation: nextRot } : c
+        ),
+        updatedAt: new Date().toISOString(),
+      }),
+    }));
     get().pushHistory(`Rotated ${comp.label}`);
+    get().runSimulation();
   },
 
   duplicateComponent: (id) => {
@@ -580,7 +1052,11 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
             pushButtonVariant:
               comp.properties.buttonType === 'NC' ? 'NC' : 'NO',
           }
-        : undefined
+        : comp.type === 'mcb'
+          ? {
+              mcbInitialPoles: mcbLayoutPoles(comp),
+            }
+          : undefined
     );
   },
 
@@ -636,7 +1112,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       wireInProgress: {
         fromComponentId: componentId,
         fromPointId: pointId,
-        color: inferWireColor(point.label, point.label),
+        color: inferWireColorFromSingleTerminal(point.label),
         crossSection: 2.5,
         energized: false,
         currentAmps: 0,
@@ -737,13 +1213,30 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   },
 
   loadCircuit: (circuit) => {
+    let wires = circuit.wires;
+    const withPush = circuit.components.map((c) =>
+      c.type === 'push_button' && !('pressed' in c)
+        ? { ...c, pressed: false }
+        : c
+    );
+    const components = withPush.map((c) => {
+      if (c.type !== 'mcb') return c;
+      if ((c.properties.poles ?? 1) !== 2) return c;
+      if (c.connectionPoints.some((p) => labelNorm(p.label) === 'IN_L')) {
+        return c;
+      }
+      const newCps = createConnectionPoints(c.id, 'mcb', { mcbPoles: 2 });
+      const remap = buildPointRemapByLabels(c, newCps, [
+        ['IN', 'IN_L'],
+        ['OUT', 'OUT_L'],
+      ]);
+      wires = remapWireEndpointsForMorph(wires, c.id, remap);
+      return { ...c, connectionPoints: newCps };
+    });
     const normalized: Circuit = {
       ...circuit,
-      components: circuit.components.map((c) =>
-        c.type === 'push_button' && c.pressed === undefined
-          ? { ...c, pressed: false }
-          : c
-      ),
+      components,
+      wires,
     };
     set({ circuit: normalized, selectedId: null });
     get().runSimulation();
