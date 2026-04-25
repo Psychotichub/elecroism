@@ -286,6 +286,21 @@ export class CircuitEngine {
     );
   }
 
+  /**
+   * NO: closed while pressed. NC: closed while not pressed.
+   * If `pressed` is absent (older saves), fall back to latched `state === 'on'`.
+   */
+  private pushButtonConducting(c: CircuitComponent): boolean {
+    if (c.type !== 'push_button') return false;
+    const nc = c.properties.buttonType === 'NC';
+    if (c.pressed !== undefined) {
+      const p = !!c.pressed;
+      return nc ? !p : p;
+    }
+    // Legacy saves without `pressed`: NC rests closed; NO used latched state.
+    return nc ? true : c.state === 'on';
+  }
+
   private isSeriesPathComponent(c: CircuitComponent): boolean {
     return (
       c.type === 'switch' ||
@@ -602,8 +617,14 @@ export class CircuitEngine {
         case 'junction':
           this.connectAll(graph, keys);
           break;
-        case 'switch':
         case 'push_button':
+          if (this.pushButtonConducting(component) && !skipInternalBridge) {
+            const inKey = this.findTerminalByLabel(component, 'IN');
+            const outKey = this.findTerminalByLabel(component, 'OUT');
+            if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+          }
+          break;
+        case 'switch':
         case 'mcb':
         case 'rcd':
         case 'overload_relay':

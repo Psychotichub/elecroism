@@ -88,6 +88,30 @@ const PropertyPanel: React.FC = () => {
     </>
   );
 
+  const renderPushButtonProps = () => (
+    <>
+      <Label text="Contact">
+        <select
+          value={selectedComp!.properties.buttonType || 'NO'}
+          onChange={(e) =>
+            updateProp({
+              buttonType: e.target.value as 'NO' | 'NC',
+            })
+          }
+          className="input-field"
+        >
+          <option value="NO">Normally open (NO)</option>
+          <option value="NC">Normally closed (NC)</option>
+        </select>
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Select tool: hold on the symbol — NO closes the contact while held; NC
+        opens it while held. The label shows contact state (Closed/Open), not
+        “power on”.
+      </p>
+    </>
+  );
+
   const renderMCBProps = (variant: '1p' | '3p' | '4p' = '1p') => (
     <>
       <Label text="Rating">
@@ -718,8 +742,9 @@ const PropertyPanel: React.FC = () => {
     if (!selectedComp) return null;
     switch (selectedComp.type) {
       case 'switch':
-      case 'push_button':
         return renderSwitchProps();
+      case 'push_button':
+        return renderPushButtonProps();
       case 'mcb':
         return renderMCBProps('1p');
       case 'three_phase_mcb':

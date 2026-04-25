@@ -56,6 +56,7 @@ const CircuitCanvas: React.FC = () => {
     setZoom,
     setPan,
     addComponent,
+    setPushButtonPressed,
   } = useCircuitStore();
 
   useEffect(() => {
@@ -156,10 +157,20 @@ const CircuitCanvas: React.FC = () => {
       const x = (e.clientX - rect.left - circuit.panX) / circuit.zoom;
       const y = (e.clientY - rect.top - circuit.panY) / circuit.zoom;
 
+      const pbVariant = e.dataTransfer.getData('pushButtonVariant') as
+        | 'NO'
+        | 'NC'
+        | '';
+
       addComponent(
         type,
         snapToGrid(x, circuit.gridSize),
-        snapToGrid(y, circuit.gridSize)
+        snapToGrid(y, circuit.gridSize),
+        type === 'push_button'
+          ? {
+              pushButtonVariant: pbVariant === 'NC' ? 'NC' : 'NO',
+            }
+          : undefined
       );
     },
     [addComponent, circuit.panX, circuit.panY, circuit.zoom, circuit.gridSize]
@@ -204,12 +215,23 @@ const CircuitCanvas: React.FC = () => {
 
     switch (comp.type) {
       case 'switch':
+        return (
+          <SwitchSymbol
+            key={comp.id}
+            {...commonProps}
+            tool={tool}
+            variant="switch"
+            onToggle={() => toggleComponent(comp.id)}
+          />
+        );
       case 'push_button':
         return (
           <SwitchSymbol
             key={comp.id}
             {...commonProps}
-            onToggle={() => toggleComponent(comp.id)}
+            tool={tool}
+            variant="push_button"
+            onPushChange={(down) => setPushButtonPressed(comp.id, down)}
           />
         );
       case 'mcb':

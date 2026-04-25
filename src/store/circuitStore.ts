@@ -368,6 +368,7 @@ function getInitialState(type: ComponentType): CircuitComponent['state'] {
     'four_phase_contactor',
   ]);
 
+  if (type === 'push_button') return 'off';
   return startsOff.has(type) ? 'off' : 'on';
 }
 
@@ -397,7 +398,13 @@ interface CircuitStore {
   historyIndex: number;
   faultDialogEvent: FaultEvent | null;
 
-  addComponent: (type: ComponentType, x: number, y: number) => void;
+  addComponent: (
+    type: ComponentType,
+    x: number,
+    y: number,
+    options?: { pushButtonVariant?: 'NO' | 'NC' }
+  ) => void;
+  setPushButtonPressed: (id: string, pressed: boolean) => void;
   updateComponent: (
     id: string,
     updates: Partial<CircuitComponent>
@@ -470,6 +477,19 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     get().runSimulation();
   },
 
+  setPushButtonPressed: (id, pressed) => {
+    set((state) => ({
+      circuit: {
+        ...state.circuit,
+        components: state.circuit.components.map((c) =>
+          c.id === id && c.type === 'push_button' ? { ...c, pressed } : c
+        ),
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+    get().runSimulation();
+  },
+
   updateComponent: (id, updates) => {
     set((state) => ({
       circuit: {
@@ -490,7 +510,6 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       'switch',
       'mcb',
       'rcd',
-      'push_button',
       'three_phase_mcb',
       'four_phase_mcb',
     ];
@@ -552,7 +571,17 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   duplicateComponent: (id) => {
     const comp = get().circuit.components.find((c) => c.id === id);
     if (!comp) return;
-    get().addComponent(comp.type, comp.x + 60, comp.y + 60);
+    get().addComponent(
+      comp.type,
+      comp.x + 60,
+      comp.y + 60,
+      comp.type === 'push_button'
+        ? {
+            pushButtonVariant:
+              comp.properties.buttonType === 'NC' ? 'NC' : 'NO',
+          }
+        : undefined
+    );
   },
 
   addWire: (wire) => {
@@ -708,7 +737,15 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   },
 
   loadCircuit: (circuit) => {
-    set({ circuit, selectedId: null });
+    const normalized: Circuit = {
+      ...circuit,
+      components: circuit.components.map((c) =>
+        c.type === 'push_button' && c.pressed === undefined
+          ? { ...c, pressed: false }
+          : c
+      ),
+    };
+    set({ circuit: normalized, selectedId: null });
     get().runSimulation();
   },
 

@@ -129,9 +129,18 @@ const Sidebar: React.FC = () => {
 
   const handleDragStart = (
     e: React.DragEvent,
-    type: ComponentType
+    type: ComponentType,
+    extras?: { pushButtonVariant?: 'NO' | 'NC' }
   ) => {
     e.dataTransfer.setData('componentType', type);
+    if (type === 'push_button') {
+      e.dataTransfer.setData(
+        'pushButtonVariant',
+        extras?.pushButtonVariant === 'NC' ? 'NC' : 'NO'
+      );
+    } else {
+      e.dataTransfer.setData('pushButtonVariant', '');
+    }
     e.dataTransfer.effectAllowed = 'copy';
   };
 
@@ -152,7 +161,18 @@ const Sidebar: React.FC = () => {
               <div
                 key={`${item.type}-${idx}`}
                 draggable
-                onDragStart={(e) => handleDragStart(e, item.type)}
+                onDragStart={(e) =>
+                  handleDragStart(
+                    e,
+                    item.type,
+                    item.type === 'push_button'
+                      ? {
+                          pushButtonVariant:
+                            item.detail === 'NC' ? 'NC' : 'NO',
+                        }
+                      : undefined
+                  )
+                }
                 className={`flex items-center gap-2 px-3 py-1.5 mx-1 rounded cursor-grab ${tc.itemHover} transition-colors active:cursor-grabbing`}
               >
                 <span className={`text-base ${tc.groupLabel}`}>

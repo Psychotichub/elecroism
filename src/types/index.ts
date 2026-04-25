@@ -45,6 +45,8 @@ export interface CircuitComponent {
   y: number;
   rotation: number;
   state: ComponentState;
+  /** Momentary contact: only for `push_button`; true while pointer is down */
+  pressed?: boolean;
   selected: boolean;
   connectionPoints: ConnectionPoint[];
   properties: ComponentProperties;

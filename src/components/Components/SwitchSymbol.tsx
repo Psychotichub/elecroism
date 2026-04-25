@@ -1,11 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Group, Circle, Line, Text } from 'react-konva';
-import type { CircuitComponent, NodeResult } from '../../types';
+import type { CircuitComponent, NodeResult, ToolMode } from '../../types';
 
 interface Props {
   component: CircuitComponent;
   nodeResult?: NodeResult;
-  onToggle: () => void;
+  /** Latching switch: double-click toggles */
+  onToggle?: () => void;
+  /** Select tool only: pointer down/up momentary */
+  onPushChange?: (pressed: boolean) => void;
+  variant?: 'switch' | 'push_button';
+  tool?: ToolMode;
   onSelect: () => void;
   onDragEnd: (x: number, y: number) => void;
   showConnectionPoints: boolean;
@@ -16,14 +21,39 @@ const SwitchSymbol: React.FC<Props> = ({
   component,
   nodeResult,
   onToggle,
+  onPushChange,
+  variant = 'switch',
+  tool = 'select',
   onSelect,
   onDragEnd,
   showConnectionPoints,
   selected,
 }) => {
-  const isOn = component.state === 'on';
+  const isPush = variant === 'push_button';
+  const isNc = component.properties.buttonType === 'NC';
+  const contactsClosed = !isPush
+    ? component.state === 'on'
+    : component.pressed !== undefined
+      ? isNc
+        ? !component.pressed
+        : !!component.pressed
+      : isNc
+        ? true
+        : component.state === 'on';
+
   const energized = nodeResult?.energized || false;
   const color = energized ? '#F59E0B' : '#374151';
+
+  useEffect(() => {
+    if (!isPush || !component.pressed) return;
+    const release = () => onPushChange?.(false);
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+  }, [isPush, component.pressed, onPushChange]);
 
   return (
     <Group
@@ -31,13 +61,21 @@ const SwitchSymbol: React.FC<Props> = ({
       y={component.y}
       rotation={component.rotation}
       draggable
+      onPointerDown={(e) => {
+        if (!isPush || tool !== 'select') return;
+        e.cancelBubble = true;
+        onPushChange?.(true);
+      }}
+      onDragStart={() => {
+        if (isPush) onPushChange?.(false);
+      }}
       onClick={(e) => {
         e.cancelBubble = true;
         onSelect();
       }}
       onDblClick={(e) => {
         e.cancelBubble = true;
-        onToggle();
+        if (!isPush) onToggle?.();
       }}
       onDragEnd={(e) => {
         onDragEnd(e.target.x(), e.target.y());
@@ -56,7 +94,7 @@ const SwitchSymbol: React.FC<Props> = ({
       <Circle x={0} y={-16} radius={4} fill={color} stroke={color} strokeWidth={1.5} />
       <Circle x={0} y={16} radius={4} fill={color} stroke={color} strokeWidth={1.5} />
 
-      {isOn ? (
+      {contactsClosed ? (
         <Line points={[0, -12, 0, 12]} stroke={color} strokeWidth={2.5} />
       ) : (
         <Line points={[0, -12, 12, 8]} stroke={color} strokeWidth={2.5} />
@@ -86,13 +124,32 @@ const SwitchSymbol: React.FC<Props> = ({
       />
 
       <Text
-        text={isOn ? 'ON' : 'OFF'}
+        text={
+          isPush
+            ? contactsClosed
+              ? 'Closed'
+              : 'Open'
+            : contactsClosed
+              ? 'ON'
+              : 'OFF'
+        }
         x={14}
         y={6}
         fontSize={8}
-        fill={isOn ? '#22C55E' : '#9CA3AF'}
+        fill={contactsClosed ? '#22C55E' : '#9CA3AF'}
         listening={false}
       />
+
+      {isPush && (
+        <Text
+          text={isNc ? 'NC' : 'NO'}
+          x={14}
+          y={16}
+          fontSize={7}
+          fill="#9CA3AF"
+          listening={false}
+        />
+      )}
 
       {showConnectionPoints &&
         component.connectionPoints.map((cp) => (
