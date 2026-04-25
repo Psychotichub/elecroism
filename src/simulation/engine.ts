@@ -11,6 +11,10 @@ interface PotentialSets {
   live: Set<string>;
   neutral: Set<string>;
   pe: Set<string>;
+  /** Terminals fed from three-phase source L1 (TN-C-S / 400 V wye) */
+  liveL1: Set<string>;
+  liveL2: Set<string>;
+  liveL3: Set<string>;
 }
 
 export class CircuitEngine {
@@ -19,16 +23,24 @@ export class CircuitEngine {
       return this.buildDegradedResult(circuit);
     }
 
-    const terminalGraph = this.buildTerminalGraph(circuit);
+    const contactorPickup = this.computeContactorPickupFixpoint(circuit);
+    const terminalGraph = this.buildTerminalGraph(
+      circuit,
+      null,
+      contactorPickup
+    );
     const potentials = this.propagatePotentials(circuit, terminalGraph);
     const nodes: Record<string, NodeResult> = {};
     const faults: FaultEvent[] = [];
-    const sourceVoltage =
+    const defaultSingleVoltage =
       circuit.components.find((c) => c.type === 'power_source')?.properties
         .voltage || 230;
 
     for (const component of circuit.components) {
-      const isOpen = component.state === 'off' || component.state === 'tripped';
+      const isOpen =
+        component.state === 'off' ||
+        component.state === 'tripped' ||
+        component.state === 'fault';
       const hasPotential = this.componentTouchesAnyPotential(
         component,
         potentials
@@ -36,28 +48,80 @@ export class CircuitEngine {
 
       let energized = false;
       let currentA = 0;
+      let voltageV = 0;
+      let lineVoltageRmsV: number | undefined;
+      let lineCurrentRmsA: number | undefined;
+      let phaseVoltageRmsV: number | undefined;
 
       if (!isOpen) {
         if (this.isLoadComponent(component)) {
           energized = this.hasPolarityCorrectSupply(component, potentials);
-          currentA = energized ? this.calculateCurrent(component, sourceVoltage) : 0;
+          if (component.type === 'three_phase_motor') {
+            const vLL =
+              component.properties.lineVoltage ||
+              this.getDefaultThreePhaseLineVoltage(circuit);
+            const pf = this.getPowerFactor(component);
+            const p = component.properties.powerWatts || 3000;
+            currentA = energized
+              ? p / (Math.sqrt(3) * vLL * pf)
+              : 0;
+            voltageV = energized ? vLL : 0;
+            lineVoltageRmsV = vLL;
+            lineCurrentRmsA = currentA;
+            phaseVoltageRmsV = vLL / Math.sqrt(3);
+          } else {
+            currentA = energized
+              ? this.calculateCurrent(component, defaultSingleVoltage)
+              : 0;
+            voltageV = energized ? defaultSingleVoltage : 0;
+          }
         } else {
-          energized = hasPotential || component.type === 'power_source';
+          energized =
+            hasPotential ||
+            component.type === 'power_source' ||
+            component.type === 'three_phase_source';
+          if (component.type === 'three_phase_source') {
+            const vLL =
+              component.properties.lineVoltage ||
+              component.properties.voltage ||
+              400;
+            voltageV = energized ? vLL : 0;
+            lineVoltageRmsV = vLL;
+            phaseVoltageRmsV = vLL / Math.sqrt(3);
+          } else if (
+            component.type === 'three_phase_contactor' ||
+            component.type === 'four_phase_contactor'
+          ) {
+            const vLL =
+              component.properties.lineVoltage ||
+              this.getDefaultThreePhaseLineVoltage(circuit);
+            voltageV = energized ? vLL : 0;
+            lineVoltageRmsV = vLL;
+            phaseVoltageRmsV = vLL / Math.sqrt(3);
+          } else {
+            voltageV = energized ? defaultSingleVoltage : 0;
+          }
         }
       }
 
       const pf = this.getPowerFactor(component);
-      const powerVA = sourceVoltage * currentA;
+      const powerVA =
+        component.type === 'three_phase_motor'
+          ? (voltageV || 0) * currentA * Math.sqrt(3)
+          : voltageV * currentA;
       const powerW = powerVA * pf;
 
       nodes[component.id] = {
         nodeId: component.id,
-        voltageV: energized ? sourceVoltage : 0,
+        voltageV,
         currentA,
         powerW,
         powerVA,
         powerFactor: pf,
         energized,
+        lineVoltageRmsV,
+        lineCurrentRmsA,
+        phaseVoltageRmsV,
       };
     }
 
@@ -74,14 +138,16 @@ export class CircuitEngine {
       let branchCurrent = this.getBranchCurrentThroughDevice(
         component,
         circuit,
-        nodes
+        nodes,
+        contactorPickup
       );
       if (
         lnFaultAnchors.size > 0 &&
         this.seriesDeviceOnLivePathToLnFault(
           component,
           circuit,
-          lnFaultAnchors
+          lnFaultAnchors,
+          contactorPickup
         )
       ) {
         branchCurrent = Math.max(branchCurrent, prospectiveShortCurrentA);
@@ -89,11 +155,19 @@ export class CircuitEngine {
       seriesPathCurrents.set(component.id, branchCurrent);
       if (nodes[component.id]) {
         const pf = this.getPowerFactor(component);
+        const vRef =
+          component.type === 'three_phase_mcb' ||
+          component.type === 'four_phase_mcb' ||
+          component.type === 'three_phase_contactor' ||
+          component.type === 'four_phase_contactor'
+            ? component.properties.lineVoltage ||
+              this.getDefaultThreePhaseLineVoltage(circuit)
+            : defaultSingleVoltage;
         nodes[component.id] = {
           ...nodes[component.id],
           currentA: branchCurrent,
-          powerVA: sourceVoltage * branchCurrent,
-          powerW: sourceVoltage * branchCurrent * pf,
+          powerVA: vRef * branchCurrent,
+          powerW: vRef * branchCurrent * pf,
         };
       }
     }
@@ -119,7 +193,36 @@ export class CircuitEngine {
       };
     }
 
-    if (anySeriesDeviceTripped) {
+    let anyMotorThermal = false;
+    for (const component of circuit.components) {
+      if (component.type !== 'three_phase_motor') continue;
+      if (!nodes[component.id]?.energized) continue;
+      const rated = component.properties.ratedLineAmps;
+      if (!rated || rated <= 0) continue;
+      const iLine = nodes[component.id].currentA;
+      if (iLine <= rated * 1.15) continue;
+      faults.push({
+        id: crypto.randomUUID(),
+        type: 'overload',
+        affectedComponentId: component.id,
+        message: `Three-phase motor "${component.label}" overload: ${iLine.toFixed(2)}A exceeds ${rated}A nameplate`,
+        severity: 'critical',
+        timestamp: Date.now(),
+      });
+      component.state = 'fault';
+      anyMotorThermal = true;
+      nodes[component.id] = {
+        nodeId: component.id,
+        voltageV: 0,
+        currentA: 0,
+        powerW: 0,
+        powerVA: 0,
+        powerFactor: this.getPowerFactor(component),
+        energized: false,
+      };
+    }
+
+    if (anySeriesDeviceTripped || anyMotorThermal) {
       const next = this.simulate(circuit, depth + 1);
       return {
         ...next,
@@ -177,7 +280,9 @@ export class CircuitEngine {
     return (
       c.type === 'mcb' ||
       c.type === 'rcd' ||
-      c.type === 'overload_relay'
+      c.type === 'overload_relay' ||
+      c.type === 'three_phase_mcb' ||
+      c.type === 'four_phase_mcb'
     );
   }
 
@@ -190,7 +295,11 @@ export class CircuitEngine {
       c.type === 'overload_relay' ||
       c.type === 'contactor' ||
       c.type === 'relay' ||
-      c.type === 'timer'
+      c.type === 'timer' ||
+      c.type === 'three_phase_mcb' ||
+      c.type === 'four_phase_mcb' ||
+      c.type === 'three_phase_contactor' ||
+      c.type === 'four_phase_contactor'
     );
   }
 
@@ -224,24 +333,77 @@ export class CircuitEngine {
   private getBranchCurrentThroughDevice(
     seriesDevice: CircuitComponent,
     circuit: Circuit,
-    nodes: Record<string, NodeResult>
+    nodes: Record<string, NodeResult>,
+    contactorPickup: Set<string>
   ): number {
-    const graph = this.buildTerminalGraph(circuit, seriesDevice.id);
-    const liveStarts = this.getLiveStartKeys(circuit);
-    const liveWithoutBridge = this.bfsFrom(graph, liveStarts);
+    const graph = this.buildTerminalGraph(
+      circuit,
+      seriesDevice.id,
+      contactorPickup
+    );
+    const lineStarts = this.getAllLineConductorStartKeys(circuit);
+    const lineReach = this.bfsFrom(graph, lineStarts);
 
     let sum = 0;
     for (const comp of circuit.components) {
       if (!this.isLoadComponent(comp)) continue;
-      const liveKey = this.getLoadLiveTerminalKey(comp);
-      if (!liveKey) continue;
       const loadI = nodes[comp.id]?.currentA || 0;
       if (loadI <= 0) continue;
-      if (!liveWithoutBridge.has(liveKey)) {
+      if (comp.type === 'three_phase_motor') {
+        const k1 = this.findTerminalByLabel(comp, 'L1');
+        const k2 = this.findTerminalByLabel(comp, 'L2');
+        const k3 = this.findTerminalByLabel(comp, 'L3');
+        if (!k1 || !k2 || !k3) continue;
+        const allReach =
+          lineReach.has(k1) && lineReach.has(k2) && lineReach.has(k3);
+        if (!allReach) sum += loadI;
+        continue;
+      }
+      const liveKey = this.getLoadLiveTerminalKey(comp);
+      if (!liveKey) continue;
+      if (!lineReach.has(liveKey)) {
         sum += loadI;
       }
     }
     return sum;
+  }
+
+  private getDefaultThreePhaseLineVoltage(circuit: Circuit): number {
+    const src = circuit.components.find((c) => c.type === 'three_phase_source');
+    return (
+      src?.properties.lineVoltage ||
+      src?.properties.voltage ||
+      400
+    );
+  }
+
+  private getAllLineConductorStartKeys(circuit: Circuit): string[] {
+    return [
+      ...this.getLiveStartKeys(circuit),
+      ...this.getThreePhaseLineStartKeys(circuit, 1),
+      ...this.getThreePhaseLineStartKeys(circuit, 2),
+      ...this.getThreePhaseLineStartKeys(circuit, 3),
+    ];
+  }
+
+  private getThreePhaseLineStartKeys(
+    circuit: Circuit,
+    phase: 1 | 2 | 3
+  ): string[] {
+    const keys: string[] = [];
+    const token =
+      phase === 1 ? 'L1' : phase === 2 ? 'L2' : 'L3';
+    for (const source of circuit.components) {
+      if (source.type !== 'three_phase_source') continue;
+      if (source.state === 'off' || source.state === 'tripped') continue;
+      for (const cp of source.connectionPoints) {
+        const t = this.tokenizeLabel(cp.label);
+        if (t.includes(token)) {
+          keys.push(this.terminalKey(source.id, cp.id));
+        }
+      }
+    }
+    return keys;
   }
 
   /**
@@ -257,9 +419,9 @@ export class CircuitEngine {
     for (const w of circuit.wires) {
       const fk = this.terminalKey(w.fromComponentId, w.fromPointId);
       const tk = this.terminalKey(w.toComponentId, w.toPointId);
-      const fl = potentials.live.has(fk);
+      const fl = this.linePotentialAt(potentials, fk);
       const fn = potentials.neutral.has(fk);
-      const tl = potentials.live.has(tk);
+      const tl = this.linePotentialAt(potentials, tk);
       const tn = potentials.neutral.has(tk);
       if (fl && tn) anchors.add(fk);
       if (fn && tl) anchors.add(tk);
@@ -274,11 +436,16 @@ export class CircuitEngine {
   private seriesDeviceOnLivePathToLnFault(
     seriesDevice: CircuitComponent,
     circuit: Circuit,
-    faultLiveAnchors: Set<string>
+    faultLiveAnchors: Set<string>,
+    contactorPickup: Set<string>
   ): boolean {
     if (faultLiveAnchors.size === 0) return false;
-    const graphWithout = this.buildTerminalGraph(circuit, seriesDevice.id);
-    const liveStarts = this.getLiveStartKeys(circuit);
+    const graphWithout = this.buildTerminalGraph(
+      circuit,
+      seriesDevice.id,
+      contactorPickup
+    );
+    const liveStarts = this.getAllLineConductorStartKeys(circuit);
     const liveReach = this.bfsFrom(graphWithout, liveStarts);
     for (const key of faultLiveAnchors) {
       if (!liveReach.has(key)) return true;
@@ -325,13 +492,84 @@ export class CircuitEngine {
     }
   }
 
+  private isCoilActuatedContactorType(type: string): boolean {
+    return (
+      type === 'contactor' ||
+      type === 'relay' ||
+      type === 'timer' ||
+      type === 'three_phase_contactor' ||
+      type === 'four_phase_contactor'
+    );
+  }
+
+  /**
+   * Coil picked up when A1 and A2 (or legacy COIL_A/B) sit on line and neutral
+   * networks (either polarity).
+   */
+  private coilHasOperatingVoltage(
+    component: CircuitComponent,
+    potentials: PotentialSets
+  ): boolean {
+    const k1 =
+      this.findTerminalByLabel(component, 'A1') ||
+      this.findTerminalByLabel(component, 'COIL_A');
+    const k2 =
+      this.findTerminalByLabel(component, 'A2') ||
+      this.findTerminalByLabel(component, 'COIL_B');
+    if (!k1 || !k2) return false;
+    const t1Live = this.linePotentialAt(potentials, k1);
+    const t1N = potentials.neutral.has(k1);
+    const t2Live = this.linePotentialAt(potentials, k2);
+    const t2N = potentials.neutral.has(k2);
+    return (t1Live && t2N) || (t1N && t2Live);
+  }
+
+  private pickupSetsEqual(a: Set<string>, b: Set<string>): boolean {
+    if (a.size !== b.size) return false;
+    for (const id of a) {
+      if (!b.has(id)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Main poles close only when the coil sees live↔neutral. Iterates so a
+   * downstream contactor can pick up after an upstream one closes.
+   */
+  private computeContactorPickupFixpoint(circuit: Circuit): Set<string> {
+    let pickup = new Set<string>();
+    for (let iter = 0; iter < 16; iter++) {
+      const graph = this.buildTerminalGraph(circuit, null, pickup);
+      const potentials = this.propagatePotentials(circuit, graph);
+      const next = new Set<string>();
+      for (const c of circuit.components) {
+        if (!this.isCoilActuatedContactorType(c.type)) continue;
+        if (this.coilHasOperatingVoltage(c, potentials)) {
+          next.add(c.id);
+        }
+      }
+      if (this.pickupSetsEqual(pickup, next)) {
+        pickup = next;
+        break;
+      }
+      pickup = next;
+    }
+    for (const c of circuit.components) {
+      if (!this.isCoilActuatedContactorType(c.type)) continue;
+      c.state = pickup.has(c.id) ? 'on' : 'off';
+    }
+    return pickup;
+  }
+
   /**
    * @param omitInternalConnectionForComponentId When set, that component’s
    * IN↔OUT bridge is omitted (used to compute branch current through an MCB).
+   * @param contactorPickupSet Main poles closed for these coil-actuated device ids.
    */
   private buildTerminalGraph(
     circuit: Circuit,
-    omitInternalConnectionForComponentId?: string | null
+    omitInternalConnectionForComponentId?: string | null,
+    contactorPickupSet?: Set<string> | null
   ): Map<string, Set<string>> {
     const graph = new Map<string, Set<string>>();
 
@@ -378,10 +616,64 @@ export class CircuitEngine {
         case 'contactor':
         case 'relay':
         case 'timer':
-          if (component.state === 'on' && !skipInternalBridge) {
+          if (
+            !skipInternalBridge &&
+            contactorPickupSet &&
+            contactorPickupSet.has(component.id)
+          ) {
             const inKey = this.findTerminalByLabel(component, 'IN');
             const outKey = this.findTerminalByLabel(component, 'OUT');
             if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+          }
+          break;
+        case 'three_phase_contactor':
+        case 'four_phase_contactor':
+          if (
+            !skipInternalBridge &&
+            contactorPickupSet &&
+            contactorPickupSet.has(component.id)
+          ) {
+            const pairs: [string, string][] =
+              component.type === 'four_phase_contactor'
+                ? [
+                    ['IN_L1', 'OUT_L1'],
+                    ['IN_L2', 'OUT_L2'],
+                    ['IN_L3', 'OUT_L3'],
+                    ['IN_N', 'OUT_N'],
+                  ]
+                : [
+                    ['IN_L1', 'OUT_L1'],
+                    ['IN_L2', 'OUT_L2'],
+                    ['IN_L3', 'OUT_L3'],
+                  ];
+            for (const [a, b] of pairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
+          }
+          break;
+        case 'three_phase_mcb':
+        case 'four_phase_mcb':
+          if (component.state === 'on' && !skipInternalBridge) {
+            const pairs: [string, string][] =
+              component.type === 'four_phase_mcb'
+                ? [
+                    ['IN_L1', 'OUT_L1'],
+                    ['IN_L2', 'OUT_L2'],
+                    ['IN_L3', 'OUT_L3'],
+                    ['IN_N', 'OUT_N'],
+                  ]
+                : [
+                    ['IN_L1', 'OUT_L1'],
+                    ['IN_L2', 'OUT_L2'],
+                    ['IN_L3', 'OUT_L3'],
+                  ];
+            for (const [a, b] of pairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
           }
           break;
         default:
@@ -434,6 +726,9 @@ export class CircuitEngine {
     const liveStarts: string[] = [];
     const neutralStarts: string[] = [];
     const peStarts: string[] = [];
+    const l1Starts: string[] = [];
+    const l2Starts: string[] = [];
+    const l3Starts: string[] = [];
 
     for (const source of circuit.components) {
       if (source.type !== 'power_source') continue;
@@ -462,11 +757,47 @@ export class CircuitEngine {
       }
     }
 
+    for (const source of circuit.components) {
+      if (source.type !== 'three_phase_source') continue;
+      if (source.state === 'off' || source.state === 'tripped') continue;
+      for (const cp of source.connectionPoints) {
+        const key = this.terminalKey(source.id, cp.id);
+        const tokens = this.tokenizeLabel(cp.label);
+        if (tokens.includes('L1')) {
+          l1Starts.push(key);
+        } else if (tokens.includes('L2')) {
+          l2Starts.push(key);
+        } else if (tokens.includes('L3')) {
+          l3Starts.push(key);
+        } else if (tokens.includes('N') || tokens.includes('NEUTRAL')) {
+          neutralStarts.push(key);
+        } else if (
+          tokens.includes('PE') ||
+          tokens.includes('EARTH') ||
+          tokens.includes('GROUND')
+        ) {
+          peStarts.push(key);
+        }
+      }
+    }
+
     return {
       live: this.bfsFrom(graph, liveStarts),
       neutral: this.bfsFrom(graph, neutralStarts),
       pe: this.bfsFrom(graph, peStarts),
+      liveL1: this.bfsFrom(graph, l1Starts),
+      liveL2: this.bfsFrom(graph, l2Starts),
+      liveL3: this.bfsFrom(graph, l3Starts),
     };
+  }
+
+  private linePotentialAt(potentials: PotentialSets, key: string): boolean {
+    return (
+      potentials.live.has(key) ||
+      potentials.liveL1.has(key) ||
+      potentials.liveL2.has(key) ||
+      potentials.liveL3.has(key)
+    );
   }
 
   private componentTouchesAnyPotential(
@@ -476,7 +807,7 @@ export class CircuitEngine {
     return component.connectionPoints.some((cp) => {
       const key = this.terminalKey(component.id, cp.id);
       return (
-        potentials.live.has(key) ||
+        this.linePotentialAt(potentials, key) ||
         potentials.neutral.has(key) ||
         potentials.pe.has(key)
       );
@@ -499,18 +830,28 @@ export class CircuitEngine {
       return this.hasCompleteSupplyAnyTerminal(component, potentials);
     }
 
-    for (const { pointId, needLive, needNeutral, needPe } of roles) {
-      const key = this.terminalKey(component.id, pointId);
-      if (needLive && !potentials.live.has(key)) return false;
-      if (needNeutral && !potentials.neutral.has(key)) return false;
-      if (needPe && !potentials.pe.has(key)) return false;
+    for (const role of roles) {
+      const key = this.terminalKey(component.id, role.pointId);
+      if (role.phase === 1 && !potentials.liveL1.has(key)) return false;
+      if (role.phase === 2 && !potentials.liveL2.has(key)) return false;
+      if (role.phase === 3 && !potentials.liveL3.has(key)) return false;
+      // Use any line network (1φ live or 3φ L1–L3), not only potentials.live
+      if (role.needLive && !this.linePotentialAt(potentials, key)) return false;
+      if (role.needNeutral && !potentials.neutral.has(key)) return false;
+      if (role.needPe && !potentials.pe.has(key)) return false;
     }
     return true;
   }
 
   private getRequiredPolarityRoles(
     component: CircuitComponent
-  ): { pointId: string; needLive: boolean; needNeutral: boolean; needPe: boolean }[] | null {
+  ): {
+    pointId: string;
+    needLive: boolean;
+    needNeutral: boolean;
+    needPe: boolean;
+    phase?: 1 | 2 | 3;
+  }[] | null {
     switch (component.type) {
       case 'socket': {
         const out: {
@@ -518,6 +859,7 @@ export class CircuitEngine {
           needLive: boolean;
           needNeutral: boolean;
           needPe: boolean;
+          phase?: 1 | 2 | 3;
         }[] = [];
         for (const cp of component.connectionPoints) {
           const label = cp.label.toUpperCase();
@@ -547,6 +889,27 @@ export class CircuitEngine {
           { pointId: t2.id, needLive: false, needNeutral: true, needPe: false },
         ];
       }
+      case 'three_phase_motor': {
+        const l1 = component.connectionPoints.find(
+          (cp) => cp.label.toUpperCase() === 'L1'
+        );
+        const l2 = component.connectionPoints.find(
+          (cp) => cp.label.toUpperCase() === 'L2'
+        );
+        const l3 = component.connectionPoints.find(
+          (cp) => cp.label.toUpperCase() === 'L3'
+        );
+        const n = component.connectionPoints.find(
+          (cp) => cp.label.toUpperCase() === 'N'
+        );
+        if (!l1 || !l2 || !l3 || !n) return null;
+        return [
+          { pointId: l1.id, needLive: false, needNeutral: false, needPe: false, phase: 1 },
+          { pointId: l2.id, needLive: false, needNeutral: false, needPe: false, phase: 2 },
+          { pointId: l3.id, needLive: false, needNeutral: false, needPe: false, phase: 3 },
+          { pointId: n.id, needLive: false, needNeutral: true, needPe: false },
+        ];
+      }
       default:
         return null;
     }
@@ -561,7 +924,7 @@ export class CircuitEngine {
     let hasNeutral = false;
     for (const cp of component.connectionPoints) {
       const key = this.terminalKey(component.id, cp.id);
-      if (potentials.live.has(key)) hasLive = true;
+      if (this.linePotentialAt(potentials, key)) hasLive = true;
       if (potentials.neutral.has(key)) hasNeutral = true;
       if (hasLive && hasNeutral) return true;
     }
@@ -575,6 +938,7 @@ export class CircuitEngine {
       case 'generic_load':
       case 'motor':
       case 'socket':
+      case 'three_phase_motor':
         return true;
       default:
         return false;
@@ -623,13 +987,23 @@ export class CircuitEngine {
     currentA: number
   ): FaultEvent | null {
     const p = component.properties;
-    if (component.type === 'mcb') {
+    if (
+      component.type === 'mcb' ||
+      component.type === 'three_phase_mcb' ||
+      component.type === 'four_phase_mcb'
+    ) {
+      const tag =
+        component.type === 'three_phase_mcb'
+          ? '3P MCB'
+          : component.type === 'four_phase_mcb'
+            ? '4P MCB'
+            : 'MCB';
       if (currentA > 1000) {
         return {
           id: crypto.randomUUID(),
           type: 'short_circuit',
           affectedComponentId: component.id,
-          message: `MCB "${component.label}" magnetic / short-circuit trip: ${currentA.toFixed(0)}A`,
+          message: `${tag} "${component.label}" magnetic / short-circuit trip: ${currentA.toFixed(0)}A`,
           severity: 'critical',
           timestamp: Date.now(),
         };
@@ -639,7 +1013,7 @@ export class CircuitEngine {
           id: crypto.randomUUID(),
           type: 'overload',
           affectedComponentId: component.id,
-          message: `MCB "${component.label}" overloaded: ${currentA.toFixed(1)}A exceeds ${p.ratingAmps}A rating`,
+          message: `${tag} "${component.label}" overloaded: ${currentA.toFixed(1)}A exceeds ${p.ratingAmps}A rating`,
           severity: 'critical',
           timestamp: Date.now(),
         };
@@ -694,8 +1068,8 @@ export class CircuitEngine {
       const fromKey = this.terminalKey(wire.fromComponentId, wire.fromPointId);
       const toKey = this.terminalKey(wire.toComponentId, wire.toPointId);
       const carriesPotential =
-        potentials.live.has(fromKey) ||
-        potentials.live.has(toKey) ||
+        this.linePotentialAt(potentials, fromKey) ||
+        this.linePotentialAt(potentials, toKey) ||
         potentials.neutral.has(fromKey) ||
         potentials.neutral.has(toKey) ||
         potentials.pe.has(fromKey) ||

@@ -36,6 +36,16 @@ function inferWireColor(
     return 'blue';
   }
 
+  if (hasToken('L1') || hasToken('PHASE1')) {
+    return 'brown';
+  }
+  if (hasToken('L2') || hasToken('PHASE2')) {
+    return 'black';
+  }
+  if (hasToken('L3') || hasToken('PHASE3')) {
+    return 'grey';
+  }
+
   if (hasToken('L') || hasToken('PHASE') || hasToken('LINE')) {
     return 'brown';
   }
@@ -98,6 +108,40 @@ function createConnectionPoints(
         { id: uuid(), componentId, x: 0, y: 30, label: 'L_OUT' },
         { id: uuid(), componentId, x: -15, y: 30, label: 'N_OUT' },
       ];
+    case 'three_phase_source':
+      return [
+        { id: uuid(), componentId, x: -20, y: -32, label: 'L1_OUT' },
+        { id: uuid(), componentId, x: 0, y: -32, label: 'L2_OUT' },
+        { id: uuid(), componentId, x: 20, y: -32, label: 'L3_OUT' },
+        { id: uuid(), componentId, x: 0, y: 32, label: 'N_OUT' },
+      ];
+    case 'three_phase_motor':
+      return [
+        { id: uuid(), componentId, x: -20, y: -22, label: 'L1' },
+        { id: uuid(), componentId, x: 0, y: -22, label: 'L2' },
+        { id: uuid(), componentId, x: 20, y: -22, label: 'L3' },
+        { id: uuid(), componentId, x: 0, y: 22, label: 'N' },
+      ];
+    case 'three_phase_mcb':
+      return [
+        { id: uuid(), componentId, x: -20, y: -25, label: 'IN_L1' },
+        { id: uuid(), componentId, x: -20, y: 25, label: 'OUT_L1' },
+        { id: uuid(), componentId, x: 0, y: -25, label: 'IN_L2' },
+        { id: uuid(), componentId, x: 0, y: 25, label: 'OUT_L2' },
+        { id: uuid(), componentId, x: 20, y: -25, label: 'IN_L3' },
+        { id: uuid(), componentId, x: 20, y: 25, label: 'OUT_L3' },
+      ];
+    case 'four_phase_mcb':
+      return [
+        { id: uuid(), componentId, x: -30, y: -25, label: 'IN_L1' },
+        { id: uuid(), componentId, x: -30, y: 25, label: 'OUT_L1' },
+        { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L2' },
+        { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L2' },
+        { id: uuid(), componentId, x: 10, y: -25, label: 'IN_L3' },
+        { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_L3' },
+        { id: uuid(), componentId, x: 30, y: -25, label: 'IN_N' },
+        { id: uuid(), componentId, x: 30, y: 25, label: 'OUT_N' },
+      ];
     case 'switch':
     case 'push_button':
       return [
@@ -146,8 +190,32 @@ function createConnectionPoints(
       return [
         { id: uuid(), componentId, x: 0, y: -25, label: 'IN' },
         { id: uuid(), componentId, x: 0, y: 25, label: 'OUT' },
-        { id: uuid(), componentId, x: -20, y: 0, label: 'COIL_A' },
-        { id: uuid(), componentId, x: 20, y: 0, label: 'COIL_B' },
+        { id: uuid(), componentId, x: -20, y: 0, label: 'A1' },
+        { id: uuid(), componentId, x: 20, y: 0, label: 'A2' },
+      ];
+    case 'three_phase_contactor':
+      return [
+        { id: uuid(), componentId, x: -20, y: -25, label: 'IN_L1' },
+        { id: uuid(), componentId, x: -20, y: 25, label: 'OUT_L1' },
+        { id: uuid(), componentId, x: 0, y: -25, label: 'IN_L2' },
+        { id: uuid(), componentId, x: 0, y: 25, label: 'OUT_L2' },
+        { id: uuid(), componentId, x: 20, y: -25, label: 'IN_L3' },
+        { id: uuid(), componentId, x: 20, y: 25, label: 'OUT_L3' },
+        { id: uuid(), componentId, x: -36, y: 0, label: 'A1' },
+        { id: uuid(), componentId, x: 36, y: 0, label: 'A2' },
+      ];
+    case 'four_phase_contactor':
+      return [
+        { id: uuid(), componentId, x: -30, y: -25, label: 'IN_L1' },
+        { id: uuid(), componentId, x: -30, y: 25, label: 'OUT_L1' },
+        { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L2' },
+        { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L2' },
+        { id: uuid(), componentId, x: 10, y: -25, label: 'IN_L3' },
+        { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_L3' },
+        { id: uuid(), componentId, x: 30, y: -25, label: 'IN_N' },
+        { id: uuid(), componentId, x: 30, y: 25, label: 'OUT_N' },
+        { id: uuid(), componentId, x: -44, y: 0, label: 'A1' },
+        { id: uuid(), componentId, x: 44, y: 0, label: 'A2' },
       ];
     default:
       return [
@@ -161,6 +229,52 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
   switch (type) {
     case 'power_source':
       return { voltage: 230, phaseSystem: 'single_phase' };
+    case 'three_phase_source':
+      return {
+        phaseSystem: 'three_phase',
+        lineVoltage: 400,
+        phaseVoltage: 400 / Math.sqrt(3),
+        voltage: 400,
+      };
+    case 'three_phase_motor':
+      return {
+        powerWatts: 3000,
+        loadType: 'inductive',
+        powerFactor: 0.85,
+        lineVoltage: 400,
+        phaseSystem: 'three_phase',
+        ratedLineAmps: 5.5,
+      };
+    case 'three_phase_mcb':
+      return {
+        ratingAmps: 16,
+        tripCurve: 'C',
+        breakingCapacity: 6000,
+        poles: 3,
+        lineVoltage: 400,
+      };
+    case 'four_phase_mcb':
+      return {
+        ratingAmps: 16,
+        tripCurve: 'C',
+        breakingCapacity: 6000,
+        poles: 4,
+        lineVoltage: 400,
+      };
+    case 'three_phase_contactor':
+      return {
+        ratingAmps: 25,
+        poles: 3,
+        lineVoltage: 400,
+        phaseSystem: 'three_phase',
+      };
+    case 'four_phase_contactor':
+      return {
+        ratingAmps: 25,
+        poles: 4,
+        lineVoltage: 400,
+        phaseSystem: 'three_phase',
+      };
     case 'switch':
       return { switchType: 'SPST', poles: 1 };
     case 'push_button':
@@ -227,6 +341,12 @@ function getDefaultLabel(type: ComponentType): string {
     contactor: 'Contactor',
     relay: 'Relay',
     timer: 'Timer',
+    three_phase_source: '3φ Supply',
+    three_phase_motor: '3φ Motor',
+    three_phase_mcb: '3P MCB',
+    four_phase_mcb: '4P MCB',
+    three_phase_contactor: '3P KM',
+    four_phase_contactor: '4P KM',
   };
   return labels[type] || type;
 }
@@ -242,6 +362,10 @@ function getInitialState(type: ComponentType): CircuitComponent['state'] {
     'relay',
     'timer',
     'overload_relay',
+    'three_phase_mcb',
+    'four_phase_mcb',
+    'three_phase_contactor',
+    'four_phase_contactor',
   ]);
 
   return startsOff.has(type) ? 'off' : 'on';
@@ -367,8 +491,8 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       'mcb',
       'rcd',
       'push_button',
-      'contactor',
-      'relay',
+      'three_phase_mcb',
+      'four_phase_mcb',
     ];
     if (toggleable.includes(comp.type) && comp.state !== 'tripped') {
       const newState = comp.state === 'on' ? 'off' : 'on';
@@ -378,8 +502,11 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   },
 
   resetTripped: (id) => {
-    get().updateComponent(id, { state: 'off' });
-    get().pushHistory('Reset tripped device');
+    const comp = get().circuit.components.find((c) => c.id === id);
+    const nextState =
+      comp?.type === 'three_phase_motor' ? 'on' : 'off';
+    get().updateComponent(id, { state: nextState });
+    get().pushHistory('Reset protection / fault');
   },
 
   removeComponent: (id) => {

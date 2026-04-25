@@ -15,7 +15,13 @@ export type ComponentType =
   | 'contactor'
   | 'relay'
   | 'timer'
-  | 'overload_relay';
+  | 'overload_relay'
+  | 'three_phase_source'
+  | 'three_phase_motor'
+  | 'three_phase_mcb'
+  | 'four_phase_mcb'
+  | 'three_phase_contactor'
+  | 'four_phase_contactor';
 
 export type ComponentState = 'on' | 'off' | 'tripped' | 'fault';
 
@@ -66,6 +72,8 @@ export interface ComponentProperties {
   phaseSystem?: PhaseSystem;
   phaseVoltage?: number;
   lineVoltage?: number;
+  /** Three-phase motor: nameplate line current for overload (A); optional */
+  ratedLineAmps?: number;
 
   buttonType?: 'NO' | 'NC';
 
@@ -107,6 +115,12 @@ export interface NodeResult {
   powerVA?: number;
   powerFactor?: number;
   energized: boolean;
+  /** Line-to-line RMS (V) for three-phase devices */
+  lineVoltageRmsV?: number;
+  /** Line current RMS (A) for balanced three-phase loads */
+  lineCurrentRmsA?: number;
+  /** Per-phase RMS voltage phase-to-neutral (V), wye */
+  phaseVoltageRmsV?: number;
 }
 
 export interface SimulationResult {

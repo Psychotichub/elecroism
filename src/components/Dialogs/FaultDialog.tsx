@@ -66,7 +66,9 @@ const FaultDialog: React.FC = () => {
           </div>
 
           <div className="flex gap-2">
-            {affectedComp?.state === 'tripped' && (
+            {(affectedComp?.state === 'tripped' ||
+              affectedComp?.state === 'fault') &&
+              affectedComp && (
               <button
                 onClick={() => {
                   resetTripped(affectedComp.id);
@@ -74,7 +76,9 @@ const FaultDialog: React.FC = () => {
                 }}
                 className="flex-1 px-3 py-2 bg-yellow-600 text-white rounded text-xs font-medium hover:bg-yellow-500"
               >
-                Reset Device
+                {affectedComp?.state === 'fault'
+                  ? 'Clear fault'
+                  : 'Reset device'}
               </button>
             )}
             <button

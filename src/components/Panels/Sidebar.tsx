@@ -30,6 +30,12 @@ const GROUPS: ComponentGroup[] = [
     emoji: '⚡',
     items: [
       { type: 'power_source', label: 'AC Source 230V', icon: <FiZap /> },
+      {
+        type: 'three_phase_source',
+        label: '3φ Supply 400V',
+        icon: <FiZap />,
+        detail: 'L1 L2 L3 + N',
+      },
       { type: 'busbar', label: 'Busbar (L)', icon: <FiActivity />, detail: 'Live' },
       { type: 'busbar', label: 'Busbar (N)', icon: <FiActivity />, detail: 'Neutral' },
       { type: 'busbar', label: 'Busbar (PE)', icon: <FiActivity />, detail: 'Earth' },
@@ -45,6 +51,18 @@ const GROUPS: ComponentGroup[] = [
       { type: 'mcb', label: 'MCB 32A', icon: <FiShield />, detail: '32A' },
       { type: 'rcd', label: 'RCD 30mA', icon: <FiShield />, detail: '30mA' },
       { type: 'overload_relay', label: 'Overload Relay', icon: <FiShield /> },
+      {
+        type: 'three_phase_mcb',
+        label: '3P MCB 16A',
+        icon: <FiShield />,
+        detail: 'L1–L3, IN top / OUT bottom',
+      },
+      {
+        type: 'four_phase_mcb',
+        label: '4P MCB 16A',
+        icon: <FiShield />,
+        detail: 'L1–L3 + N',
+      },
     ],
   },
   {
@@ -58,6 +76,18 @@ const GROUPS: ComponentGroup[] = [
       { type: 'contactor', label: 'Contactor', icon: <FiToggleLeft /> },
       { type: 'relay', label: 'Relay', icon: <FiToggleLeft /> },
       { type: 'timer', label: 'Timer', icon: <FiToggleLeft /> },
+      {
+        type: 'three_phase_contactor',
+        label: '3P Contactor (KM)',
+        icon: <FiToggleLeft />,
+        detail: 'L1–L3 + A1 A2',
+      },
+      {
+        type: 'four_phase_contactor',
+        label: '4P Contactor (KM)',
+        icon: <FiToggleLeft />,
+        detail: 'L1–L3–N + A1 A2',
+      },
     ],
   },
   {
@@ -74,6 +104,12 @@ const GROUPS: ComponentGroup[] = [
     items: [
       { type: 'lamp', label: 'Lamp 60W', icon: <FiSun /> },
       { type: 'motor', label: 'Motor 1kW', icon: <FiActivity /> },
+      {
+        type: 'three_phase_motor',
+        label: '3φ Motor 3kW',
+        icon: <FiActivity />,
+        detail: 'Wye 400V',
+      },
       { type: 'heater', label: 'Heater 2kW', icon: <FiSun /> },
       { type: 'generic_load', label: 'Generic Load', icon: <FiCircle /> },
     ],

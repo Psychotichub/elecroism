@@ -12,6 +12,10 @@ import SocketSymbol from '../Components/SocketSymbol';
 import LoadSymbol from '../Components/LoadSymbol';
 import BusbarSymbol from '../Components/BusbarSymbol';
 import PowerSourceSymbol from '../Components/PowerSourceSymbol';
+import ThreePhaseSourceSymbol from '../Components/ThreePhaseSourceSymbol';
+import ThreePhaseMotorSymbol from '../Components/ThreePhaseMotorSymbol';
+import ThreePhaseMCBSymbol from '../Components/ThreePhaseMCBSymbol';
+import ThreePhaseContactorSymbol from '../Components/ThreePhaseContactorSymbol';
 import JunctionSymbol from '../Components/JunctionSymbol';
 import ControlSymbol from '../Components/ControlSymbol';
 import type { CircuitComponent, ComponentType, WireColor } from '../../types';
@@ -216,6 +220,15 @@ const CircuitCanvas: React.FC = () => {
             onToggle={() => toggleComponent(comp.id)}
           />
         );
+      case 'three_phase_mcb':
+      case 'four_phase_mcb':
+        return (
+          <ThreePhaseMCBSymbol
+            key={comp.id}
+            {...commonProps}
+            onToggle={() => toggleComponent(comp.id)}
+          />
+        );
       case 'rcd':
         return (
           <BreakerSymbol
@@ -251,6 +264,18 @@ const CircuitCanvas: React.FC = () => {
         );
       case 'power_source':
         return <PowerSourceSymbol key={comp.id} {...commonProps} />;
+      case 'three_phase_source':
+        return <ThreePhaseSourceSymbol key={comp.id} {...commonProps} />;
+      case 'three_phase_motor':
+        return <ThreePhaseMotorSymbol key={comp.id} {...commonProps} />;
+      case 'three_phase_contactor':
+      case 'four_phase_contactor':
+        return (
+          <ThreePhaseContactorSymbol
+            key={comp.id}
+            {...commonProps}
+          />
+        );
       case 'junction':
         return <JunctionSymbol key={comp.id} {...commonProps} />;
       case 'contactor':
@@ -261,7 +286,6 @@ const CircuitCanvas: React.FC = () => {
           <ControlSymbol
             key={comp.id}
             {...commonProps}
-            onToggle={() => toggleComponent(comp.id)}
           />
         );
       default:

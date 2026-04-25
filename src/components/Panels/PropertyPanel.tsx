@@ -88,7 +88,7 @@ const PropertyPanel: React.FC = () => {
     </>
   );
 
-  const renderMCBProps = () => (
+  const renderMCBProps = (variant: '1p' | '3p' | '4p' = '1p') => (
     <>
       <Label text="Rating">
         <select
@@ -107,23 +107,32 @@ const PropertyPanel: React.FC = () => {
           )}
         </select>
       </Label>
-      <Label text="Poles">
-        <div className="flex gap-1">
-          {[1, 2, 3].map((p) => (
-            <button
-              key={p}
-              onClick={() => updateProp({ poles: p })}
-              className={`px-2 py-1 rounded text-xs ${
-                selectedComp!.properties.poles === p
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-600 text-gray-300'
-              }`}
-            >
-              {p}P
-            </button>
-          ))}
-        </div>
-      </Label>
+      {variant === '1p' && (
+        <Label text="Poles">
+          <div className="flex gap-1">
+            {[1, 2, 3].map((p) => (
+              <button
+                key={p}
+                onClick={() => updateProp({ poles: p })}
+                className={`px-2 py-1 rounded text-xs ${
+                  selectedComp!.properties.poles === p
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-600 text-gray-300'
+                }`}
+              >
+                {p}P
+              </button>
+            ))}
+          </div>
+        </Label>
+      )}
+      {(variant === '3p' || variant === '4p') && (
+        <Label text="Poles">
+          <span className={`text-xs ${tc.textMuted}`}>
+            {variant === '4p' ? '4' : '3'} (fixed)
+          </span>
+        </Label>
+      )}
       <Label text="Trip Curve">
         <div className="flex gap-1">
           {(['B', 'C', 'D'] as const).map((t) => (
@@ -163,7 +172,11 @@ const PropertyPanel: React.FC = () => {
           onClick={() => resetTripped(selectedComp!.id)}
           className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
         >
-          RESET MCB
+          {variant === '4p'
+            ? 'RESET 4P MCB'
+            : variant === '3p'
+              ? 'RESET 3P MCB'
+              : 'RESET MCB'}
         </button>
       )}
       <Label text="State">
@@ -386,6 +399,251 @@ const PropertyPanel: React.FC = () => {
     </>
   );
 
+  const renderThreePhaseSourceProps = () => {
+    const ll =
+      selectedComp!.properties.lineVoltage ??
+      selectedComp!.properties.voltage ??
+      400;
+    return (
+      <>
+        <Label text="Line voltage U_L-L (V)">
+          <input
+            type="number"
+            value={ll}
+            onChange={(e) => {
+              const v = Math.max(0, Number(e.target.value));
+              updateProp({
+                lineVoltage: v,
+                voltage: v,
+                phaseVoltage: v / Math.sqrt(3),
+                phaseSystem: 'three_phase',
+              });
+            }}
+            className="input-field"
+            min={0}
+          />
+        </Label>
+        <Label text="Phase voltage U_L-N (V)">
+          <span className={`text-xs ${tc.text}`}>
+            {(ll / Math.sqrt(3)).toFixed(1)} (balanced wye)
+          </span>
+        </Label>
+        <Label text="System">
+          <span className={`text-xs ${tc.textMuted}`}>Three-phase (no control logic)</span>
+        </Label>
+      </>
+    );
+  };
+
+  const renderThreePhaseMotorProps = () => {
+    const ll = selectedComp!.properties.lineVoltage ?? 400;
+    return (
+      <>
+        <Label text="Load type">
+          <select
+            value={selectedComp!.properties.loadType || 'inductive'}
+            onChange={(e) =>
+              updateProp({
+                loadType: e.target.value as ComponentProperties['loadType'],
+              })
+            }
+            className="input-field"
+          >
+            <option value="resistive">Resistive</option>
+            <option value="inductive">Inductive</option>
+            <option value="capacitive">Capacitive</option>
+          </select>
+        </Label>
+        <Label text="Power (W)">
+          <input
+            type="number"
+            value={selectedComp!.properties.powerWatts || 0}
+            onChange={(e) =>
+              updateProp({ powerWatts: Number(e.target.value) })
+            }
+            className="input-field"
+            min={0}
+            max={500000}
+          />
+        </Label>
+        <Label text="Power factor">
+          <input
+            type="number"
+            value={selectedComp!.properties.powerFactor ?? 0.85}
+            onChange={(e) =>
+              updateProp({
+                powerFactor: Math.max(
+                  0,
+                  Math.min(1, Number(e.target.value))
+                ),
+              })
+            }
+            className="input-field"
+            min={0}
+            max={1}
+            step={0.01}
+          />
+        </Label>
+        <Label text="Line voltage U_L-L">
+          <div className="flex gap-1 flex-wrap">
+            {[230, 400, 690].map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() =>
+                  updateProp({ lineVoltage: v, phaseSystem: 'three_phase' })
+                }
+                className={`px-2 py-1 rounded text-xs ${
+                  ll === v
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-600 text-gray-300'
+                }`}
+              >
+                {v}V
+              </button>
+            ))}
+          </div>
+        </Label>
+        <Label text="Nameplate line current (A)">
+          <input
+            type="number"
+            value={
+              selectedComp!.properties.ratedLineAmps === undefined
+                ? ''
+                : selectedComp!.properties.ratedLineAmps
+            }
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === '') {
+                updateProp({ ratedLineAmps: undefined });
+                return;
+              }
+              updateProp({ ratedLineAmps: Math.max(0, Number(raw)) });
+            }}
+            className="input-field"
+            min={0}
+            step={0.1}
+            placeholder="Optional (overload)"
+          />
+        </Label>
+        {selectedComp!.state === 'fault' && (
+          <button
+            type="button"
+            onClick={() => resetTripped(selectedComp!.id)}
+            className="w-full px-3 py-2 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-500"
+          >
+            Clear motor overload / fault
+          </button>
+        )}
+        <Label text="State">
+          <span
+            className={`text-xs font-medium ${
+              selectedComp!.state === 'fault'
+                ? 'text-red-400'
+                : selectedComp!.state === 'on'
+                  ? 'text-green-400'
+                  : tc.textMuted
+            }`}
+          >
+            {selectedComp!.state.toUpperCase()}
+          </span>
+        </Label>
+      </>
+    );
+  };
+
+  const renderMultipoleMcbProps = () => {
+    const variant =
+      selectedComp!.type === 'four_phase_mcb' ? '4p' : '3p';
+    return (
+    <>
+      {renderMCBProps(variant)}
+      <Label text="Design voltage U_L-L">
+        <div className="flex gap-1 flex-wrap">
+          {[230, 400, 690].map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => updateProp({ lineVoltage: v })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.lineVoltage ?? 400) === v
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {v}V
+            </button>
+          ))}
+        </div>
+      </Label>
+    </>
+    );
+  };
+
+  const renderThreePhaseContactorProps = () => {
+    const variant =
+      selectedComp!.type === 'four_phase_contactor' ? '4p' : '3p';
+    return (
+      <>
+        <Label text="Poles">
+          <span className={`text-xs ${tc.textMuted}`}>
+            {variant === '4p' ? '4' : '3'} power + coil A1/A2
+          </span>
+        </Label>
+        <Label text="Rating (A)">
+          <select
+            value={selectedComp!.properties.ratingAmps || 25}
+            onChange={(e) =>
+              updateProp({ ratingAmps: Number(e.target.value) })
+            }
+            className="input-field"
+          >
+            {[16, 25, 32, 40, 63, 80, 100].map((a) => (
+              <option key={a} value={a}>
+                {a}A
+              </option>
+            ))}
+          </select>
+        </Label>
+        <Label text="Design voltage U_L-L">
+          <div className="flex gap-1 flex-wrap">
+            {[230, 400, 690].map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => updateProp({ lineVoltage: v })}
+                className={`px-2 py-1 rounded text-xs ${
+                  (selectedComp!.properties.lineVoltage ?? 400) === v
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-600 text-gray-300'
+                }`}
+              >
+                {v}V
+              </button>
+            ))}
+          </div>
+        </Label>
+        <Label text="Power path (simulated)">
+          <span
+            className={`text-xs font-medium ${
+              selectedComp!.state === 'on'
+                ? 'text-green-400'
+                : tc.textMuted
+            }`}
+          >
+            {selectedComp!.state === 'on'
+              ? 'Closed — coil has live + neutral'
+              : 'Open — energize A1 and A2 (live ↔ neutral)'}
+          </span>
+        </Label>
+        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+          Main contacts close only when the coil terminals see line on one side
+          and neutral on the other. Coil voltage is not modeled numerically.
+        </p>
+      </>
+    );
+  };
+
   const renderWireProps = () => {
     if (!selectedWire) return null;
     return (
@@ -463,7 +721,10 @@ const PropertyPanel: React.FC = () => {
       case 'push_button':
         return renderSwitchProps();
       case 'mcb':
-        return renderMCBProps();
+        return renderMCBProps('1p');
+      case 'three_phase_mcb':
+      case 'four_phase_mcb':
+        return renderMultipoleMcbProps();
       case 'rcd':
         return renderRCDProps();
       case 'socket':
@@ -475,6 +736,13 @@ const PropertyPanel: React.FC = () => {
         return renderLoadProps();
       case 'power_source':
         return renderPowerSourceProps();
+      case 'three_phase_source':
+        return renderThreePhaseSourceProps();
+      case 'three_phase_motor':
+        return renderThreePhaseMotorProps();
+      case 'three_phase_contactor':
+      case 'four_phase_contactor':
+        return renderThreePhaseContactorProps();
       default:
         return null;
     }
@@ -552,6 +820,24 @@ const PropertyPanel: React.FC = () => {
               <>
                 <span className={tc.textMuted}>PF:</span>
                 <span>{nodeResult.powerFactor.toFixed(2)}</span>
+              </>
+            )}
+            {nodeResult.lineVoltageRmsV !== undefined && (
+              <>
+                <span className={tc.textMuted}>U_L-L:</span>
+                <span>{nodeResult.lineVoltageRmsV.toFixed(1)}V</span>
+              </>
+            )}
+            {nodeResult.phaseVoltageRmsV !== undefined && (
+              <>
+                <span className={tc.textMuted}>U_L-N:</span>
+                <span>{nodeResult.phaseVoltageRmsV.toFixed(1)}V</span>
+              </>
+            )}
+            {nodeResult.lineCurrentRmsA !== undefined && (
+              <>
+                <span className={tc.textMuted}>I_line:</span>
+                <span>{nodeResult.lineCurrentRmsA.toFixed(2)}A</span>
               </>
             )}
             <span className={tc.textMuted}>Status:</span>

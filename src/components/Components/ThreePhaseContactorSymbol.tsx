@@ -18,7 +18,7 @@ interface Props {
   selected: boolean;
 }
 
-const ControlSymbol: React.FC<Props> = ({
+const ThreePhaseContactorSymbol: React.FC<Props> = ({
   component,
   nodeResult,
   onSelect,
@@ -28,21 +28,17 @@ const ControlSymbol: React.FC<Props> = ({
 }) => {
   const isOn = component.state === 'on';
   const energized = nodeResult?.energized || false;
-
-  const getLabel = () => {
-    switch (component.type) {
-      case 'contactor':
-        return 'KM';
-      case 'relay':
-        return 'KA';
-      case 'timer':
-        return 'KT';
-      case 'overload_relay':
-        return 'OL';
-      default:
-        return '?';
-    }
-  };
+  const is4P = component.type === 'four_phase_contactor';
+  const poleXs = is4P ? [-30, -10, 10, 30] : [-20, 0, 20];
+  const poleColors = is4P
+    ? ['#7C3F19', '#111827', '#4B5563', '#2563EB']
+    : ['#7C3F19', '#111827', '#4B5563'];
+  const minX = Math.min(...poleXs) - 6;
+  const maxX = Math.max(...poleXs) + 6;
+  const bodyW = maxX - minX;
+  const coilAX = is4P ? -44 : -36;
+  const coilBX = is4P ? 44 : 36;
+  const title = is4P ? '4P KM' : '3P KM';
 
   return (
     <Group
@@ -58,10 +54,10 @@ const ControlSymbol: React.FC<Props> = ({
     >
       {selected && (
         <Rect
-          x={-22}
-          y={-30}
-          width={44}
-          height={60}
+          x={minX - 4}
+          y={-32}
+          width={bodyW + 8}
+          height={64}
           stroke="#3B82F6"
           strokeWidth={2}
           dash={[4, 4]}
@@ -70,9 +66,9 @@ const ControlSymbol: React.FC<Props> = ({
       )}
 
       <Rect
-        x={-18}
+        x={minX}
         y={-25}
-        width={36}
+        width={bodyW}
         height={50}
         fill={energized ? '#F0FDF4' : '#F3F4F6'}
         stroke="#374151"
@@ -81,27 +77,29 @@ const ControlSymbol: React.FC<Props> = ({
       />
 
       <Rect
-        x={-14}
-        y={-8}
-        width={28}
-        height={16}
+        x={minX + 4}
+        y={-10}
+        width={bodyW - 8}
+        height={18}
         fill="transparent"
         stroke="#374151"
         strokeWidth={1}
       />
 
       <Text
-        text={getLabel()}
-        x={-8}
-        y={-6}
-        fontSize={10}
+        text={title}
+        x={minX + 2}
+        y={-8}
+        width={bodyW - 4}
+        fontSize={9}
         fill="#374151"
         fontStyle="bold"
+        align="center"
         listening={false}
       />
 
       <Circle
-        x={10}
+        x={minX + bodyW - 10}
         y={-18}
         radius={3}
         fill={isOn ? '#22C55E' : '#9CA3AF'}
@@ -109,19 +107,40 @@ const ControlSymbol: React.FC<Props> = ({
 
       <Text
         text={component.label}
-        x={-18}
-        y={12}
-        width={36}
+        x={minX}
+        y={14}
+        width={bodyW}
         fontSize={7}
         fill="#6B7280"
         align="center"
         listening={false}
       />
 
-      <Line points={[0, -25, 0, -30]} stroke="#374151" strokeWidth={2} />
-      <Line points={[0, 25, 0, 30]} stroke="#374151" strokeWidth={2} />
-      <Line points={[-18, 0, -24, 0]} stroke="#374151" strokeWidth={1.5} />
-      <Line points={[18, 0, 24, 0]} stroke="#374151" strokeWidth={1.5} />
+      {poleXs.map((dx, i) => (
+        <React.Fragment key={dx}>
+          <Line
+            points={[dx, -25, dx, -30]}
+            stroke={poleColors[i]}
+            strokeWidth={2}
+          />
+          <Line
+            points={[dx, 25, dx, 30]}
+            stroke={poleColors[i]}
+            strokeWidth={2}
+          />
+        </React.Fragment>
+      ))}
+
+      <Line
+        points={[minX, 0, coilAX, 0]}
+        stroke="#374151"
+        strokeWidth={1.5}
+      />
+      <Line
+        points={[maxX, 0, coilBX, 0]}
+        stroke="#374151"
+        strokeWidth={1.5}
+      />
 
       {showConnectionPoints &&
         component.connectionPoints.map((cp) => (
@@ -159,4 +178,4 @@ const ControlSymbol: React.FC<Props> = ({
   );
 };
 
-export default ControlSymbol;
+export default ThreePhaseContactorSymbol;

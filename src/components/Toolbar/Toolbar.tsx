@@ -22,6 +22,41 @@ import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import type { ToolMode } from '../../types';
 
+interface ToolbarToolBtnProps {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  shortcut?: string;
+  /** Classes when not active (e.g. theme text + hover) */
+  inactiveClassName: string;
+}
+
+const ToolbarToolBtn: React.FC<ToolbarToolBtnProps> = ({
+  icon,
+  label,
+  onClick,
+  active,
+  shortcut,
+  inactiveClassName,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs transition-colors ${
+      active ? 'bg-blue-600 text-white' : inactiveClassName
+    }`}
+    title={`${label}${shortcut ? ` (${shortcut})` : ''}`}
+  >
+    {icon}
+    <span className="hidden lg:inline">{label}</span>
+  </button>
+);
+
+const ToolbarDivider: React.FC<{ className: string }> = ({ className }) => (
+  <div className={className} />
+);
+
 const Toolbar: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
@@ -170,88 +205,76 @@ const Toolbar: React.FC = () => {
     handleFitToScreen,
   ]);
 
-  const ToolBtn: React.FC<{
-    icon: React.ReactNode;
-    label: string;
-    onClick: () => void;
-    active?: boolean;
-    shortcut?: string;
-  }> = ({ icon, label, onClick, active, shortcut }) => (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs transition-colors ${
-        active
-          ? 'bg-blue-600 text-white'
-          : `${tc.btnText} ${tc.itemHover}`
-      }`}
-      title={`${label}${shortcut ? ` (${shortcut})` : ''}`}
-    >
-      {icon}
-      <span className="hidden lg:inline">{label}</span>
-    </button>
-  );
-
-  const Divider = () => (
-    <div className={`w-px h-5 mx-1 ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-300'}`} />
-  );
+  const toolBtnInactive = `${tc.btnText} ${tc.itemHover}`;
+  const dividerClass = `w-px h-5 mx-1 ${
+    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-300'
+  }`;
 
   return (
     <div className={`h-10 ${tc.toolbar} flex items-center px-2 gap-0.5 border-b ${tc.border} select-none shadow-sm`}>
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiFile />}
         label="New"
         onClick={clearCircuit}
         shortcut="Ctrl+N"
+        inactiveClassName={toolBtnInactive}
       />
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiFolderPlus />}
         label="Open"
         onClick={handleOpen}
         shortcut="Ctrl+O"
+        inactiveClassName={toolBtnInactive}
       />
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiSave />}
         label="Save"
         onClick={saveCircuit}
         shortcut="Ctrl+S"
+        inactiveClassName={toolBtnInactive}
       />
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiImage />}
         label="Export"
         onClick={handleExportPNG}
+        inactiveClassName={toolBtnInactive}
       />
 
-      <Divider />
+      <ToolbarDivider className={dividerClass} />
 
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiMousePointer />}
         label="Select"
         onClick={() => setTool('select')}
         active={tool === 'select'}
         shortcut="V"
+        inactiveClassName={toolBtnInactive}
       />
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiEdit3 />}
         label="Wire"
         onClick={() => setTool('wire')}
         active={tool === 'wire'}
         shortcut="W"
+        inactiveClassName={toolBtnInactive}
       />
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiTrash2 />}
         label="Delete"
         onClick={() => setTool('delete')}
         active={tool === 'delete'}
         shortcut="E"
+        inactiveClassName={toolBtnInactive}
       />
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiMove />}
         label="Pan"
         onClick={() => setTool('pan')}
         active={tool === 'pan'}
         shortcut="Space"
+        inactiveClassName={toolBtnInactive}
       />
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiRotateCw />}
         label="Rotate"
         onClick={() => {
@@ -260,58 +283,66 @@ const Toolbar: React.FC = () => {
           if (selectedId) rotateComponent(selectedId);
         }}
         shortcut="R"
+        inactiveClassName={toolBtnInactive}
       />
 
-      <Divider />
+      <ToolbarDivider className={dividerClass} />
 
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiCornerUpLeft />}
         label="Undo"
         onClick={undo}
         shortcut="Ctrl+Z"
+        inactiveClassName={toolBtnInactive}
       />
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiCornerUpRight />}
         label="Redo"
         onClick={redo}
         shortcut="Ctrl+Y"
+        inactiveClassName={toolBtnInactive}
       />
 
-      <Divider />
+      <ToolbarDivider className={dividerClass} />
 
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiZoomIn />}
         label=""
         onClick={() => setZoom(circuit.zoom * 1.2)}
         shortcut="+"
+        inactiveClassName={toolBtnInactive}
       />
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiZoomOut />}
         label=""
         onClick={() => setZoom(circuit.zoom / 1.2)}
         shortcut="-"
+        inactiveClassName={toolBtnInactive}
       />
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiMaximize />}
         label="Fit"
         onClick={handleFitToScreen}
         shortcut="F"
+        inactiveClassName={toolBtnInactive}
       />
 
-      <Divider />
+      <ToolbarDivider className={dividerClass} />
 
-      <ToolBtn
+      <ToolbarToolBtn
         icon={<FiPlay />}
         label="Simulate"
         onClick={runSimulation}
+        inactiveClassName={toolBtnInactive}
       />
 
-      <Divider />
+      <ToolbarDivider className={dividerClass} />
 
-      <ToolBtn
+      <ToolbarToolBtn
         icon={theme === 'dark' ? <FiSun /> : <FiMoon />}
         label={theme === 'dark' ? 'Light' : 'Dark'}
         onClick={toggleTheme}
+        inactiveClassName={toolBtnInactive}
       />
 
       <div className="flex-1" />
