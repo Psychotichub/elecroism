@@ -129,6 +129,58 @@ function ensureAcbControlConnectionPoints(
   };
 }
 
+/** BMS control block for motorized MCCB (motor ON, shunt, aux changeover, trip contact). */
+function mccbControlConnectionPoints(componentId: string): ConnectionPoint[] {
+  const x = -46;
+  const rows: [number, string][] = [
+    [-26, 'MOT_A1'],
+    [-18, 'MOT_A2'],
+    [-10, 'ST_A1'],
+    [-2, 'ST_A2'],
+    [6, 'AUX_COM'],
+    [14, 'AUX_NO'],
+    [22, 'AUX_NC'],
+    [30, 'TRIP_T1'],
+    [38, 'TRIP_T2'],
+  ];
+  return rows.map(([y, label]) => ({
+    id: uuid(),
+    componentId,
+    x,
+    y,
+    label,
+  }));
+}
+
+function ensureMccbControlConnectionPoints(
+  component: CircuitComponent
+): CircuitComponent {
+  if (
+    component.type !== 'motorized_mccb' &&
+    component.type !== 'four_pole_motorized_mccb'
+  ) {
+    return component;
+  }
+  if (component.connectionPoints.some((p) => p.label === 'MOT_A1')) {
+    return component;
+  }
+  return {
+    ...component,
+    connectionPoints: [
+      ...component.connectionPoints,
+      ...mccbControlConnectionPoints(component.id),
+    ],
+  };
+}
+
+function ensureBreakerControlTerminals(
+  component: CircuitComponent
+): CircuitComponent {
+  return ensureMccbControlConnectionPoints(
+    ensureAcbControlConnectionPoints(component)
+  );
+}
+
 function createConnectionPoints(
   componentId: string,
   type: ComponentType,
@@ -139,6 +191,11 @@ function createConnectionPoints(
       return [
         { id: uuid(), componentId, x: -16, y: 32, label: 'L_OUT' },
         { id: uuid(), componentId, x: 16, y: 32, label: 'N_OUT' },
+      ];
+    case 'dc_power_source':
+      return [
+        { id: uuid(), componentId, x: -16, y: 32, label: 'DC_PLUS' },
+        { id: uuid(), componentId, x: 16, y: 32, label: 'DC_MINUS' },
       ];
     case 'three_phase_source':
       return [
@@ -162,6 +219,28 @@ function createConnectionPoints(
         { id: uuid(), componentId, x: 0, y: 25, label: 'OUT_L2' },
         { id: uuid(), componentId, x: 20, y: -25, label: 'IN_L3' },
         { id: uuid(), componentId, x: 20, y: 25, label: 'OUT_L3' },
+      ];
+    case 'motorized_mccb':
+      return [
+        { id: uuid(), componentId, x: -20, y: -25, label: 'IN_L1' },
+        { id: uuid(), componentId, x: -20, y: 25, label: 'OUT_L1' },
+        { id: uuid(), componentId, x: 0, y: -25, label: 'IN_L2' },
+        { id: uuid(), componentId, x: 0, y: 25, label: 'OUT_L2' },
+        { id: uuid(), componentId, x: 20, y: -25, label: 'IN_L3' },
+        { id: uuid(), componentId, x: 20, y: 25, label: 'OUT_L3' },
+        ...mccbControlConnectionPoints(componentId),
+      ];
+    case 'four_pole_motorized_mccb':
+      return [
+        { id: uuid(), componentId, x: -30, y: -25, label: 'IN_L1' },
+        { id: uuid(), componentId, x: -30, y: 25, label: 'OUT_L1' },
+        { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L2' },
+        { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L2' },
+        { id: uuid(), componentId, x: 10, y: -25, label: 'IN_L3' },
+        { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_L3' },
+        { id: uuid(), componentId, x: 30, y: -25, label: 'IN_N' },
+        { id: uuid(), componentId, x: 30, y: 25, label: 'OUT_N' },
+        ...mccbControlConnectionPoints(componentId),
       ];
     case 'four_phase_mcb':
       return [
@@ -569,6 +648,8 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
   switch (type) {
     case 'power_source':
       return { voltage: 230, phaseSystem: 'single_phase' };
+    case 'dc_power_source':
+      return { voltage: 24, phaseSystem: 'single_phase' };
     case 'three_phase_source':
       return {
         phaseSystem: 'three_phase',
@@ -593,6 +674,52 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         poles: 3,
         lineVoltage: 400,
         phaseSystem: 'three_phase',
+      };
+    case 'motorized_mccb':
+      return {
+        ratingAmps: 63,
+        tripCurve: 'C',
+        breakingCapacity: 10000,
+        poles: 3,
+        lineVoltage: 400,
+        phaseSystem: 'three_phase',
+        mccbBmsEnabled: false,
+        mccbBmsCtrlVoltageOk: true,
+        mccbBmsMotorReady: true,
+        mccbBmsProtocol: 'none' as const,
+        mccbCtrlSupply: '24dc',
+        mccbCtrlFuseDesignation: 'F1',
+        mccbCtrlFuseAmps: 2,
+        mccbRelayMotorId: 'K1',
+        mccbRelayStId: 'K2',
+        mccbBmsDoMotorTag: 'DO-MOTOR',
+        mccbBmsDoShuntTag: 'DO-ST',
+        mccbBmsDiAuxNoTag: 'DI-AUX-NO',
+        mccbBmsDiAuxNcTag: 'DI-AUX-NC',
+        mccbBmsDiTripTag: 'DI-TRIP',
+      };
+    case 'four_pole_motorized_mccb':
+      return {
+        ratingAmps: 63,
+        tripCurve: 'C',
+        breakingCapacity: 10000,
+        poles: 4,
+        lineVoltage: 400,
+        phaseSystem: 'three_phase',
+        mccbBmsEnabled: false,
+        mccbBmsCtrlVoltageOk: true,
+        mccbBmsMotorReady: true,
+        mccbBmsProtocol: 'none' as const,
+        mccbCtrlSupply: '24dc',
+        mccbCtrlFuseDesignation: 'F1',
+        mccbCtrlFuseAmps: 2,
+        mccbRelayMotorId: 'K1',
+        mccbRelayStId: 'K2',
+        mccbBmsDoMotorTag: 'DO-MOTOR',
+        mccbBmsDoShuntTag: 'DO-ST',
+        mccbBmsDiAuxNoTag: 'DI-AUX-NO',
+        mccbBmsDiAuxNcTag: 'DI-AUX-NC',
+        mccbBmsDiTripTag: 'DI-TRIP',
       };
     case 'four_phase_mcb':
       return {
@@ -721,6 +848,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
 function getDefaultLabel(type: ComponentType): string {
   const labels: Record<string, string> = {
     power_source: 'AC Supply',
+    dc_power_source: 'DC Supply',
     switch: 'Switch',
     push_button: 'PB',
     mcb: 'MCB',
@@ -740,6 +868,8 @@ function getDefaultLabel(type: ComponentType): string {
     three_phase_motor: '3φ Motor',
     three_phase_mcb: '3P MCB',
     four_phase_mcb: '4P MCB',
+    motorized_mccb: 'mMCCB',
+    four_pole_motorized_mccb: '4P mMCCB',
     air_circuit_breaker: 'ACB',
     three_phase_contactor: '3P KM',
     four_phase_contactor: '4P KM',
@@ -760,6 +890,8 @@ function getInitialState(type: ComponentType): CircuitComponent['state'] {
     'overload_relay',
     'three_phase_mcb',
     'four_phase_mcb',
+    'motorized_mccb',
+    'four_pole_motorized_mccb',
     'air_circuit_breaker',
     'three_phase_contactor',
     'four_phase_contactor',
@@ -819,6 +951,8 @@ interface CircuitStore {
   acbBmsClosePulse: (id: string) => void;
   /** BMS shunt trip — opens main contacts (remote OFF) */
   acbBmsShuntOpen: (id: string) => void;
+  mccbBmsMotorClosePulse: (id: string) => void;
+  mccbBmsShuntOpen: (id: string) => void;
   moveComponent: (id: string, x: number, y: number) => void;
   rotateComponent: (id: string) => void;
   duplicateComponent: (id: string) => void;
@@ -1058,6 +1192,8 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       'rcd',
       'three_phase_mcb',
       'four_phase_mcb',
+      'motorized_mccb',
+      'four_pole_motorized_mccb',
       'air_circuit_breaker',
     ];
     if (toggleable.includes(comp.type) && comp.state !== 'tripped') {
@@ -1100,6 +1236,39 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     if (comp.state !== 'on') return;
     get().updateComponent(id, { state: 'off' });
     get().pushHistory('BMS ACB shunt trip (remote open)');
+  },
+
+  mccbBmsMotorClosePulse: (id) => {
+    const comp = get().circuit.components.find((c) => c.id === id);
+    if (
+      !comp ||
+      (comp.type !== 'motorized_mccb' &&
+        comp.type !== 'four_pole_motorized_mccb')
+    ) {
+      return;
+    }
+    const p = comp.properties;
+    if (!p.mccbBmsEnabled) return;
+    if (p.mccbBmsCtrlVoltageOk === false) return;
+    if (p.mccbBmsMotorReady === false) return;
+    if (comp.state === 'tripped' || comp.state === 'fault') return;
+    get().updateComponent(id, { state: 'on' });
+    get().pushHistory('BMS mMCCB motor close (remote ON)');
+  },
+
+  mccbBmsShuntOpen: (id) => {
+    const comp = get().circuit.components.find((c) => c.id === id);
+    if (
+      !comp ||
+      (comp.type !== 'motorized_mccb' &&
+        comp.type !== 'four_pole_motorized_mccb')
+    ) {
+      return;
+    }
+    if (!comp.properties.mccbBmsEnabled) return;
+    if (comp.state !== 'on') return;
+    get().updateComponent(id, { state: 'off' });
+    get().pushHistory('BMS mMCCB shunt trip (remote OFF)');
   },
 
   removeComponent: (id) => {
@@ -1345,7 +1514,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const base = get().circuit;
     const normalized = {
       ...base,
-      components: base.components.map(ensureAcbControlConnectionPoints),
+      components: base.components.map(ensureBreakerControlTerminals),
     };
     const clonedCircuit = structuredClone(normalized);
     const result = engine.simulate(clonedCircuit, 0, Date.now());
@@ -1389,7 +1558,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       return { ...c, connectionPoints: newCps };
     });
     const withAcbCps = components.map((c) =>
-      ensureAcbControlConnectionPoints(c)
+      ensureBreakerControlTerminals(c)
     );
     const normalized: Circuit = {
       ...circuit,

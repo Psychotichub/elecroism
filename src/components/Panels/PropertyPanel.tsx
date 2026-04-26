@@ -22,11 +22,15 @@ const CROSS_SECTIONS = [1.5, 2.5, 4, 6, 10];
 
 function defaultPhaseSystemForType(t: ComponentType): PhaseSystem {
   switch (t) {
+    case 'dc_power_source':
+      return 'single_phase';
     case 'three_phase_source':
     case 'three_phase_motor':
     case 'three_phase_mcb':
     case 'four_phase_mcb':
     case 'air_circuit_breaker':
+    case 'motorized_mccb':
+    case 'four_pole_motorized_mccb':
     case 'three_phase_contactor':
     case 'four_phase_contactor':
       return 'three_phase';
@@ -54,6 +58,8 @@ const PropertyPanel: React.FC = () => {
     duplicateComponent,
     acbBmsClosePulse,
     acbBmsShuntOpen,
+    mccbBmsMotorClosePulse,
+    mccbBmsShuntOpen,
   } = useCircuitStore();
 
   const selectedComp = circuit.components.find(
@@ -151,7 +157,9 @@ const PropertyPanel: React.FC = () => {
     </>
   );
 
-  const renderMCBProps = (variant: '1p' | '3p' | '4p' = '1p') => (
+  const renderMCBProps = (
+    variant: '1p' | '3p' | '4p' | 'motorized_mccb' | 'motorized_mccb_4p' = '1p'
+  ) => (
     <>
       <Label text="Rating">
         <select
@@ -195,10 +203,14 @@ const PropertyPanel: React.FC = () => {
           </p>
         </Label>
       )}
-      {(variant === '3p' || variant === '4p') && (
+      {(variant === '3p' ||
+        variant === '4p' ||
+        variant === 'motorized_mccb' ||
+        variant === 'motorized_mccb_4p') && (
         <Label text="Poles">
           <span className={`text-xs ${tc.textMuted}`}>
-            {variant === '4p' ? '4' : '3'} (fixed)
+            {variant === '4p' || variant === 'motorized_mccb_4p' ? '4' : '3'}{' '}
+            (fixed)
           </span>
         </Label>
       )}
@@ -241,11 +253,15 @@ const PropertyPanel: React.FC = () => {
           onClick={() => resetTripped(selectedComp!.id)}
           className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
         >
-          {variant === '4p'
-            ? 'RESET 4P MCB'
-            : variant === '3p'
-              ? 'RESET 3P MCB'
-              : 'RESET MCB'}
+          {variant === 'motorized_mccb_4p'
+            ? 'RESET 4P mMCCB'
+            : variant === 'motorized_mccb'
+              ? 'RESET mMCCB'
+              : variant === '4p'
+                ? 'RESET 4P MCB'
+                : variant === '3p'
+                  ? 'RESET 3P MCB'
+                  : 'RESET MCB'}
         </button>
       )}
       <Label text="State">
@@ -451,6 +467,47 @@ const PropertyPanel: React.FC = () => {
           min={0}
         />
       </Label>
+    </>
+  );
+
+  const renderDcPowerSourceProps = () => (
+    <>
+      <Label text="DC voltage (V)">
+        <input
+          type="number"
+          value={selectedComp!.properties.voltage ?? 24}
+          onChange={(e) =>
+            updateProp({
+              voltage: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="input-field"
+          min={0}
+          step={0.1}
+        />
+      </Label>
+      <Label text="Presets">
+        <div className="flex gap-1 flex-wrap">
+          {[5, 12, 24, 48, 110].map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => updateProp({ voltage: preset })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.voltage ?? 24) === preset
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {preset} V
+            </button>
+          ))}
+        </div>
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Positive (DC_PLUS) and return (DC_MINUS) behave like L and N in the
+        simulator for reachability and load current.
+      </p>
     </>
   );
 
@@ -1216,6 +1273,408 @@ const PropertyPanel: React.FC = () => {
     );
   };
 
+  const renderMotorizedMccbProps = () => {
+    const mccbVariant =
+      selectedComp!.type === 'four_pole_motorized_mccb'
+        ? 'motorized_mccb_4p'
+        : 'motorized_mccb';
+    return (
+    <>
+      {renderMCBProps(mccbVariant)}
+      <Label text="Design voltage U_L-L">
+        <div className="flex gap-1 flex-wrap">
+          {[230, 400, 690].map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => updateProp({ lineVoltage: v })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.lineVoltage ?? 400) === v
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {v}V
+            </button>
+          ))}
+        </div>
+      </Label>
+      <div className={`rounded border ${tc.border} p-2 space-y-2`}>
+        <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+          BMS (motor ON / shunt / aux / trip)
+        </p>
+        <p className={`text-[9px] ${tc.textMuted} leading-snug`}>
+          Wire the <strong>power</strong> poles (IN_L1…OUT_L3) like a 3P MCB.
+          On the <strong>left</strong> of the symbol: MOT_A1/A2 (motor close),
+          ST_A1/A2 (shunt trip), AUX_COM / AUX_NO / AUX_NC (status changeover),
+          TRIP_T1/T2 (fault contact). Simulator does not model control-circuit
+          current — use the buttons for remote ON/OFF and the table for
+          as-built tags.
+        </p>
+        <Label text="BMS enabled">
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selectedComp!.properties.mccbBmsEnabled ?? false}
+              onChange={(e) =>
+                updateProp({ mccbBmsEnabled: e.target.checked })
+              }
+            />
+            <span className={tc.textMuted}>Remote motor + shunt (BMS/PLC)</span>
+          </label>
+        </Label>
+        {(selectedComp!.properties.mccbBmsEnabled ?? false) && (
+          <>
+            <Label text="Field bus (supervision)">
+              <select
+                value={selectedComp!.properties.mccbBmsProtocol ?? 'none'}
+                onChange={(e) =>
+                  updateProp({
+                    mccbBmsProtocol: e.target
+                      .value as ComponentProperties['mccbBmsProtocol'],
+                  })
+                }
+                className="input-field"
+              >
+                <option value="none">None (hardwired DO/DI only)</option>
+                <option value="modbus_rtu">Modbus RTU</option>
+                <option value="modbus_tcp">Modbus TCP</option>
+                <option value="bacnet_ip">BACnet IP</option>
+              </select>
+            </Label>
+            <Label text="Control supply present">
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={
+                    selectedComp!.properties.mccbBmsCtrlVoltageOk !== false
+                  }
+                  onChange={(e) => {
+                    const c = selectedComp!;
+                    const on = e.target.checked;
+                    if (
+                      !on &&
+                      c.state === 'on' &&
+                      (c.properties.mccbBmsEnabled ?? false)
+                    ) {
+                      updateComponent(c.id, {
+                        properties: {
+                          ...c.properties,
+                          mccbBmsCtrlVoltageOk: false,
+                        },
+                        state: 'off',
+                      });
+                    } else {
+                      updateProp({ mccbBmsCtrlVoltageOk: on });
+                    }
+                  }}
+                />
+                <span className={tc.textMuted}>
+                  Interlock — loss opens main path in sim
+                </span>
+              </label>
+            </Label>
+            <Label text="Mechanism ready (spring / motor ready)">
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={
+                    selectedComp!.properties.mccbBmsMotorReady !== false
+                  }
+                  onChange={(e) =>
+                    updateProp({ mccbBmsMotorReady: e.target.checked })
+                  }
+                />
+                <span className={tc.textMuted}>
+                  Motor close pulse ignored if unchecked
+                </span>
+              </label>
+            </Label>
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => mccbBmsMotorClosePulse(selectedComp!.id)}
+                className="w-full px-2 py-1.5 rounded text-xs font-medium bg-emerald-700 text-white hover:bg-emerald-600"
+              >
+                BMS DO — motor close (remote ON)
+              </button>
+              <button
+                type="button"
+                onClick={() => mccbBmsShuntOpen(selectedComp!.id)}
+                className="w-full px-2 py-1.5 rounded text-xs font-medium bg-amber-700 text-white hover:bg-amber-600"
+              >
+                BMS DO — shunt trip (remote OFF)
+              </button>
+            </div>
+            <div className={`space-y-2 rounded border ${tc.border} bg-black/10 p-2`}>
+              <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+                Panel schedule — control wiring
+              </p>
+              <Label text="Control supply">
+                <select
+                  value={selectedComp!.properties.mccbCtrlSupply ?? '24dc'}
+                  onChange={(e) =>
+                    updateProp({
+                      mccbCtrlSupply: e.target
+                        .value as ComponentProperties['mccbCtrlSupply'],
+                    })
+                  }
+                  className="input-field"
+                >
+                  <option value="24dc">+24 V DC (typ. BMS)</option>
+                  <option value="110dc">110 V DC</option>
+                  <option value="230ac">230 V AC</option>
+                </select>
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Label text="Fuse ref">
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="F1"
+                    value={
+                      selectedComp!.properties.mccbCtrlFuseDesignation ?? 'F1'
+                    }
+                    onChange={(e) =>
+                      updateProp({
+                        mccbCtrlFuseDesignation:
+                          e.target.value.trim() || 'F1',
+                      })
+                    }
+                  />
+                </Label>
+                <Label text="Fuse (A)">
+                  <select
+                    value={String(
+                      selectedComp!.properties.mccbCtrlFuseAmps ?? 2
+                    )}
+                    onChange={(e) =>
+                      updateProp({
+                        mccbCtrlFuseAmps: Number(e.target.value) || 2,
+                      })
+                    }
+                    className="input-field"
+                  >
+                    {[1, 2, 4, 6, 10].map((a) => (
+                      <option key={a} value={a}>
+                        {a} A
+                      </option>
+                    ))}
+                  </select>
+                </Label>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Label text="Interposing relay — motor">
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="K1"
+                    value={selectedComp!.properties.mccbRelayMotorId ?? 'K1'}
+                    onChange={(e) =>
+                      updateProp({
+                        mccbRelayMotorId: e.target.value.trim() || 'K1',
+                      })
+                    }
+                  />
+                </Label>
+                <Label text="Interposing relay — shunt">
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="K2"
+                    value={selectedComp!.properties.mccbRelayStId ?? 'K2'}
+                    onChange={(e) =>
+                      updateProp({
+                        mccbRelayStId: e.target.value.trim() || 'K2',
+                      })
+                    }
+                  />
+                </Label>
+              </div>
+              <p className={`text-[9px] ${tc.textMuted}`}>
+                Use interposing relays per manufacturer — do not land BMS DOs
+                directly on motor or shunt coils.
+              </p>
+              <div className="grid grid-cols-1 gap-1 text-[9px]">
+                <Label text="BMS DO tags">
+                  <div className="flex gap-1">
+                    <input
+                      className="input-field flex-1"
+                      placeholder="DO-MOTOR"
+                      value={
+                        selectedComp!.properties.mccbBmsDoMotorTag ??
+                        'DO-MOTOR'
+                      }
+                      onChange={(e) =>
+                        updateProp({
+                          mccbBmsDoMotorTag:
+                            e.target.value.trim() || 'DO-MOTOR',
+                        })
+                      }
+                    />
+                    <input
+                      className="input-field flex-1"
+                      placeholder="DO-ST"
+                      value={
+                        selectedComp!.properties.mccbBmsDoShuntTag ?? 'DO-ST'
+                      }
+                      onChange={(e) =>
+                        updateProp({
+                          mccbBmsDoShuntTag:
+                            e.target.value.trim() || 'DO-ST',
+                        })
+                      }
+                    />
+                  </div>
+                </Label>
+                <Label text="BMS DI tags">
+                  <div className="grid grid-cols-3 gap-1">
+                    <input
+                      className="input-field"
+                      placeholder="DI-AUX-NO"
+                      value={
+                        selectedComp!.properties.mccbBmsDiAuxNoTag ??
+                        'DI-AUX-NO'
+                      }
+                      onChange={(e) =>
+                        updateProp({
+                          mccbBmsDiAuxNoTag:
+                            e.target.value.trim() || 'DI-AUX-NO',
+                        })
+                      }
+                    />
+                    <input
+                      className="input-field"
+                      placeholder="DI-AUX-NC"
+                      value={
+                        selectedComp!.properties.mccbBmsDiAuxNcTag ??
+                        'DI-AUX-NC'
+                      }
+                      onChange={(e) =>
+                        updateProp({
+                          mccbBmsDiAuxNcTag:
+                            e.target.value.trim() || 'DI-AUX-NC',
+                        })
+                      }
+                    />
+                    <input
+                      className="input-field"
+                      placeholder="DI-TRIP"
+                      value={
+                        selectedComp!.properties.mccbBmsDiTripTag ??
+                        'DI-TRIP'
+                      }
+                      onChange={(e) =>
+                        updateProp({
+                          mccbBmsDiTripTag:
+                            e.target.value.trim() || 'DI-TRIP',
+                        })
+                      }
+                    />
+                  </div>
+                </Label>
+              </div>
+              {(() => {
+                const pr = selectedComp!.properties;
+                const pos =
+                  pr.mccbCtrlSupply === '110dc'
+                    ? '+110 V DC'
+                    : pr.mccbCtrlSupply === '230ac'
+                      ? 'L (230 V AC)'
+                      : '+24 V DC';
+                const fuseRef = pr.mccbCtrlFuseDesignation ?? 'F1';
+                const fuseA = pr.mccbCtrlFuseAmps ?? 2;
+                const kM = pr.mccbRelayMotorId ?? 'K1';
+                const kS = pr.mccbRelayStId ?? 'K2';
+                const doM = pr.mccbBmsDoMotorTag ?? 'DO-MOTOR';
+                const doS = pr.mccbBmsDoShuntTag ?? 'DO-ST';
+                const diN = pr.mccbBmsDiAuxNoTag ?? 'DI-AUX-NO';
+                const diC = pr.mccbBmsDiAuxNcTag ?? 'DI-AUX-NC';
+                const diT = pr.mccbBmsDiTripTag ?? 'DI-TRIP';
+                const neg =
+                  pr.mccbCtrlSupply === '230ac' ? 'N (AC return)' : '0 V / GND';
+                const rows: [string, string, string][] = [
+                  [
+                    'Control + (after fuse)',
+                    `${fuseRef} (${fuseA} A)`,
+                    `${pos} → ${fuseRef} → bus`,
+                  ],
+                  [
+                    'Motor close (pulse)',
+                    'MOT_A1 / MOT_A2',
+                    `${doM} → ${kM} coil → ${kM} NO → MOT_A1–A2; return ${neg}`,
+                  ],
+                  [
+                    'Shunt trip (open)',
+                    'ST_A1 / ST_A2',
+                    `${doS} → ${kS} coil → ${kS} NO → ST_A1–A2; return ${neg}`,
+                  ],
+                  ['Aux common', 'AUX_COM', `Common for changeover aux`],
+                  [
+                    'Aux — closed (NO to COM)',
+                    'AUX_NO',
+                    `AUX_NO → ${diN} when breaker closed`,
+                  ],
+                  [
+                    'Aux — open (NC to COM)',
+                    'AUX_NC',
+                    `AUX_NC → ${diC} when breaker open / trip`,
+                  ],
+                  [
+                    'Trip contact',
+                    'TRIP_T1 / T2',
+                    `TRIP → ${diT} (BMS DI on protection trip)`,
+                  ],
+                ];
+                return (
+                  <div className="overflow-x-auto">
+                    <table
+                      className={`w-full text-left text-[9px] border-collapse ${tc.text}`}
+                    >
+                      <thead>
+                        <tr className={tc.textMuted}>
+                          <th className="border border-gray-600/50 px-1 py-0.5 font-medium">
+                            Function
+                          </th>
+                          <th className="border border-gray-600/50 px-1 py-0.5 font-medium">
+                            Terminals
+                          </th>
+                          <th className="border border-gray-600/50 px-1 py-0.5 font-medium">
+                            Route
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map(([fn, term, route]) => (
+                          <tr key={fn}>
+                            <td className="border border-gray-600/40 px-1 py-0.5 align-top">
+                              {fn}
+                            </td>
+                            <td className="border border-gray-600/40 px-1 py-0.5 align-top font-mono">
+                              {term}
+                            </td>
+                            <td className="border border-gray-600/40 px-1 py-0.5 align-top">
+                              {route}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+              <p className={`text-[9px] ${tc.textMuted} leading-snug`}>
+                Motor is pulsed to close; shunt is energised to trip. Thermal /
+                magnetic protection still trips the MCCB independently of BMS.
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+    );
+  };
+
   const renderThreePhaseContactorProps = () => {
     const variant =
       selectedComp!.type === 'four_phase_contactor' ? '4p' : '3p';
@@ -1364,6 +1823,9 @@ const PropertyPanel: React.FC = () => {
         return renderMultipoleMcbProps();
       case 'air_circuit_breaker':
         return renderAirCircuitBreakerProps();
+      case 'motorized_mccb':
+      case 'four_pole_motorized_mccb':
+        return renderMotorizedMccbProps();
       case 'rcd':
         return renderRCDProps();
       case 'socket':
@@ -1375,6 +1837,8 @@ const PropertyPanel: React.FC = () => {
         return renderLoadProps();
       case 'power_source':
         return renderPowerSourceProps();
+      case 'dc_power_source':
+        return renderDcPowerSourceProps();
       case 'three_phase_source':
         return renderThreePhaseSourceProps();
       case 'three_phase_motor':
@@ -1600,6 +2064,54 @@ const PropertyPanel: React.FC = () => {
                   })()}
               </>
             )}
+            {(selectedComp?.type === 'motorized_mccb' ||
+              selectedComp?.type === 'four_pole_motorized_mccb') &&
+              (selectedComp.properties.mccbBmsEnabled ?? false) &&
+              (() => {
+                const p = selectedComp.properties;
+                const trip = selectedComp.state === 'tripped';
+                const interlockOpen =
+                  p.mccbBmsCtrlVoltageOk === false ||
+                  p.mccbBmsMotorReady === false;
+                const closed =
+                  selectedComp.state === 'on' && !trip && !interlockOpen;
+                const auxNoHi = closed;
+                const auxNcHi = !closed;
+                const tripDiHi = trip;
+                const proto = p.mccbBmsProtocol ?? 'none';
+                return (
+                  <>
+                    <span className={tc.textMuted}>BMS AUX NO (closed):</span>
+                    <span
+                      className={
+                        auxNoHi ? 'text-green-400 font-medium' : tc.textMuted
+                      }
+                    >
+                      {auxNoHi ? 'HI' : 'LO'}
+                    </span>
+                    <span className={tc.textMuted}>BMS AUX NC:</span>
+                    <span
+                      className={
+                        auxNcHi ? 'text-amber-400 font-medium' : tc.textMuted
+                      }
+                    >
+                      {auxNcHi ? 'HI' : 'LO'}
+                    </span>
+                    <span className={tc.textMuted}>BMS TRIP:</span>
+                    <span
+                      className={
+                        tripDiHi ? 'text-red-400 font-medium' : tc.textMuted
+                      }
+                    >
+                      {tripDiHi ? 'HI' : 'LO'}
+                    </span>
+                    <span className={tc.textMuted}>BMS bus:</span>
+                    <span className={tc.textMuted}>
+                      {proto === 'none' ? '—' : proto.replace(/_/g, ' ')}
+                    </span>
+                  </>
+                );
+              })()}
           </div>
         </div>
       )}

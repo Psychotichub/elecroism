@@ -33,6 +33,12 @@ const GROUPS: ComponentGroup[] = [
     items: [
       { type: 'power_source', label: 'AC Source 230V', icon: <FiZap /> },
       {
+        type: 'dc_power_source',
+        label: 'DC Supply',
+        icon: <FiZap />,
+        detail: 'Adjustable V · + / −',
+      },
+      {
         type: 'three_phase_source',
         label: '3φ Supply 400V',
         icon: <FiZap />,
@@ -72,6 +78,18 @@ const GROUPS: ComponentGroup[] = [
         label: 'ACB',
         icon: <FiShield />,
         detail: '4P incomer · Ir / Ii / ST / earth G',
+      },
+      {
+        type: 'motorized_mccb',
+        label: 'Motor MCCB',
+        icon: <FiShield />,
+        detail: '3P + BMS MOT / ST / aux / trip',
+      },
+      {
+        type: 'four_pole_motorized_mccb',
+        label: '4P Motor MCCB',
+        icon: <FiShield />,
+        detail: 'L1–L3 + N + BMS control block',
       },
     ],
   },

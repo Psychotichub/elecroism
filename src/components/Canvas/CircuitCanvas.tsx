@@ -18,10 +18,12 @@ import SocketSymbol from '../Components/SocketSymbol';
 import LoadSymbol from '../Components/LoadSymbol';
 import BusbarSymbol from '../Components/BusbarSymbol';
 import PowerSourceSymbol from '../Components/PowerSourceSymbol';
+import DCPowerSourceSymbol from '../Components/DCPowerSourceSymbol';
 import ThreePhaseSourceSymbol from '../Components/ThreePhaseSourceSymbol';
 import ThreePhaseMotorSymbol from '../Components/ThreePhaseMotorSymbol';
 import ThreePhaseMCBSymbol from '../Components/ThreePhaseMCBSymbol';
 import AirCircuitBreakerSymbol from '../Components/AirCircuitBreakerSymbol';
+import MotorizedMCCBSymbol from '../Components/MotorizedMCCBSymbol';
 import ThreePhaseContactorSymbol from '../Components/ThreePhaseContactorSymbol';
 import JunctionSymbol from '../Components/JunctionSymbol';
 import ControlSymbol from '../Components/ControlSymbol';
@@ -351,6 +353,16 @@ const CircuitCanvas: React.FC = () => {
             onReset={() => resetTripped(comp.id)}
           />
         );
+      case 'motorized_mccb':
+      case 'four_pole_motorized_mccb':
+        return (
+          <MotorizedMCCBSymbol
+            key={comp.id}
+            {...commonProps}
+            onToggle={() => toggleComponent(comp.id)}
+            onReset={() => resetTripped(comp.id)}
+          />
+        );
       case 'rcd':
         return (
           <BreakerSymbol
@@ -386,6 +398,8 @@ const CircuitCanvas: React.FC = () => {
         );
       case 'power_source':
         return <PowerSourceSymbol key={comp.id} {...commonProps} />;
+      case 'dc_power_source':
+        return <DCPowerSourceSymbol key={comp.id} {...commonProps} />;
       case 'three_phase_source':
         return <ThreePhaseSourceSymbol key={comp.id} {...commonProps} />;
       case 'three_phase_motor':

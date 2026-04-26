@@ -31,6 +31,9 @@ function inferFromTokens(tokens: string[]): WireColor | null {
   if (has('L2') || has('PHASE2')) return 'black';
   if (has('L3') || has('PHASE3')) return 'grey';
 
+  if (has('DC') && has('PLUS')) return 'red';
+  if (has('DC') && has('MINUS')) return 'black';
+
   if (has('L') || has('PHASE') || has('LINE')) return 'brown';
 
   return null;

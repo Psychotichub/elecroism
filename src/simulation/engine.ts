@@ -19,6 +19,15 @@ interface PotentialSets {
 }
 
 export class CircuitEngine {
+  /** Single-phase load voltage: AC supply if present, else first DC supply, else 230 V nominal. */
+  private defaultSinglePhaseLoadVoltage(circuit: Circuit): number {
+    const ac = circuit.components.find((c) => c.type === 'power_source');
+    if (ac) return ac.properties.voltage ?? 230;
+    const dc = circuit.components.find((c) => c.type === 'dc_power_source');
+    if (dc) return dc.properties.voltage ?? 24;
+    return 230;
+  }
+
   simulate(circuit: Circuit, depth = 0, wallMs = Date.now()): SimulationResult {
     if (depth > 6) {
       return this.buildDegradedResult(circuit);
@@ -34,15 +43,14 @@ export class CircuitEngine {
     const nodes: Record<string, NodeResult> = {};
     const faults: FaultEvent[] = [];
     const defaultSingleVoltage =
-      circuit.components.find((c) => c.type === 'power_source')?.properties
-        .voltage || 230;
+      this.defaultSinglePhaseLoadVoltage(circuit);
 
     for (const component of circuit.components) {
       const isOpen =
         component.state === 'off' ||
         component.state === 'tripped' ||
         component.state === 'fault' ||
-        this.acbBmsUvrOpensContacts(component);
+        this.mainBreakerBmsInterlockOpen(component);
       const hasPotential = this.componentTouchesAnyPotential(
         component,
         potentials
@@ -94,6 +102,7 @@ export class CircuitEngine {
           energized =
             hasPotential ||
             component.type === 'power_source' ||
+            component.type === 'dc_power_source' ||
             component.type === 'three_phase_source';
           if (component.type === 'three_phase_source') {
             const vLL =
@@ -113,6 +122,14 @@ export class CircuitEngine {
             voltageV = energized ? vLL : 0;
             lineVoltageRmsV = vLL;
             phaseVoltageRmsV = vLL / Math.sqrt(3);
+          } else if (component.type === 'power_source') {
+            voltageV = energized
+              ? (component.properties.voltage ?? 230)
+              : 0;
+          } else if (component.type === 'dc_power_source') {
+            voltageV = energized
+              ? (component.properties.voltage ?? 24)
+              : 0;
           } else {
             voltageV = energized ? defaultSingleVoltage : 0;
           }
@@ -172,6 +189,8 @@ export class CircuitEngine {
         const vRef =
           component.type === 'three_phase_mcb' ||
           component.type === 'four_phase_mcb' ||
+          component.type === 'motorized_mccb' ||
+          component.type === 'four_pole_motorized_mccb' ||
           component.type === 'air_circuit_breaker' ||
           component.type === 'three_phase_contactor' ||
           component.type === 'four_phase_contactor'
@@ -390,6 +409,8 @@ export class CircuitEngine {
       c.type === 'overload_relay' ||
       c.type === 'three_phase_mcb' ||
       c.type === 'four_phase_mcb' ||
+      c.type === 'motorized_mccb' ||
+      c.type === 'four_pole_motorized_mccb' ||
       c.type === 'air_circuit_breaker'
     );
   }
@@ -422,6 +443,8 @@ export class CircuitEngine {
       c.type === 'timer' ||
       c.type === 'three_phase_mcb' ||
       c.type === 'four_phase_mcb' ||
+      c.type === 'motorized_mccb' ||
+      c.type === 'four_pole_motorized_mccb' ||
       c.type === 'air_circuit_breaker' ||
       c.type === 'three_phase_contactor' ||
       c.type === 'four_phase_contactor'
@@ -581,11 +604,17 @@ export class CircuitEngine {
   private getLiveStartKeys(circuit: Circuit): string[] {
     const keys: string[] = [];
     for (const source of circuit.components) {
-      if (source.type !== 'power_source') continue;
+      if (source.type !== 'power_source' && source.type !== 'dc_power_source') {
+        continue;
+      }
       if (source.state === 'off' || source.state === 'tripped') continue;
       for (const cp of source.connectionPoints) {
         const key = this.terminalKey(source.id, cp.id);
         const tokens = this.tokenizeLabel(cp.label);
+        if (source.type === 'dc_power_source') {
+          if (tokens.includes('PLUS')) keys.push(key);
+          continue;
+        }
         if (
           tokens.includes('L') ||
           tokens.includes('LINE') ||
@@ -808,15 +837,18 @@ export class CircuitEngine {
           break;
         case 'three_phase_mcb':
         case 'four_phase_mcb':
+        case 'motorized_mccb':
+        case 'four_pole_motorized_mccb':
         case 'air_circuit_breaker':
           if (
             component.state === 'on' &&
-            !this.acbBmsUvrOpensContacts(component) &&
+            !this.mainBreakerBmsInterlockOpen(component) &&
             !skipInternalBridge
           ) {
             const pairs: [string, string][] =
               component.type === 'four_phase_mcb' ||
-              component.type === 'air_circuit_breaker'
+              component.type === 'air_circuit_breaker' ||
+              component.type === 'four_pole_motorized_mccb'
                 ? [
                     ['IN_L1', 'OUT_L1'],
                     ['IN_L2', 'OUT_L2'],
@@ -890,11 +922,21 @@ export class CircuitEngine {
     const l3Starts: string[] = [];
 
     for (const source of circuit.components) {
-      if (source.type !== 'power_source') continue;
+      if (source.type !== 'power_source' && source.type !== 'dc_power_source') {
+        continue;
+      }
       if (source.state === 'off' || source.state === 'tripped') continue;
       for (const cp of source.connectionPoints) {
         const key = this.terminalKey(source.id, cp.id);
         const tokens = this.tokenizeLabel(cp.label);
+        if (source.type === 'dc_power_source') {
+          if (tokens.includes('PLUS')) {
+            liveStarts.push(key);
+          } else if (tokens.includes('MINUS')) {
+            neutralStarts.push(key);
+          }
+          continue;
+        }
         if (
           tokens.includes('L') ||
           tokens.includes('LINE') ||
@@ -1160,11 +1202,24 @@ export class CircuitEngine {
     return component.acbSimState;
   }
 
-  /** BMS undervoltage release: loss of UVR control supply opens contacts (no IN–OUT bridge). */
-  private acbBmsUvrOpensContacts(component: CircuitComponent): boolean {
-    if (component.type !== 'air_circuit_breaker') return false;
-    const p = component.properties;
-    return Boolean(p.acbBmsEnabled && p.acbBmsUvrEnergized === false);
+  /** ACB: UVR de-energized opens main contacts. mMCCB: loss of control volts or mechanism not ready. */
+  private mainBreakerBmsInterlockOpen(component: CircuitComponent): boolean {
+    if (component.type === 'air_circuit_breaker') {
+      const p = component.properties;
+      return Boolean(p.acbBmsEnabled && p.acbBmsUvrEnergized === false);
+    }
+    if (
+      component.type === 'motorized_mccb' ||
+      component.type === 'four_pole_motorized_mccb'
+    ) {
+      const p = component.properties;
+      return Boolean(
+        p.mccbBmsEnabled &&
+          (p.mccbBmsCtrlVoltageOk === false ||
+            p.mccbBmsMotorReady === false)
+      );
+    }
+    return false;
   }
 
   private acbArcFootnote(hz: number): string {
@@ -1321,18 +1376,24 @@ export class CircuitEngine {
     if (
       component.type === 'mcb' ||
       component.type === 'three_phase_mcb' ||
-      component.type === 'four_phase_mcb'
+      component.type === 'four_phase_mcb' ||
+      component.type === 'motorized_mccb' ||
+      component.type === 'four_pole_motorized_mccb'
     ) {
       const tag =
         component.type === 'three_phase_mcb'
           ? '3P MCB'
           : component.type === 'four_phase_mcb'
             ? '4P MCB'
-            : component.type === 'mcb' &&
-                ((component.properties.poles ?? 1) >= 2 ||
-                  this.findTerminalByLabel(component, 'IN_L'))
-              ? '2P MCB'
-              : 'MCB';
+            : component.type === 'four_pole_motorized_mccb'
+              ? '4P Motorized MCCB'
+              : component.type === 'motorized_mccb'
+                ? 'Motorized MCCB'
+                : component.type === 'mcb' &&
+                  ((component.properties.poles ?? 1) >= 2 ||
+                    this.findTerminalByLabel(component, 'IN_L'))
+                ? '2P MCB'
+                : 'MCB';
       const inA = Math.max(0.1, p.ratingAmps ?? 16);
       const curve = (p.tripCurve || 'C').toString().trim().toUpperCase() || 'C';
       const kMag = this.mcbMagneticInMultiple(component);

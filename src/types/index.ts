@@ -9,6 +9,8 @@ export type ComponentType =
   | 'busbar'
   | 'wire'
   | 'power_source'
+  /** Adjustable nominal DC supply (+ / −). */
+  | 'dc_power_source'
   | 'junction'
   | 'push_button'
   | 'generic_load'
@@ -21,6 +23,10 @@ export type ComponentType =
   | 'three_phase_mcb'
   | 'four_phase_mcb'
   | 'air_circuit_breaker'
+  /** 3P MCCB with motor operator + BMS control terminals (MOT / shunt / aux / trip). */
+  | 'motorized_mccb'
+  /** 4P (L1–L3 + N) motorized MCCB + same BMS control block as 3P mMCCB. */
+  | 'four_pole_motorized_mccb'
   | 'three_phase_contactor'
   | 'four_phase_contactor';
 
@@ -122,6 +128,24 @@ export interface ComponentProperties {
   acbBmsDi52aTag?: string;
   acbBmsDi52bTag?: string;
   acbBmsDiTripTag?: string;
+
+  /** Motorized MCCB: remote motor close, shunt trip, aux + trip feedback (as-built / panel schedule). */
+  mccbBmsEnabled?: boolean;
+  /** Control supply present — if false while BMS enabled, main contacts treated open (interlock). */
+  mccbBmsCtrlVoltageOk?: boolean;
+  /** Mechanism ready (spring charged / ready) — motor close pulse ignored if false. */
+  mccbBmsMotorReady?: boolean;
+  mccbBmsProtocol?: 'none' | 'modbus_rtu' | 'modbus_tcp' | 'bacnet_ip';
+  mccbCtrlSupply?: '24dc' | '110dc' | '230ac';
+  mccbCtrlFuseDesignation?: string;
+  mccbCtrlFuseAmps?: number;
+  mccbRelayMotorId?: string;
+  mccbRelayStId?: string;
+  mccbBmsDoMotorTag?: string;
+  mccbBmsDoShuntTag?: string;
+  mccbBmsDiAuxNoTag?: string;
+  mccbBmsDiAuxNcTag?: string;
+  mccbBmsDiTripTag?: string;
 
   socketType?: 'schuko' | 'UK' | 'US' | 'IEC';
   voltage?: number;
