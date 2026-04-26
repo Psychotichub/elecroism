@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Group, Circle, Line, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult, ToolMode } from '../../types';
+import ScaledSymbolInner from './ScaledSymbolInner';
 
 interface Props {
   component: CircuitComponent;
@@ -81,6 +82,7 @@ const SwitchSymbol: React.FC<Props> = ({
         onDragEnd(e.target.x(), e.target.y());
       }}
     >
+      <ScaledSymbolInner component={component}>
       {selected && (
         <Line
           points={[-18, -24, 18, -24, 18, 24, -18, 24]}
@@ -164,6 +166,7 @@ const SwitchSymbol: React.FC<Props> = ({
             strokeWidth={1}
           />
         ))}
+      </ScaledSymbolInner>
     </Group>
   );
 };

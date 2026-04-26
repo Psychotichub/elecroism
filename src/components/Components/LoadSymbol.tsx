@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Group, Circle, Line, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
+import ScaledSymbolInner from './ScaledSymbolInner';
 import Konva from 'konva';
 
 interface Props {
@@ -107,6 +108,7 @@ const LoadSymbol: React.FC<Props> = ({
       }}
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
     >
+      <ScaledSymbolInner component={component}>
       {selected && (
         <Circle
           x={0}
@@ -176,6 +178,7 @@ const LoadSymbol: React.FC<Props> = ({
             strokeWidth={1}
           />
         ))}
+      </ScaledSymbolInner>
     </Group>
   );
 };

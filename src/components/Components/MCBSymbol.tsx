@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Group, Rect, Text, Line, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import ScaledSymbolInner from './ScaledSymbolInner';
 
 interface Props {
   component: CircuitComponent;
@@ -69,6 +70,7 @@ const MCBSymbol: React.FC<Props> = ({
       }}
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
     >
+      <ScaledSymbolInner component={component}>
       {selected && (
         <Rect
           x={-bodyW / 2 - selPadX}
@@ -222,6 +224,7 @@ const MCBSymbol: React.FC<Props> = ({
             strokeWidth={1}
           />
         ))}
+      </ScaledSymbolInner>
     </Group>
   );
 };

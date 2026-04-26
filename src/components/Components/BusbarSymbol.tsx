@@ -3,6 +3,7 @@ import { Group, Rect, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult, WireColor } from '../../types';
 import { getWireColor } from '../../utils/geometry';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import ScaledSymbolInner from './ScaledSymbolInner';
 
 interface Props {
   component: CircuitComponent;
@@ -42,6 +43,7 @@ const BusbarSymbol: React.FC<Props> = ({
       }}
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
     >
+      <ScaledSymbolInner component={component}>
       {selected && (
         <Rect
           x={-64}
@@ -90,6 +92,7 @@ const BusbarSymbol: React.FC<Props> = ({
             strokeWidth={1}
           />
         ))}
+      </ScaledSymbolInner>
     </Group>
   );
 };

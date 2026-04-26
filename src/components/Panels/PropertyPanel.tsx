@@ -7,7 +7,7 @@ import type {
   ComponentType,
   PhaseSystem,
 } from '../../types';
-import { getWireColor } from '../../utils/geometry';
+import { clampComponentScale, getWireColor } from '../../utils/geometry';
 
 const WIRE_COLORS: { value: WireColor; label: string }[] = [
   { value: 'brown', label: 'Brown (L)' },
@@ -26,6 +26,7 @@ function defaultPhaseSystemForType(t: ComponentType): PhaseSystem {
     case 'three_phase_motor':
     case 'three_phase_mcb':
     case 'four_phase_mcb':
+    case 'air_circuit_breaker':
     case 'three_phase_contactor':
     case 'four_phase_contactor':
       return 'three_phase';
@@ -51,6 +52,8 @@ const PropertyPanel: React.FC = () => {
     removeComponent,
     rotateComponent,
     duplicateComponent,
+    acbBmsClosePulse,
+    acbBmsShuntOpen,
   } = useCircuitStore();
 
   const selectedComp = circuit.components.find(
@@ -598,6 +601,593 @@ const PropertyPanel: React.FC = () => {
     );
   };
 
+  const renderAirCircuitBreakerProps = () => (
+    <>
+      <Label text="Ir (long-time, A)">
+        <select
+          value={selectedComp!.properties.ratingAmps || 630}
+          onChange={(e) =>
+            updateProp({ ratingAmps: Number(e.target.value) })
+          }
+          className="input-field"
+        >
+          {[160, 200, 250, 320, 400, 500, 630, 800, 1000, 1250, 1600].map(
+            (a) => (
+              <option key={a} value={a}>
+                {a}A
+              </option>
+            )
+          )}
+        </select>
+      </Label>
+      <div className={`rounded border ${tc.border} p-2 space-y-2`}>
+        <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+          BMS (CC / shunt / UVR / aux)
+        </p>
+        <p className={`text-[9px] ${tc.textMuted} leading-snug`}>
+          Wiring: choose the Wire tool, then click the terminals on the ACB.
+          Main power stays on the pole terminals (IN_L1…OUT_N). BMS control uses
+          the extra terminals on the left of the symbol: CC_A1/A2, ST_A1/A2,
+          UVR_A1/A2, AUX_52A, AUX_52B, AUX_TRIP — for your diagram to
+          junctions, relay coils, or a notional BMS block. The simulator does
+          not model current on those control wires; use the buttons above for
+          close/open and the table below for as-built labels.
+        </p>
+        <Label text="BMS motor pack">
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selectedComp!.properties.acbBmsEnabled ?? false}
+              onChange={(e) =>
+                updateProp({ acbBmsEnabled: e.target.checked })
+              }
+            />
+            <span className={tc.textMuted}>Enable remote control</span>
+          </label>
+        </Label>
+        {(selectedComp!.properties.acbBmsEnabled ?? false) && (
+          <>
+            <Label text="Field bus (supervision)">
+              <select
+                value={selectedComp!.properties.acbBmsProtocol ?? 'none'}
+                onChange={(e) =>
+                  updateProp({
+                    acbBmsProtocol: e.target
+                      .value as ComponentProperties['acbBmsProtocol'],
+                  })
+                }
+                className="input-field"
+              >
+                <option value="none">None (hardwired DO/DI only)</option>
+                <option value="modbus_rtu">Modbus RTU</option>
+                <option value="modbus_tcp">Modbus TCP</option>
+                <option value="bacnet_ip">BACnet IP</option>
+              </select>
+            </Label>
+            <Label text="UVR energized (must hold to close)">
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={
+                    selectedComp!.properties.acbBmsUvrEnergized !== false
+                  }
+                  onChange={(e) => {
+                    const c = selectedComp!;
+                    const on = e.target.checked;
+                    if (
+                      !on &&
+                      c.state === 'on' &&
+                      (c.properties.acbBmsEnabled ?? false)
+                    ) {
+                      updateComponent(c.id, {
+                        properties: {
+                          ...c.properties,
+                          acbBmsUvrEnergized: false,
+                        },
+                        state: 'off',
+                      });
+                    } else {
+                      updateProp({ acbBmsUvrEnergized: on });
+                    }
+                  }}
+                />
+                <span className={tc.textMuted}>
+                  Loss opens contacts (interlock)
+                </span>
+              </label>
+            </Label>
+            <Label text="Spring charged (motor)">
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={
+                    selectedComp!.properties.acbBmsSpringCharged !== false
+                  }
+                  onChange={(e) =>
+                    updateProp({ acbBmsSpringCharged: e.target.checked })
+                  }
+                />
+                <span className={tc.textMuted}>CC ineffective if unchecked</span>
+              </label>
+            </Label>
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => acbBmsClosePulse(selectedComp!.id)}
+                className="w-full px-2 py-1.5 rounded text-xs font-medium bg-emerald-700 text-white hover:bg-emerald-600"
+              >
+                BMS DO — closing coil (CC pulse)
+              </button>
+              <button
+                type="button"
+                onClick={() => acbBmsShuntOpen(selectedComp!.id)}
+                className="w-full px-2 py-1.5 rounded text-xs font-medium bg-amber-700 text-white hover:bg-amber-600"
+              >
+                BMS DO — shunt trip (remote OFF)
+              </button>
+            </div>
+            <div className={`space-y-2 rounded border ${tc.border} bg-black/10 p-2`}>
+              <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+                Panel schedule — control wiring (as-built)
+              </p>
+              <Label text="Control supply">
+                <select
+                  value={selectedComp!.properties.acbCtrlSupply ?? '24dc'}
+                  onChange={(e) =>
+                    updateProp({
+                      acbCtrlSupply: e.target
+                        .value as ComponentProperties['acbCtrlSupply'],
+                    })
+                  }
+                  className="input-field"
+                >
+                  <option value="24dc">+24 V DC (typ. BMS)</option>
+                  <option value="110dc">110 V DC</option>
+                  <option value="230ac">230 V AC</option>
+                </select>
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Label text="Fuse ref">
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="F1"
+                    value={
+                      selectedComp!.properties.acbCtrlFuseDesignation ?? 'F1'
+                    }
+                    onChange={(e) =>
+                      updateProp({
+                        acbCtrlFuseDesignation:
+                          e.target.value.trim() || 'F1',
+                      })
+                    }
+                  />
+                </Label>
+                <Label text="Fuse (A)">
+                  <select
+                    value={String(
+                      selectedComp!.properties.acbCtrlFuseAmps ?? 2
+                    )}
+                    onChange={(e) =>
+                      updateProp({
+                        acbCtrlFuseAmps: Number(e.target.value) || 2,
+                      })
+                    }
+                    className="input-field"
+                  >
+                    {[1, 2, 4, 6, 10].map((a) => (
+                      <option key={a} value={a}>
+                        {a} A
+                      </option>
+                    ))}
+                  </select>
+                </Label>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Label text="Interposing relay — CC">
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="K1"
+                    value={selectedComp!.properties.acbRelayCcId ?? 'K1'}
+                    onChange={(e) =>
+                      updateProp({
+                        acbRelayCcId: e.target.value.trim() || 'K1',
+                      })
+                    }
+                  />
+                </Label>
+                <Label text="Interposing relay — shunt">
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="K2"
+                    value={selectedComp!.properties.acbRelayStId ?? 'K2'}
+                    onChange={(e) =>
+                      updateProp({
+                        acbRelayStId: e.target.value.trim() || 'K2',
+                      })
+                    }
+                  />
+                </Label>
+              </div>
+              <p className={`text-[9px] ${tc.textMuted}`}>
+                Never land BMS DO directly on ACB coils — use NO contacts of{' '}
+                {selectedComp!.properties.acbRelayCcId ?? 'K1'} /{' '}
+                {selectedComp!.properties.acbRelayStId ?? 'K2'} per manufacturer
+                data sheet.
+              </p>
+              <div className="grid grid-cols-1 gap-1 text-[9px]">
+                <Label text="BMS DO tags (labels)">
+                  <div className="flex gap-1">
+                    <input
+                      className="input-field flex-1"
+                      placeholder="DO-CC"
+                      value={
+                        selectedComp!.properties.acbBmsDoCloseTag ?? 'DO-CC'
+                      }
+                      onChange={(e) =>
+                        updateProp({
+                          acbBmsDoCloseTag: e.target.value.trim() || 'DO-CC',
+                        })
+                      }
+                    />
+                    <input
+                      className="input-field flex-1"
+                      placeholder="DO-ST"
+                      value={
+                        selectedComp!.properties.acbBmsDoOpenTag ?? 'DO-ST'
+                      }
+                      onChange={(e) =>
+                        updateProp({
+                          acbBmsDoOpenTag: e.target.value.trim() || 'DO-ST',
+                        })
+                      }
+                    />
+                  </div>
+                </Label>
+                <Label text="BMS DI tags (aux)">
+                  <div className="grid grid-cols-3 gap-1">
+                    <input
+                      className="input-field"
+                      placeholder="DI-52a"
+                      value={
+                        selectedComp!.properties.acbBmsDi52aTag ?? 'DI-52a'
+                      }
+                      onChange={(e) =>
+                        updateProp({
+                          acbBmsDi52aTag: e.target.value.trim() || 'DI-52a',
+                        })
+                      }
+                    />
+                    <input
+                      className="input-field"
+                      placeholder="DI-52b"
+                      value={
+                        selectedComp!.properties.acbBmsDi52bTag ?? 'DI-52b'
+                      }
+                      onChange={(e) =>
+                        updateProp({
+                          acbBmsDi52bTag: e.target.value.trim() || 'DI-52b',
+                        })
+                      }
+                    />
+                    <input
+                      className="input-field"
+                      placeholder="DI-TRIP"
+                      value={
+                        selectedComp!.properties.acbBmsDiTripTag ?? 'DI-TRIP'
+                      }
+                      onChange={(e) =>
+                        updateProp({
+                          acbBmsDiTripTag: e.target.value.trim() || 'DI-TRIP',
+                        })
+                      }
+                    />
+                  </div>
+                </Label>
+              </div>
+              {(() => {
+                const pr = selectedComp!.properties;
+                const pos =
+                  pr.acbCtrlSupply === '110dc'
+                    ? '+110 V DC'
+                    : pr.acbCtrlSupply === '230ac'
+                      ? 'L (230 V AC)'
+                      : '+24 V DC';
+                const fuseRef = pr.acbCtrlFuseDesignation ?? 'F1';
+                const fuseA = pr.acbCtrlFuseAmps ?? 2;
+                const kCc = pr.acbRelayCcId ?? 'K1';
+                const kSt = pr.acbRelayStId ?? 'K2';
+                const doC = pr.acbBmsDoCloseTag ?? 'DO-CC';
+                const doO = pr.acbBmsDoOpenTag ?? 'DO-ST';
+                const diA = pr.acbBmsDi52aTag ?? 'DI-52a';
+                const diB = pr.acbBmsDi52bTag ?? 'DI-52b';
+                const diT = pr.acbBmsDiTripTag ?? 'DI-TRIP';
+                const neg =
+                  pr.acbCtrlSupply === '230ac' ? 'N (AC return)' : '0 V / GND';
+                const rows: [string, string, string][] = [
+                  [
+                    'Control + (after fuse)',
+                    `${fuseRef} (${fuseA} A)`,
+                    `${pos} → ${fuseRef} → bus`,
+                  ],
+                  [
+                    'UVR hold',
+                    'UVR A1 / A2',
+                    `${pos} → UVR A1; ${neg} → UVR A2 (continuous)`,
+                  ],
+                  [
+                    'Closing coil (pulse)',
+                    'CC A1 / A2',
+                    `${doC} → ${kCc} coil → ${kCc} NO → CC A1–A2; return ${neg}`,
+                  ],
+                  [
+                    'Shunt trip (open)',
+                    'ST A1 / A2',
+                    `${doO} → ${kSt} coil → ${kSt} NO → ST A1–A2; return ${neg}`,
+                  ],
+                  [
+                    'Aux — breaker closed',
+                    'AUX_52A',
+                    `AUX_52A → ${diA} (BMS DI)`,
+                  ],
+                  [
+                    'Aux — breaker open',
+                    'AUX_52B',
+                    `AUX_52B → ${diB} (BMS DI)`,
+                  ],
+                  [
+                    'Aux — trip / fault',
+                    'AUX_TRIP',
+                    `AUX_TRIP → ${diT} (BMS DI)`,
+                  ],
+                ];
+                return (
+                  <div className="overflow-x-auto">
+                    <table
+                      className={`w-full text-left text-[9px] border-collapse ${tc.text}`}
+                    >
+                      <thead>
+                        <tr className={tc.textMuted}>
+                          <th className="border border-gray-600/50 px-1 py-0.5 font-medium">
+                            Function
+                          </th>
+                          <th className="border border-gray-600/50 px-1 py-0.5 font-medium">
+                            ACB terminals
+                          </th>
+                          <th className="border border-gray-600/50 px-1 py-0.5 font-medium">
+                            Route
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map(([fn, term, route]) => (
+                          <tr key={fn}>
+                            <td className="border border-gray-600/40 px-1 py-0.5 align-top">
+                              {fn}
+                            </td>
+                            <td className="border border-gray-600/40 px-1 py-0.5 align-top font-mono">
+                              {term}
+                            </td>
+                            <td className="border border-gray-600/40 px-1 py-0.5 align-top">
+                              {route}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+              <p className={`text-[9px] ${tc.textMuted} leading-snug`}>
+                CC: short pulse only (≈0.5–1 s). Do not hold energised. Shunt:
+                energise to trip open. Trip unit (LSIG) operates independently
+                of BMS. Terminal lettering follows common IEC-style A1/A2
+                naming; factory numbering may differ — verify against the device
+                sheet.
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+      <Label text="Instantaneous (×Ir)">
+        <div className="flex gap-1 flex-wrap">
+          {[5, 6, 8, 10, 12, 15].map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => updateProp({ acbInstantaneousMult: m })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.acbInstantaneousMult ?? 10) === m
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {m}×
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="Short-time (×Ir)">
+        <div className="flex gap-1 flex-wrap">
+          {[3, 4, 5, 6, 8].map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => updateProp({ acbShortTimeMult: m })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.acbShortTimeMult ?? 6) === m
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {m}×
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="Earth-fault G">
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input
+            type="checkbox"
+            checked={
+              selectedComp!.properties.acbEarthFaultEnabled ?? false
+            }
+            onChange={(e) =>
+              updateProp({ acbEarthFaultEnabled: e.target.checked })
+            }
+          />
+          <span className={tc.textMuted}>Enable Ig trip</span>
+        </label>
+      </Label>
+      {(selectedComp!.properties.acbEarthFaultEnabled ?? false) && (
+        <Label text="Ig (A)">
+          <select
+            value={selectedComp!.properties.acbEarthFaultAmps || 120}
+            onChange={(e) =>
+              updateProp({ acbEarthFaultAmps: Number(e.target.value) })
+            }
+            className="input-field"
+          >
+            {[30, 60, 120, 200, 300, 500].map((g) => (
+              <option key={g} value={g}>
+                {g}A
+              </option>
+            ))}
+          </select>
+        </Label>
+      )}
+      <Label text="Line frequency (½-cycle delay)">
+        <div className="flex gap-1">
+          {[50, 60].map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => updateProp({ acbLineFrequencyHz: f })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.acbLineFrequencyHz ?? 50) === f
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {f} Hz
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="ST definite delay (s)">
+        <input
+          type="number"
+          min={0}
+          step={0.01}
+          value={selectedComp!.properties.acbShortTimeDelayS ?? 0.18}
+          onChange={(e) =>
+            updateProp({
+              acbShortTimeDelayS: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="input-field"
+        />
+      </Label>
+      <Label text="Earth definite delay (s)">
+        <input
+          type="number"
+          min={0}
+          step={0.01}
+          value={selectedComp!.properties.acbEarthFaultDelayS ?? 0.1}
+          onChange={(e) =>
+            updateProp({
+              acbEarthFaultDelayS: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="input-field"
+        />
+      </Label>
+      <Label text="Long-time trip integral">
+        <input
+          type="number"
+          min={5}
+          step={1}
+          value={selectedComp!.properties.acbThermalTripIntegral ?? 80}
+          onChange={(e) =>
+            updateProp({
+              acbThermalTripIntegral: Math.max(
+                5,
+                Number(e.target.value) || 80
+              ),
+            })
+          }
+          className="input-field"
+        />
+      </Label>
+      <Label text="Breaking capacity">
+        <div className="flex gap-1">
+          {([6000, 10000] as const).map((b) => (
+            <button
+              key={b}
+              type="button"
+              onClick={() => updateProp({ breakingCapacity: b })}
+              className={`px-2 py-1 rounded text-xs ${
+                selectedComp!.properties.breakingCapacity === b
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {b / 1000}kA
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="Design voltage U_L-L">
+        <div className="flex gap-1 flex-wrap">
+          {[230, 400, 690].map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => updateProp({ lineVoltage: v })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.lineVoltage ?? 400) === v
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {v}V
+            </button>
+          ))}
+        </div>
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Simulation: inverse-time long-time (∫ below ST pickup); definite
+        short-time and earth delays; instantaneous pickup with ~½-cycle
+        current-zero / arc-chute wording in trip text. Re-run simulation as
+        time advances (wall clock between runs, capped per step).
+      </p>
+      {selectedComp!.state === 'tripped' && (
+        <button
+          type="button"
+          onClick={() => resetTripped(selectedComp!.id)}
+          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+        >
+          RESET ACB
+        </button>
+      )}
+      <Label text="State">
+        <span
+          className={`text-xs font-medium ${
+            selectedComp!.state === 'tripped'
+              ? 'text-red-400'
+              : selectedComp!.state === 'on'
+                ? 'text-green-400'
+                : 'text-gray-400'
+          }`}
+        >
+          {selectedComp!.state.toUpperCase()}
+        </span>
+      </Label>
+    </>
+  );
+
   const renderMultipoleMcbProps = () => {
     const variant =
       selectedComp!.type === 'four_phase_mcb' ? '4p' : '3p';
@@ -772,6 +1362,8 @@ const PropertyPanel: React.FC = () => {
       case 'three_phase_mcb':
       case 'four_phase_mcb':
         return renderMultipoleMcbProps();
+      case 'air_circuit_breaker':
+        return renderAirCircuitBreakerProps();
       case 'rcd':
         return renderRCDProps();
       case 'socket':
@@ -821,6 +1413,27 @@ const PropertyPanel: React.FC = () => {
               <span className={`text-xs ${tc.textMuted} capitalize`}>
                 {selectedComp.type.replace(/_/g, ' ')}
               </span>
+            </Label>
+
+            <Label text="Visual scale">
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min={0.25}
+                  max={4}
+                  step={0.05}
+                  value={selectedComp.scale ?? 1}
+                  onChange={(e) =>
+                    updateComponent(selectedComp.id, {
+                      scale: clampComponentScale(Number(e.target.value)),
+                    })
+                  }
+                  className="flex-1 min-w-0 accent-blue-600"
+                />
+                <span className={`text-xs font-mono w-11 shrink-0 ${tc.textMuted}`}>
+                  {(selectedComp.scale ?? 1).toFixed(2)}×
+                </span>
+              </div>
             </Label>
 
             <Label text="Phase system">
@@ -935,6 +1548,58 @@ const PropertyPanel: React.FC = () => {
             >
               {nodeResult.energized ? 'ENERGIZED' : 'DE-ENERGIZED'}
             </span>
+            {selectedComp?.type === 'air_circuit_breaker' && (
+              <>
+                <span className={tc.textMuted}>ACB overload ∫:</span>
+                <span>
+                  {(selectedComp.acbSimState?.thermalExcess ?? 0).toFixed(1)} /{' '}
+                  {selectedComp.properties.acbThermalTripIntegral ?? 80}
+                </span>
+                {(selectedComp.properties.acbBmsEnabled ?? false) &&
+                  (() => {
+                    const p = selectedComp.properties;
+                    const trip = selectedComp.state === 'tripped';
+                    const uvrOff = p.acbBmsUvrEnergized === false;
+                    const aux52a =
+                      !trip && selectedComp.state === 'on' && !uvrOff;
+                    const aux52b =
+                      selectedComp.state === 'off' || trip || uvrOff;
+                    const proto = p.acbBmsProtocol ?? 'none';
+                    return (
+                      <>
+                        <span className={tc.textMuted}>BMS 52a (closed):</span>
+                        <span
+                          className={
+                            aux52a ? 'text-green-400 font-medium' : tc.textMuted
+                          }
+                        >
+                          {aux52a ? 'HI' : 'LO'}
+                        </span>
+                        <span className={tc.textMuted}>BMS 52b (open):</span>
+                        <span
+                          className={
+                            aux52b ? 'text-amber-400 font-medium' : tc.textMuted
+                          }
+                        >
+                          {aux52b ? 'HI' : 'LO'}
+                        </span>
+                        <span className={tc.textMuted}>BMS TRIP:</span>
+                        <span
+                          className={
+                            trip ? 'text-red-400 font-medium' : tc.textMuted
+                          }
+                        >
+                          {trip ? 'HI' : 'LO'}
+                        </span>
+                        <span className={tc.textMuted}>BMS bus:</span>
+                        <span className={tc.textMuted}>
+                          {proto === 'none' ? '—' : proto.replace(/_/g, ' ')}
+                        </span>
+                      </>
+                    );
+                  })()}
+              </>
+            )}
           </div>
         </div>
       )}

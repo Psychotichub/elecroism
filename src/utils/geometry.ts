@@ -1,3 +1,5 @@
+import type { CircuitComponent, ConnectionPoint } from '../types';
+
 export function snapToGrid(value: number, gridSize: number): number {
   return Math.round(value / gridSize) * gridSize;
 }
@@ -44,4 +46,49 @@ export function getWireWidth(crossSection: number): number {
     10: 3,
   };
   return widths[crossSection] || 1.5;
+}
+
+const SCALE_MIN = 0.25;
+const SCALE_MAX = 4;
+
+export function clampComponentScale(scale?: number): number {
+  const s = scale ?? 1;
+  return Math.min(SCALE_MAX, Math.max(SCALE_MIN, s));
+}
+
+/** World position of a connection point (includes component scale). */
+export function connectionPointWorld(
+  component: CircuitComponent,
+  cp: ConnectionPoint
+): { x: number; y: number } {
+  const s = clampComponentScale(component.scale);
+  const r = rotatePoint(cp.x * s, cp.y * s, component.rotation);
+  return { x: component.x + r.x, y: component.y + r.y };
+}
+
+/** Bottom-right style handle anchor in world space (from CP hull + pad). */
+export function componentResizeHandleWorld(
+  component: CircuitComponent
+): { x: number; y: number } {
+  if (component.connectionPoints.length === 0) {
+    const s = clampComponentScale(component.scale);
+    return {
+      x: component.x + 28 * s,
+      y: component.y + 28 * s,
+    };
+  }
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const cp of component.connectionPoints) {
+    const w = connectionPointWorld(component, cp);
+    maxX = Math.max(maxX, w.x);
+    maxY = Math.max(maxY, w.y);
+  }
+  const cx = component.x;
+  const cy = component.y;
+  const vx = maxX - cx;
+  const vy = maxY - cy;
+  const len = Math.hypot(vx, vy) || 1;
+  const pad = 16;
+  return { x: maxX + (vx / len) * pad, y: maxY + (vy / len) * pad };
 }

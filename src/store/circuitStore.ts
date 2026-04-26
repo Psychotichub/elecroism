@@ -14,7 +14,10 @@ import type {
 } from '../types';
 import { engine } from '../simulation/engine';
 import { v4 as uuid } from 'uuid';
-import { rotatePoint } from '../utils/geometry';
+import {
+  clampComponentScale,
+  connectionPointWorld,
+} from '../utils/geometry';
 import {
   inferWireColor,
   inferWireColorFromSingleTerminal,
@@ -29,8 +32,7 @@ function getConnectionPointAbsolutePosition(
   if (!comp) return null;
   const point = comp.connectionPoints.find((p) => p.id === pointId);
   if (!point) return null;
-  const rotated = rotatePoint(point.x, point.y, comp.rotation);
-  return { x: comp.x + rotated.x, y: comp.y + rotated.y };
+  return connectionPointWorld(comp, point);
 }
 
 type CreateConnectionPointsOptions = {
@@ -88,6 +90,45 @@ function syncWireEndpoints(circuit: Circuit): Circuit {
   };
 }
 
+/** BMS / motor-pack control terminals (diagram only — not in power graph). */
+function acbControlConnectionPoints(componentId: string): ConnectionPoint[] {
+  const x = -46;
+  const rows: [number, string][] = [
+    [-26, 'CC_A1'],
+    [-18, 'CC_A2'],
+    [-10, 'ST_A1'],
+    [-2, 'ST_A2'],
+    [6, 'UVR_A1'],
+    [14, 'UVR_A2'],
+    [22, 'AUX_52A'],
+    [30, 'AUX_52B'],
+    [38, 'AUX_TRIP'],
+  ];
+  return rows.map(([y, label]) => ({
+    id: uuid(),
+    componentId,
+    x,
+    y,
+    label,
+  }));
+}
+
+function ensureAcbControlConnectionPoints(
+  component: CircuitComponent
+): CircuitComponent {
+  if (component.type !== 'air_circuit_breaker') return component;
+  if (component.connectionPoints.some((p) => p.label === 'CC_A1')) {
+    return component;
+  }
+  return {
+    ...component,
+    connectionPoints: [
+      ...component.connectionPoints,
+      ...acbControlConnectionPoints(component.id),
+    ],
+  };
+}
+
 function createConnectionPoints(
   componentId: string,
   type: ComponentType,
@@ -132,6 +173,18 @@ function createConnectionPoints(
         { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_L3' },
         { id: uuid(), componentId, x: 30, y: -25, label: 'IN_N' },
         { id: uuid(), componentId, x: 30, y: 25, label: 'OUT_N' },
+      ];
+    case 'air_circuit_breaker':
+      return [
+        { id: uuid(), componentId, x: -30, y: -25, label: 'IN_L1' },
+        { id: uuid(), componentId, x: -30, y: 25, label: 'OUT_L1' },
+        { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L2' },
+        { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L2' },
+        { id: uuid(), componentId, x: 10, y: -25, label: 'IN_L3' },
+        { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_L3' },
+        { id: uuid(), componentId, x: 30, y: -25, label: 'IN_N' },
+        { id: uuid(), componentId, x: 30, y: 25, label: 'OUT_N' },
+        ...acbControlConnectionPoints(componentId),
       ];
     case 'switch':
     case 'push_button':
@@ -550,6 +603,36 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         lineVoltage: 400,
         phaseSystem: 'three_phase',
       };
+    case 'air_circuit_breaker':
+      return {
+        ratingAmps: 630,
+        breakingCapacity: 10000,
+        poles: 4,
+        lineVoltage: 400,
+        phaseSystem: 'three_phase',
+        acbInstantaneousMult: 10,
+        acbShortTimeMult: 6,
+        acbEarthFaultEnabled: true,
+        acbEarthFaultAmps: 120,
+        acbLineFrequencyHz: 50,
+        acbShortTimeDelayS: 0.18,
+        acbEarthFaultDelayS: 0.1,
+        acbThermalTripIntegral: 80,
+        acbBmsEnabled: false,
+        acbBmsUvrEnergized: true,
+        acbBmsSpringCharged: true,
+        acbBmsProtocol: 'none' as const,
+        acbCtrlSupply: '24dc',
+        acbCtrlFuseDesignation: 'F1',
+        acbCtrlFuseAmps: 2,
+        acbRelayCcId: 'K1',
+        acbRelayStId: 'K2',
+        acbBmsDoCloseTag: 'DO-CC',
+        acbBmsDoOpenTag: 'DO-ST',
+        acbBmsDi52aTag: 'DI-52a',
+        acbBmsDi52bTag: 'DI-52b',
+        acbBmsDiTripTag: 'DI-TRIP',
+      };
     case 'three_phase_contactor':
       return {
         ratingAmps: 25,
@@ -657,6 +740,7 @@ function getDefaultLabel(type: ComponentType): string {
     three_phase_motor: '3φ Motor',
     three_phase_mcb: '3P MCB',
     four_phase_mcb: '4P MCB',
+    air_circuit_breaker: 'ACB',
     three_phase_contactor: '3P KM',
     four_phase_contactor: '4P KM',
   };
@@ -676,6 +760,7 @@ function getInitialState(type: ComponentType): CircuitComponent['state'] {
     'overload_relay',
     'three_phase_mcb',
     'four_phase_mcb',
+    'air_circuit_breaker',
     'three_phase_contactor',
     'four_phase_contactor',
   ]);
@@ -714,7 +799,11 @@ interface CircuitStore {
     type: ComponentType,
     x: number,
     y: number,
-    options?: { pushButtonVariant?: 'NO' | 'NC'; mcbInitialPoles?: 1 | 2 }
+    options?: {
+      pushButtonVariant?: 'NO' | 'NC';
+      mcbInitialPoles?: 1 | 2;
+      initialScale?: number;
+    }
   ) => void;
   setMcbPoleLayout: (id: string, poles: 1 | 2) => void;
   setPushButtonPressed: (id: string, pressed: boolean) => void;
@@ -726,6 +815,10 @@ interface CircuitStore {
   removeComponent: (id: string) => void;
   toggleComponent: (id: string) => void;
   resetTripped: (id: string) => void;
+  /** BMS closing coil (CC) pulse — closes main contacts if interlocks OK */
+  acbBmsClosePulse: (id: string) => void;
+  /** BMS shunt trip — opens main contacts (remote OFF) */
+  acbBmsShuntOpen: (id: string) => void;
   moveComponent: (id: string, x: number, y: number) => void;
   rotateComponent: (id: string) => void;
   duplicateComponent: (id: string) => void;
@@ -741,6 +834,12 @@ interface CircuitStore {
   setSelected: (id: string | null) => void;
   setTool: (tool: ToolMode) => void;
   setZoom: (zoom: number) => void;
+  /** Zoom to `zoom` while keeping the world point under (stageX, stageY) fixed; coords match Konva `getPointerPosition()`. */
+  setZoomAroundStagePoint: (
+    zoom: number,
+    stageX: number,
+    stageY: number
+  ) => void;
   setPan: (x: number, y: number) => void;
 
   runSimulation: () => void;
@@ -784,6 +883,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       label: getDefaultLabel(type),
       x,
       y,
+      scale: clampComponentScale(options?.initialScale ?? 1),
       rotation: 0,
       state: getInitialState(type),
       ...(type === 'push_button' ? { pressed: false } : {}),
@@ -872,11 +972,15 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   },
 
   updateComponent: (id, updates) => {
+    const next: Partial<CircuitComponent> =
+      updates.scale !== undefined
+        ? { ...updates, scale: clampComponentScale(updates.scale) }
+        : updates;
     set((state) => ({
       circuit: {
         ...state.circuit,
         components: state.circuit.components.map((c) =>
-          c.id === id ? { ...c, ...updates } : c
+          c.id === id ? { ...c, ...next } : c
         ),
         updatedAt: new Date().toISOString(),
       },
@@ -954,6 +1058,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       'rcd',
       'three_phase_mcb',
       'four_phase_mcb',
+      'air_circuit_breaker',
     ];
     if (toggleable.includes(comp.type) && comp.state !== 'tripped') {
       const newState = comp.state === 'on' ? 'off' : 'on';
@@ -966,8 +1071,35 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const comp = get().circuit.components.find((c) => c.id === id);
     const nextState =
       comp?.type === 'three_phase_motor' ? 'on' : 'off';
-    get().updateComponent(id, { state: nextState });
+    const updates: Partial<CircuitComponent> = {
+      state: nextState,
+    };
+    if (comp?.type === 'air_circuit_breaker') {
+      updates.acbSimState = undefined;
+    }
+    get().updateComponent(id, updates);
     get().pushHistory('Reset protection / fault');
+  },
+
+  acbBmsClosePulse: (id) => {
+    const comp = get().circuit.components.find((c) => c.id === id);
+    if (!comp || comp.type !== 'air_circuit_breaker') return;
+    const p = comp.properties;
+    if (!p.acbBmsEnabled) return;
+    if (p.acbBmsUvrEnergized === false) return;
+    if (p.acbBmsSpringCharged === false) return;
+    if (comp.state === 'tripped' || comp.state === 'fault') return;
+    get().updateComponent(id, { state: 'on' });
+    get().pushHistory('BMS ACB closing coil (CC pulse)');
+  },
+
+  acbBmsShuntOpen: (id) => {
+    const comp = get().circuit.components.find((c) => c.id === id);
+    if (!comp || comp.type !== 'air_circuit_breaker') return;
+    if (!comp.properties.acbBmsEnabled) return;
+    if (comp.state !== 'on') return;
+    get().updateComponent(id, { state: 'off' });
+    get().pushHistory('BMS ACB shunt trip (remote open)');
   },
 
   removeComponent: (id) => {
@@ -1043,6 +1175,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   duplicateComponent: (id) => {
     const comp = get().circuit.components.find((c) => c.id === id);
     if (!comp) return;
+    const baseScale = { initialScale: comp.scale ?? 1 };
     get().addComponent(
       comp.type,
       comp.x + 60,
@@ -1051,12 +1184,14 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         ? {
             pushButtonVariant:
               comp.properties.buttonType === 'NC' ? 'NC' : 'NO',
+            ...baseScale,
           }
         : comp.type === 'mcb'
           ? {
               mcbInitialPoles: mcbLayoutPoles(comp),
+              ...baseScale,
             }
-          : undefined
+          : baseScale
     );
   },
 
@@ -1105,9 +1240,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     if (!comp) return;
     const point = comp.connectionPoints.find((p) => p.id === pointId);
     if (!point) return;
-    const rotated = rotatePoint(point.x, point.y, comp.rotation);
-    const absX = comp.x + rotated.x;
-    const absY = comp.y + rotated.y;
+    const { x: absX, y: absY } = connectionPointWorld(comp, point);
     set({
       wireInProgress: {
         fromComponentId: componentId,
@@ -1148,9 +1281,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       (p) => p.id === wip.fromPointId
     );
 
-    const rotated = rotatePoint(point.x, point.y, comp.rotation);
-    const absX = comp.x + rotated.x;
-    const absY = comp.y + rotated.y;
+    const { x: absX, y: absY } = connectionPointWorld(comp, point);
     const allPoints = [...get().wirePoints, absX, absY];
 
     get().addWire({
@@ -1186,14 +1317,38 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         zoom: Math.max(0.1, Math.min(5, zoom)),
       },
     })),
+  setZoomAroundStagePoint: (zoom, stageX, stageY) =>
+    set((state) => {
+      const prevZ = state.circuit.zoom;
+      const z = Math.max(0.1, Math.min(5, zoom));
+      if (Math.abs(z - prevZ) < 1e-12) {
+        return state;
+      }
+      const ratio = z / prevZ;
+      const panX = stageX - (stageX - state.circuit.panX) * ratio;
+      const panY = stageY - (stageY - state.circuit.panY) * ratio;
+      return {
+        circuit: {
+          ...state.circuit,
+          zoom: z,
+          panX,
+          panY,
+        },
+      };
+    }),
   setPan: (x, y) =>
     set((state) => ({
       circuit: { ...state.circuit, panX: x, panY: y },
     })),
 
   runSimulation: () => {
-    const clonedCircuit = structuredClone(get().circuit);
-    const result = engine.simulate(clonedCircuit);
+    const base = get().circuit;
+    const normalized = {
+      ...base,
+      components: base.components.map(ensureAcbControlConnectionPoints),
+    };
+    const clonedCircuit = structuredClone(normalized);
+    const result = engine.simulate(clonedCircuit, 0, Date.now());
     set({
       circuit: clonedCircuit,
       simulationResult: result,
@@ -1233,9 +1388,12 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       wires = remapWireEndpointsForMorph(wires, c.id, remap);
       return { ...c, connectionPoints: newCps };
     });
+    const withAcbCps = components.map((c) =>
+      ensureAcbControlConnectionPoints(c)
+    );
     const normalized: Circuit = {
       ...circuit,
-      components,
+      components: withAcbCps,
       wires,
     };
     set({ circuit: normalized, selectedId: null });

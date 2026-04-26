@@ -1,6 +1,7 @@
 import React from 'react';
 import { Group, Rect, Circle, Text, Line } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
+import ScaledSymbolInner from './ScaledSymbolInner';
 
 interface Props {
   component: CircuitComponent;
@@ -33,6 +34,7 @@ const SocketSymbol: React.FC<Props> = ({
       }}
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
     >
+      <ScaledSymbolInner component={component}>
       {selected && (
         <Rect
           x={-24}
@@ -97,6 +99,7 @@ const SocketSymbol: React.FC<Props> = ({
             strokeWidth={1}
           />
         ))}
+      </ScaledSymbolInner>
     </Group>
   );
 };

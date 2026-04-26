@@ -21,16 +21,19 @@ import PowerSourceSymbol from '../Components/PowerSourceSymbol';
 import ThreePhaseSourceSymbol from '../Components/ThreePhaseSourceSymbol';
 import ThreePhaseMotorSymbol from '../Components/ThreePhaseMotorSymbol';
 import ThreePhaseMCBSymbol from '../Components/ThreePhaseMCBSymbol';
+import AirCircuitBreakerSymbol from '../Components/AirCircuitBreakerSymbol';
 import ThreePhaseContactorSymbol from '../Components/ThreePhaseContactorSymbol';
 import JunctionSymbol from '../Components/JunctionSymbol';
 import ControlSymbol from '../Components/ControlSymbol';
 import type { CircuitComponent, ComponentType, WireColor } from '../../types';
-import { snapToGrid, rotatePoint } from '../../utils/geometry';
+import { snapToGrid, connectionPointWorld } from '../../utils/geometry';
 import { inferWireColor } from '../../utils/inferWireColor';
 
 const CircuitCanvas: React.FC = () => {
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  /** Middle-button drag pan (any tool); null when not dragging. */
+  const middlePanRef = useRef<{ lastX: number; lastY: number } | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   const [hoveredConnectionPoint, setHoveredConnectionPoint] = useState<{
@@ -60,7 +63,6 @@ const CircuitCanvas: React.FC = () => {
     addWirePoint,
     finishWire,
     cancelWire,
-    setZoom,
     setPan,
     addComponent,
     setPushButtonPressed,
@@ -106,6 +108,48 @@ const CircuitCanvas: React.FC = () => {
     updateSize();
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
+  useEffect(() => {
+    const restoreCursor = () => {
+      if (containerRef.current) {
+        containerRef.current.style.cursor = '';
+      }
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      const drag = middlePanRef.current;
+      if (!drag) return;
+      if ((e.buttons & 4) === 0) {
+        middlePanRef.current = null;
+        restoreCursor();
+        return;
+      }
+      const dx = e.clientX - drag.lastX;
+      const dy = e.clientY - drag.lastY;
+      middlePanRef.current = { lastX: e.clientX, lastY: e.clientY };
+      const { circuit, setPan: pan } = useCircuitStore.getState();
+      pan(circuit.panX + dx, circuit.panY + dy);
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      if (e.button === 1 && middlePanRef.current) {
+        middlePanRef.current = null;
+        restoreCursor();
+      }
+    };
+    const onPointerCancel = () => {
+      if (middlePanRef.current) {
+        middlePanRef.current = null;
+        restoreCursor();
+      }
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
+    };
   }, []);
 
   const getStagePointerPosition = useCallback(() => {
@@ -164,13 +208,22 @@ const CircuitCanvas: React.FC = () => {
     (e: Konva.KonvaEventObject<WheelEvent>) => {
       e.evt.preventDefault();
       const scaleBy = 1.08;
-      const newZoom =
-        e.evt.deltaY < 0
-          ? circuit.zoom * scaleBy
-          : circuit.zoom / scaleBy;
-      setZoom(newZoom);
+      const stage = stageRef.current;
+      const pos = stage?.getPointerPosition();
+      const { circuit: c, setZoomAroundStagePoint: zoomAt, setZoom } =
+        useCircuitStore.getState();
+      const prevZ = c.zoom;
+      const raw =
+        e.evt.deltaY < 0 ? prevZ * scaleBy : prevZ / scaleBy;
+      const newZoom = Math.max(0.1, Math.min(5, raw));
+      if (Math.abs(newZoom - prevZ) < 1e-9) return;
+      if (pos) {
+        zoomAt(newZoom, pos.x, pos.y);
+      } else {
+        setZoom(newZoom);
+      }
     },
-    [circuit.zoom, setZoom]
+    []
   );
 
   const handleDrop = useCallback(
@@ -289,6 +342,15 @@ const CircuitCanvas: React.FC = () => {
             onToggle={() => toggleComponent(comp.id)}
           />
         );
+      case 'air_circuit_breaker':
+        return (
+          <AirCircuitBreakerSymbol
+            key={comp.id}
+            {...commonProps}
+            onToggle={() => toggleComponent(comp.id)}
+            onReset={() => resetTripped(comp.id)}
+          />
+        );
       case 'rcd':
         return (
           <BreakerSymbol
@@ -372,6 +434,17 @@ const CircuitCanvas: React.FC = () => {
       style={{ backgroundColor: tc.canvasHex }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
+      onPointerDownCapture={(e: React.PointerEvent) => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        middlePanRef.current = {
+          lastX: e.clientX,
+          lastY: e.clientY,
+        };
+        if (containerRef.current) {
+          containerRef.current.style.cursor = 'grabbing';
+        }
+      }}
     >
       <Stage
         ref={stageRef}
@@ -425,9 +498,7 @@ const CircuitCanvas: React.FC = () => {
           <Layer>
             {circuit.components.flatMap((comp) =>
               comp.connectionPoints.map((cp) => {
-                const rotated = rotatePoint(cp.x, cp.y, comp.rotation);
-                const absX = comp.x + rotated.x;
-                const absY = comp.y + rotated.y;
+                const { x: absX, y: absY } = connectionPointWorld(comp, cp);
                 return (
                   <Circle
                     key={`${comp.id}-${cp.id}-hotspot`}

@@ -20,6 +20,7 @@ export type ComponentType =
   | 'three_phase_motor'
   | 'three_phase_mcb'
   | 'four_phase_mcb'
+  | 'air_circuit_breaker'
   | 'three_phase_contactor'
   | 'four_phase_contactor';
 
@@ -37,12 +38,27 @@ export interface ConnectionPoint {
   label: string;
 }
 
+/** Persisted dynamic state for `air_circuit_breaker` (thermal integral, definite delays). */
+export interface AcbSimState {
+  lastWallMs?: number;
+  /** Integrated overload severity: ∑ max(0,(I/Ir)²−1)·dt */
+  thermalExcess?: number;
+  /** Wall time when branch current entered the short-time band */
+  stZoneSinceMs?: number | null;
+  /** Wall time when earth-fault band was entered */
+  earthZoneSinceMs?: number | null;
+  /** Instantaneous trip scheduled at this wall time (current-zero / arc model) */
+  instantTripAtMs?: number | null;
+}
+
 export interface CircuitComponent {
   id: string;
   type: ComponentType;
   label: string;
   x: number;
   y: number;
+  /** Uniform visual scale (connection points and graphics); default 1 */
+  scale?: number;
   rotation: number;
   state: ComponentState;
   /** Momentary contact: only for `push_button`; true while pointer is down */
@@ -50,6 +66,8 @@ export interface CircuitComponent {
   selected: boolean;
   connectionPoints: ConnectionPoint[];
   properties: ComponentProperties;
+  /** Runtime integration for ACB time-current behaviour (cloned with circuit on simulate) */
+  acbSimState?: AcbSimState;
 }
 
 export interface ComponentProperties {
@@ -60,6 +78,50 @@ export interface ComponentProperties {
   tripCurve?: 'B' | 'C' | 'D';
   breakingCapacity?: 6000 | 10000;
   rcdSensitivity?: 10 | 30 | 100 | 300;
+
+  /** Air circuit breaker: instantaneous pickup as multiple of Ir (e.g. 10) */
+  acbInstantaneousMult?: number;
+  /** ACB short-time pickup as multiple of Ir (below instantaneous mult) */
+  acbShortTimeMult?: number;
+  acbEarthFaultEnabled?: boolean;
+  /** ACB earth-fault trip (A), when enabled and on L–N fault path */
+  acbEarthFaultAmps?: number;
+  /** Supply frequency for half-cycle (current-zero) delay (Hz) */
+  acbLineFrequencyHz?: number;
+  /** Definite short-time delay after ST pickup (s) */
+  acbShortTimeDelayS?: number;
+  /** Definite earth-fault delay after Ig pickup (s) */
+  acbEarthFaultDelayS?: number;
+  /** Trip long-time overload when thermal excess integral exceeds this */
+  acbThermalTripIntegral?: number;
+
+  /** BMS / motor pack: remote close (CC), open (shunt), UVR, spring, optional comms */
+  acbBmsEnabled?: boolean;
+  /** UVR coil energized — if false while BMS enabled, contacts must not close (interlock) */
+  acbBmsUvrEnergized?: boolean;
+  /** Closing spring charged (CC pulse ineffective if false) */
+  acbBmsSpringCharged?: boolean;
+  /** Optional field bus label for incomer supervision */
+  acbBmsProtocol?: 'none' | 'modbus_rtu' | 'modbus_tcp' | 'bacnet_ip';
+
+  /** Control supply for CC / ST / UVR (panel schedule — not simulated) */
+  acbCtrlSupply?: '24dc' | '110dc' | '230ac';
+  /** Control-circuit fuse reference on drawings (e.g. F1) */
+  acbCtrlFuseDesignation?: string;
+  /** Fuse rating (A) — documentation only */
+  acbCtrlFuseAmps?: number;
+  /** Interposing relay for BMS close → closing coil (CC) */
+  acbRelayCcId?: string;
+  /** Interposing relay for BMS open → shunt trip */
+  acbRelayStId?: string;
+  /** BMS DO tag for close command (as-built label) */
+  acbBmsDoCloseTag?: string;
+  /** BMS DO tag for open / shunt command */
+  acbBmsDoOpenTag?: string;
+  /** BMS DI tags for aux feedback (documentation) */
+  acbBmsDi52aTag?: string;
+  acbBmsDi52bTag?: string;
+  acbBmsDiTripTag?: string;
 
   socketType?: 'schuko' | 'UK' | 'US' | 'IEC';
   voltage?: number;

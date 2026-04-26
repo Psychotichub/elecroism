@@ -5,6 +5,7 @@ import type {
   FaultEvent,
   CircuitComponent,
   Wire,
+  AcbSimState,
 } from '../types';
 
 interface PotentialSets {
@@ -18,7 +19,7 @@ interface PotentialSets {
 }
 
 export class CircuitEngine {
-  simulate(circuit: Circuit, depth = 0): SimulationResult {
+  simulate(circuit: Circuit, depth = 0, wallMs = Date.now()): SimulationResult {
     if (depth > 6) {
       return this.buildDegradedResult(circuit);
     }
@@ -40,7 +41,8 @@ export class CircuitEngine {
       const isOpen =
         component.state === 'off' ||
         component.state === 'tripped' ||
-        component.state === 'fault';
+        component.state === 'fault' ||
+        this.acbBmsUvrOpensContacts(component);
       const hasPotential = this.componentTouchesAnyPotential(
         component,
         potentials
@@ -170,6 +172,7 @@ export class CircuitEngine {
         const vRef =
           component.type === 'three_phase_mcb' ||
           component.type === 'four_phase_mcb' ||
+          component.type === 'air_circuit_breaker' ||
           component.type === 'three_phase_contactor' ||
           component.type === 'four_phase_contactor'
             ? component.properties.lineVoltage ||
@@ -189,7 +192,18 @@ export class CircuitEngine {
       if (!this.isSeriesProtectionDevice(component)) continue;
       if (component.state === 'off' || component.state === 'tripped') continue;
       const branchCurrent = seriesPathCurrents.get(component.id) || 0;
-      const fault = this.checkFaults(component, branchCurrent);
+      const lnFaultPath =
+        lnFaultAnchors.size > 0 &&
+        this.seriesDeviceOnLivePathToLnFault(
+          component,
+          circuit,
+          lnFaultAnchors,
+          contactorPickup
+        );
+      const fault = this.checkFaults(component, branchCurrent, {
+        lnFaultPath,
+        wallMs,
+      });
       if (!fault) continue;
       faults.push(fault);
       component.state = 'tripped';
@@ -236,7 +250,7 @@ export class CircuitEngine {
     }
 
     if (anySeriesDeviceTripped || anyMotorThermal) {
-      const next = this.simulate(circuit, depth + 1);
+      const next = this.simulate(circuit, depth + 1, wallMs);
       return {
         ...next,
         faults: [...faults, ...next.faults],
@@ -260,7 +274,7 @@ export class CircuitEngine {
       success: true,
       nodes,
       faults,
-      timestamp: Date.now(),
+      timestamp: wallMs,
       totalPowerW,
       totalCurrentA,
     };
@@ -375,7 +389,8 @@ export class CircuitEngine {
       c.type === 'rcd' ||
       c.type === 'overload_relay' ||
       c.type === 'three_phase_mcb' ||
-      c.type === 'four_phase_mcb'
+      c.type === 'four_phase_mcb' ||
+      c.type === 'air_circuit_breaker'
     );
   }
 
@@ -407,6 +422,7 @@ export class CircuitEngine {
       c.type === 'timer' ||
       c.type === 'three_phase_mcb' ||
       c.type === 'four_phase_mcb' ||
+      c.type === 'air_circuit_breaker' ||
       c.type === 'three_phase_contactor' ||
       c.type === 'four_phase_contactor'
     );
@@ -792,9 +808,15 @@ export class CircuitEngine {
           break;
         case 'three_phase_mcb':
         case 'four_phase_mcb':
-          if (component.state === 'on' && !skipInternalBridge) {
+        case 'air_circuit_breaker':
+          if (
+            component.state === 'on' &&
+            !this.acbBmsUvrOpensContacts(component) &&
+            !skipInternalBridge
+          ) {
             const pairs: [string, string][] =
-              component.type === 'four_phase_mcb'
+              component.type === 'four_phase_mcb' ||
+              component.type === 'air_circuit_breaker'
                 ? [
                     ['IN_L1', 'OUT_L1'],
                     ['IN_L2', 'OUT_L2'],
@@ -1133,11 +1155,169 @@ export class CircuitEngine {
     return 5;
   }
 
-  private checkFaults(
+  private ensureAcbSim(component: CircuitComponent): AcbSimState {
+    if (!component.acbSimState) component.acbSimState = {};
+    return component.acbSimState;
+  }
+
+  /** BMS undervoltage release: loss of UVR control supply opens contacts (no IN–OUT bridge). */
+  private acbBmsUvrOpensContacts(component: CircuitComponent): boolean {
+    if (component.type !== 'air_circuit_breaker') return false;
+    const p = component.properties;
+    return Boolean(p.acbBmsEnabled && p.acbBmsUvrEnergized === false);
+  }
+
+  private acbArcFootnote(hz: number): string {
+    const halfMs = 1000 / (2 * hz);
+    return ` Blow-out drives the arc into the splitting chute; extinction near current zero (~${halfMs.toFixed(1)} ms half-cycle at ${hz} Hz).`;
+  }
+
+  private checkAcbFaults(
     component: CircuitComponent,
-    currentA: number
+    currentA: number,
+    ctx: { lnFaultPath: boolean },
+    wallMs: number
   ): FaultEvent | null {
     const p = component.properties;
+    const Ir = Math.max(1, p.ratingAmps ?? 630);
+    const hz = Math.max(40, Math.min(70, p.acbLineFrequencyHz ?? 50));
+    const foot = this.acbArcFootnote(hz);
+    const halfCycleMs = 1000 / (2 * hz);
+
+    const iiMult = Math.max(2, p.acbInstantaneousMult ?? 10);
+    let stMult = p.acbShortTimeMult ?? 6;
+    if (stMult >= iiMult) stMult = Math.max(1.5, iiMult - 0.5);
+    const instantA = Ir * iiMult;
+    const stA = Ir * stMult;
+    const ig = p.acbEarthFaultAmps ?? 0;
+    const gOn = p.acbEarthFaultEnabled ?? false;
+
+    const stDelayS = Math.max(0, p.acbShortTimeDelayS ?? 0.18);
+    const earthDelayS = Math.max(0, p.acbEarthFaultDelayS ?? 0.1);
+    const thermalLimit = Math.max(5, p.acbThermalTripIntegral ?? 80);
+
+    const sim = this.ensureAcbSim(component);
+    const last = sim.lastWallMs;
+    const coldStart = last == null;
+    let dt = 0;
+    if (last != null) {
+      dt = (wallMs - last) / 1000;
+      if (dt < 0) dt = 0;
+      if (dt > 1.5) dt = 1.5;
+    }
+    sim.lastWallMs = wallMs;
+
+    // Long-time thermal only below short-time pickup (L-band vs ST-band).
+    if (currentA < stA) {
+      const ratio = currentA / Ir;
+      if (ratio > 1) {
+        sim.thermalExcess =
+          (sim.thermalExcess ?? 0) + (ratio * ratio - 1) * dt;
+      } else if (dt > 0) {
+        const cool = (1 - ratio) * 2 * dt;
+        sim.thermalExcess = Math.max(0, (sim.thermalExcess ?? 0) - cool);
+      }
+    }
+
+    if (currentA >= instantA) {
+      if (coldStart) {
+        sim.instantTripAtMs = null;
+        return {
+          id: crypto.randomUUID(),
+          type: 'short_circuit',
+          affectedComponentId: component.id,
+          message: `ACB "${component.label}" instantaneous: ${currentA.toFixed(0)}A ≥ ${iiMult}×Ir (${instantA.toFixed(0)}A); first evaluation — subsequent sustained faults use ~½-cycle delay.${foot}`,
+          severity: 'critical',
+          timestamp: wallMs,
+        };
+      }
+      if (sim.instantTripAtMs == null) {
+        sim.instantTripAtMs = wallMs + halfCycleMs;
+      }
+      if (wallMs >= (sim.instantTripAtMs ?? 0)) {
+        sim.instantTripAtMs = null;
+        return {
+          id: crypto.randomUUID(),
+          type: 'short_circuit',
+          affectedComponentId: component.id,
+          message: `ACB "${component.label}" instantaneous: ${currentA.toFixed(0)}A ≥ ${iiMult}×Ir (${instantA.toFixed(0)}A); opening timed to ~½ cycle for current-zero interruption.${foot}`,
+          severity: 'critical',
+          timestamp: wallMs,
+        };
+      }
+      return null;
+    }
+    sim.instantTripAtMs = null;
+
+    if (currentA >= stA && currentA < instantA) {
+      if (sim.stZoneSinceMs == null) sim.stZoneSinceMs = wallMs;
+      const elapsedS = (wallMs - sim.stZoneSinceMs) / 1000;
+      if (elapsedS >= stDelayS) {
+        sim.stZoneSinceMs = null;
+        return {
+          id: crypto.randomUUID(),
+          type: 'short_circuit',
+          affectedComponentId: component.id,
+          message: `ACB "${component.label}" short-time: ${currentA.toFixed(0)}A ≥ ${stMult}×Ir (${stA.toFixed(0)}A), below ${iiMult}×Ir; definite delay ${stDelayS}s elapsed.${foot}`,
+          severity: 'critical',
+          timestamp: wallMs,
+        };
+      }
+      return null;
+    }
+    sim.stZoneSinceMs = null;
+
+    if (
+      gOn &&
+      ig > 0 &&
+      ctx.lnFaultPath &&
+      currentA >= ig &&
+      currentA < stA
+    ) {
+      if (sim.earthZoneSinceMs == null) sim.earthZoneSinceMs = wallMs;
+      const elapsedS = (wallMs - sim.earthZoneSinceMs) / 1000;
+      if (elapsedS >= earthDelayS) {
+        sim.earthZoneSinceMs = null;
+        return {
+          id: crypto.randomUUID(),
+          type: 'earth_fault',
+          affectedComponentId: component.id,
+          message: `ACB "${component.label}" earth-fault: ${currentA.toFixed(0)}A ≥ Ig ${ig}A (L–N fault path); definite delay ${earthDelayS}s elapsed.${foot}`,
+          severity: 'critical',
+          timestamp: wallMs,
+        };
+      }
+      return null;
+    }
+    sim.earthZoneSinceMs = null;
+
+    if ((sim.thermalExcess ?? 0) >= thermalLimit) {
+      return {
+        id: crypto.randomUUID(),
+        type: 'overload',
+        affectedComponentId: component.id,
+        message: `ACB "${component.label}" long-time (inverse-time integral below ST): ~${(currentA / Ir).toFixed(2)}×Ir sustained; ∫max(0,(I/Ir)²−1)dt ≥ ${thermalLimit}.${foot}`,
+        severity: 'critical',
+        timestamp: wallMs,
+      };
+    }
+
+    return null;
+  }
+
+  private checkFaults(
+    component: CircuitComponent,
+    currentA: number,
+    faultCtx?: { lnFaultPath: boolean; wallMs?: number }
+  ): FaultEvent | null {
+    const p = component.properties;
+    const ctx = faultCtx ?? { lnFaultPath: false };
+    const wall = faultCtx?.wallMs ?? Date.now();
+
+    if (component.type === 'air_circuit_breaker') {
+      return this.checkAcbFaults(component, currentA, ctx, wall);
+    }
+
     if (
       component.type === 'mcb' ||
       component.type === 'three_phase_mcb' ||
@@ -1164,7 +1344,7 @@ export class CircuitEngine {
           affectedComponentId: component.id,
           message: `${tag} "${component.label}" magnetic (${curve}) trip: ${currentA.toFixed(0)}A ≥ ${kMag}×${inA.toFixed(0)}A (${magneticA.toFixed(0)}A)`,
           severity: 'critical',
-          timestamp: Date.now(),
+          timestamp: wall,
         };
       }
       if (p.ratingAmps && currentA > p.ratingAmps) {
@@ -1174,7 +1354,7 @@ export class CircuitEngine {
           affectedComponentId: component.id,
           message: `${tag} "${component.label}" thermal overload: ${currentA.toFixed(1)}A > ${p.ratingAmps}A (In); magnetic at ${kMag}×In (${magneticA.toFixed(0)}A)`,
           severity: 'critical',
-          timestamp: Date.now(),
+          timestamp: wall,
         };
       }
     }
@@ -1191,7 +1371,7 @@ export class CircuitEngine {
           affectedComponentId: component.id,
           message: `Overload relay "${component.label}" short-circuit trip: ${currentA.toFixed(0)}A`,
           severity: 'critical',
-          timestamp: Date.now(),
+          timestamp: wall,
         };
       }
       return {
@@ -1200,7 +1380,7 @@ export class CircuitEngine {
         affectedComponentId: component.id,
         message: `Overload relay "${component.label}" tripped: ${currentA.toFixed(1)}A exceeds ${p.ratingAmps}A`,
         severity: 'critical',
-        timestamp: Date.now(),
+        timestamp: wall,
       };
     }
 
@@ -1211,7 +1391,7 @@ export class CircuitEngine {
         affectedComponentId: component.id,
         message: `Short circuit detected at "${component.label}"`,
         severity: 'critical',
-        timestamp: Date.now(),
+        timestamp: wall,
       };
     }
 

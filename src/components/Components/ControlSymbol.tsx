@@ -1,6 +1,7 @@
 import React from 'react';
 import { Group, Rect, Text, Line, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
+import ScaledSymbolInner from './ScaledSymbolInner';
 
 function coilTerminalTag(label: string): 'A1' | 'A2' | null {
   const u = label.toUpperCase();
@@ -56,6 +57,7 @@ const ControlSymbol: React.FC<Props> = ({
       }}
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
     >
+      <ScaledSymbolInner component={component}>
       {selected && (
         <Rect
           x={-22}
@@ -155,6 +157,7 @@ const ControlSymbol: React.FC<Props> = ({
           />
         );
       })}
+      </ScaledSymbolInner>
     </Group>
   );
 };

@@ -67,6 +67,12 @@ const GROUPS: ComponentGroup[] = [
         icon: <FiShield />,
         detail: 'L1–L3 + N · rating in properties',
       },
+      {
+        type: 'air_circuit_breaker',
+        label: 'ACB',
+        icon: <FiShield />,
+        detail: '4P incomer · Ir / Ii / ST / earth G',
+      },
     ],
   },
   {
