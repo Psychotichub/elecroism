@@ -1,7 +1,8 @@
 import React from 'react';
-import { Group, Rect, Circle, Text } from 'react-konva';
+import { Group, Rect, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult, WireColor } from '../../types';
 import { getWireColor } from '../../utils/geometry';
+import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
 interface Props {
   component: CircuitComponent;
@@ -68,13 +69,12 @@ const BusbarSymbol: React.FC<Props> = ({
         opacity={1}
       />
 
-      <Text
-        text={component.label}
+      <ComponentCanvasLabel
+        label={component.label}
         x={-60}
         y={-16}
+        width={120}
         fontSize={9}
-        fill="#6B7280"
-        listening={false}
       />
 
       {showConnectionPoints &&

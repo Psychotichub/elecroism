@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Group, Rect, Text, Line, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
+import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
 interface Props {
   component: CircuitComponent;
@@ -50,6 +51,7 @@ const MCBSymbol: React.FC<Props> = ({
   const bodyH = 50;
   const selPadX = is2P ? 4 : 4;
   const selPadY = 4;
+  const labelBand = 12;
 
   return (
     <Group
@@ -72,7 +74,7 @@ const MCBSymbol: React.FC<Props> = ({
           x={-bodyW / 2 - selPadX}
           y={-bodyH / 2 - selPadY - 4}
           width={bodyW + selPadX * 2}
-          height={bodyH + selPadY * 2 + 8}
+          height={bodyH + selPadY * 2 + 8 + labelBand}
           stroke="#3B82F6"
           strokeWidth={2}
           dash={[4, 4]}
@@ -198,6 +200,14 @@ const MCBSymbol: React.FC<Props> = ({
           opacity={flashVisible ? 1 : 0.3}
         />
       )}
+
+      <ComponentCanvasLabel
+        label={component.label}
+        x={-bodyW / 2 - 10}
+        y={32}
+        width={bodyW + 20}
+        fontSize={8}
+      />
 
       {showConnectionPoints &&
         component.connectionPoints.map((cp) => (

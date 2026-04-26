@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Group, Rect, Text, Line, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
+import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
 interface Props {
   component: CircuitComponent;
@@ -133,6 +134,14 @@ const BreakerSymbol: React.FC<Props> = ({
 
       <Line points={[0, -26, 0, -30]} stroke="#374151" strokeWidth={2} />
       <Line points={[0, 26, 0, 30]} stroke="#374151" strokeWidth={2} />
+
+      <ComponentCanvasLabel
+        label={component.label}
+        x={-26}
+        y={34}
+        width={52}
+        fontSize={8}
+      />
 
       {showConnectionPoints &&
         component.connectionPoints.map((cp) => (

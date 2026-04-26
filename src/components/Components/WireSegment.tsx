@@ -13,7 +13,7 @@ const WireSegment: React.FC<Props> = ({ wire, onSelect, selected }) => {
   const color = getWireColor(wire.color);
   const width = getWireWidth(wire.crossSection);
   const opacity = wire.energized ? 1 : 0.92;
-  const strokeWidth = selected ? width + 2 : width;
+  const strokeWidth = selected ? width + 1 : width;
   const isEarthWire = wire.color === 'green_yellow';
   const isNeutralWire = wire.color === 'blue';
 
@@ -28,18 +28,18 @@ const WireSegment: React.FC<Props> = ({ wire, onSelect, selected }) => {
             opacity={opacity}
             lineCap="round"
             lineJoin="round"
-            hitStrokeWidth={10}
+            hitStrokeWidth={8}
             onClick={(e) => {
               e.cancelBubble = true;
               onSelect();
             }}
             shadowColor={wire.energized ? '#65A30D' : undefined}
-            shadowBlur={wire.energized ? 5 : 0}
+            shadowBlur={wire.energized ? 3 : 0}
           />
           <Line
             points={wire.points}
             stroke="#15803D"
-            strokeWidth={Math.max(1.25, strokeWidth * 0.55)}
+            strokeWidth={Math.max(0.75, strokeWidth * 0.55)}
             opacity={opacity}
             dash={[9, 7]}
             lineCap="round"
@@ -56,19 +56,19 @@ const WireSegment: React.FC<Props> = ({ wire, onSelect, selected }) => {
             opacity={opacity}
             lineCap="round"
             lineJoin="round"
-            hitStrokeWidth={10}
+            hitStrokeWidth={8}
             onClick={(e) => {
               e.cancelBubble = true;
               onSelect();
             }}
             shadowColor={wire.energized ? color : undefined}
-            shadowBlur={wire.energized ? 5 : 0}
+            shadowBlur={wire.energized ? 3 : 0}
           />
           {isNeutralWire && (
             <Line
               points={wire.points}
               stroke="#93C5FD"
-              strokeWidth={Math.max(1, strokeWidth * 0.45)}
+              strokeWidth={Math.max(0.5, strokeWidth * 0.45)}
               opacity={Math.min(1, opacity + 0.04)}
               lineCap="round"
               lineJoin="round"
@@ -86,7 +86,7 @@ const WireSegment: React.FC<Props> = ({ wire, onSelect, selected }) => {
                 key={i}
                 x={wire.points[i * 2]}
                 y={wire.points[i * 2 + 1]}
-                radius={3}
+                radius={2}
                 fill="#3B82F6"
               />
             )

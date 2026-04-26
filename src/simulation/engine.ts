@@ -1119,6 +1119,20 @@ export class CircuitEngine {
     }
   }
 
+  /**
+   * Simplified IEC-style magnetic window: B ≈ 3×In, C ≈ 5×In, D ≈ 10×In (instantaneous).
+   * Unknown curve defaults to C.
+   */
+  private mcbMagneticInMultiple(component: CircuitComponent): number {
+    const c = (component.properties.tripCurve || 'C')
+      .toString()
+      .trim()
+      .toUpperCase();
+    if (c === 'B') return 3;
+    if (c === 'D') return 10;
+    return 5;
+  }
+
   private checkFaults(
     component: CircuitComponent,
     currentA: number
@@ -1139,12 +1153,16 @@ export class CircuitEngine {
                   this.findTerminalByLabel(component, 'IN_L'))
               ? '2P MCB'
               : 'MCB';
-      if (currentA > 1000) {
+      const inA = Math.max(0.1, p.ratingAmps ?? 16);
+      const curve = (p.tripCurve || 'C').toString().trim().toUpperCase() || 'C';
+      const kMag = this.mcbMagneticInMultiple(component);
+      const magneticA = kMag * inA;
+      if (currentA >= magneticA) {
         return {
           id: crypto.randomUUID(),
           type: 'short_circuit',
           affectedComponentId: component.id,
-          message: `${tag} "${component.label}" magnetic / short-circuit trip: ${currentA.toFixed(0)}A`,
+          message: `${tag} "${component.label}" magnetic (${curve}) trip: ${currentA.toFixed(0)}A ≥ ${kMag}×${inA.toFixed(0)}A (${magneticA.toFixed(0)}A)`,
           severity: 'critical',
           timestamp: Date.now(),
         };
@@ -1154,7 +1172,7 @@ export class CircuitEngine {
           id: crypto.randomUUID(),
           type: 'overload',
           affectedComponentId: component.id,
-          message: `${tag} "${component.label}" overloaded: ${currentA.toFixed(1)}A exceeds ${p.ratingAmps}A rating`,
+          message: `${tag} "${component.label}" thermal overload: ${currentA.toFixed(1)}A > ${p.ratingAmps}A (In); magnetic at ${kMag}×In (${magneticA.toFixed(0)}A)`,
           severity: 'critical',
           timestamp: Date.now(),
         };

@@ -37,11 +37,11 @@ export function getWireColor(color: string): string {
 
 export function getWireWidth(crossSection: number): number {
   const widths: Record<number, number> = {
-    1.5: 2,
-    2.5: 3,
-    4: 4,
-    6: 5,
-    10: 6,
+    1.5: 1,
+    2.5: 1.5,
+    4: 2,
+    6: 2.5,
+    10: 3,
   };
-  return widths[crossSection] || 3;
+  return widths[crossSection] || 1.5;
 }

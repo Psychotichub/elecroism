@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Group, Rect, Text, Line, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
+import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
 interface Props {
   component: CircuitComponent;
@@ -68,7 +69,7 @@ const ThreePhaseMCBSymbol: React.FC<Props> = ({
           x={minX - 4}
           y={-32}
           width={bodyW + 8}
-          height={64}
+          height={76}
           stroke="#3B82F6"
           strokeWidth={2}
           dash={[4, 4]}
@@ -155,6 +156,14 @@ const ThreePhaseMCBSymbol: React.FC<Props> = ({
           opacity={flashVisible ? 1 : 0.3}
         />
       )}
+
+      <ComponentCanvasLabel
+        label={component.label}
+        x={minX - 4}
+        y={34}
+        width={bodyW + 8}
+        fontSize={8}
+      />
 
       {showConnectionPoints &&
         component.connectionPoints.map((cp) => (

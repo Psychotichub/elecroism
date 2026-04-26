@@ -43,7 +43,7 @@ const WireLayer: React.FC<Props> = ({
               : wirePoints
           }
           stroke={getWireColor(draftWireColor)}
-          strokeWidth={3}
+          strokeWidth={1.5}
           opacity={0.9}
           dash={[6, 3]}
           lineCap="round"

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Group, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
+import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
 interface Props {
   component: CircuitComponent;
@@ -36,7 +37,7 @@ const JunctionSymbol: React.FC<Props> = ({
         <Circle
           x={0}
           y={0}
-          radius={12}
+          radius={14}
           stroke="#3B82F6"
           strokeWidth={2}
           dash={[4, 4]}
@@ -50,6 +51,14 @@ const JunctionSymbol: React.FC<Props> = ({
         fill={energized ? '#374151' : '#9CA3AF'}
         stroke="#374151"
         strokeWidth={1.5}
+      />
+
+      <ComponentCanvasLabel
+        label={component.label}
+        x={-36}
+        y={14}
+        width={72}
+        fontSize={8}
       />
 
       {showConnectionPoints &&
