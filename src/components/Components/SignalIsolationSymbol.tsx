@@ -95,32 +95,60 @@ const SignalIsolationSymbol: React.FC<Props> = ({
                   offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />
+        {component.connectionPoints.map((cp, idx) => {
+          const body = { left: -30, right: 30, top: -22, bottom: 22 };
+          const pinLen = 10;
+          const dL = Math.abs(cp.x - body.left);
+          const dR = Math.abs(cp.x - body.right);
+          const dT = Math.abs(cp.y - body.top);
+          const dB = Math.abs(cp.y - body.bottom);
+          const m = Math.min(dL, dR, dT, dB);
+          const pin =
+            m === dL
+              ? { sx: body.left, sy: cp.y, ex: body.left - pinLen, ey: cp.y, side: 'left' as const }
+              : m === dR
+                ? { sx: body.right, sy: cp.y, ex: body.right + pinLen, ey: cp.y, side: 'right' as const }
+                : m === dT
+                  ? { sx: cp.x, sy: body.top, ex: cp.x, ey: body.top - pinLen, side: 'top' as const }
+                  : { sx: cp.x, sy: body.bottom, ex: cp.x, ey: body.bottom + pinLen, side: 'bottom' as const };
+          const c = '#0F766E';
+          const nx = pin.side === 'left' ? pin.sx + 2 : pin.side === 'right' ? pin.sx - 8 : pin.sx - 2;
+          const ny = pin.side === 'top' ? pin.sy + 2 : pin.side === 'bottom' ? pin.sy - 6 : pin.sy - 2;
+          return (
+            <React.Fragment key={`${cp.id}-stub`}>
+              <Line
+                points={[pin.sx, pin.sy, pin.ex, pin.ey]}
+                stroke={c}
+                strokeWidth={1.2}
+                lineCap="round"
+                listening={false}
+              />
+              <Text
+                text={`${idx + 1}`}
+                x={nx}
+                y={ny}
+                width={8}
+                align="center"
+                fontSize={3.5}
+                fill={c}
+                listening={false}
+              />
+            </React.Fragment>
+          );
+        })}
         {showConnectionPoints &&
           component.connectionPoints.map((cp) => (
             <Circle
               key={cp.id}
               x={cp.x}
               y={cp.y}
-              radius={5}
+              radius={2.8}
               fill="#3B82F6"
-              opacity={0.6}
+              opacity={0.68}
               stroke="#2563EB"
               strokeWidth={1}
             />
           ))}
-        {component.connectionPoints.map((cp) => (
-          <Text
-            key={`${cp.id}-term-label`}
-            text={cp.label}
-            x={cp.x - 14}
-            y={cp.y + 7}
-            width={28}
-            fontSize={6}
-            fill="#334155"
-            align="center"
-            listening={false}
-          />
-        ))}
       </ScaledSymbolInner>
     </Group>
   );

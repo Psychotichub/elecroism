@@ -82,6 +82,58 @@ const PropertyPanel: React.FC = () => {
     }
   }, [selectedId]);
 
+  useEffect(() => {
+    if (!selectedId) return;
+    const c = useCircuitStore
+      .getState()
+      .circuit.components.find((x) => x.id === selectedId);
+    if (!c || (c.type !== 'rcd' && c.type !== 'residual_current_circuit_breaker')) {
+      return;
+    }
+    const poles = c.properties.poles ?? 2;
+    const expected =
+      poles >= 4
+        ? [
+            { x: -24, y: -25, label: 'IN_L1' },
+            { x: -8, y: -25, label: 'IN_L2' },
+            { x: 8, y: -25, label: 'IN_L3' },
+            { x: 24, y: -25, label: 'IN_N' },
+            { x: -24, y: 25, label: 'OUT_L1' },
+            { x: -8, y: 25, label: 'OUT_L2' },
+            { x: 8, y: 25, label: 'OUT_L3' },
+            { x: 24, y: 25, label: 'OUT_N' },
+          ]
+        : [
+            { x: -14, y: -25, label: 'IN_L' },
+            { x: 14, y: -25, label: 'IN_N' },
+            { x: -14, y: 25, label: 'OUT_L' },
+            { x: 14, y: 25, label: 'OUT_N' },
+          ];
+    const same =
+      c.connectionPoints.length === expected.length &&
+      expected.every(
+        (ep, idx) =>
+          c.connectionPoints[idx]?.x === ep.x &&
+          c.connectionPoints[idx]?.y === ep.y &&
+          c.connectionPoints[idx]?.label === ep.label
+      );
+    if (same) return;
+    useCircuitStore.getState().updateComponent(c.id, {
+      properties: {
+        ...c.properties,
+        poles: poles >= 4 ? 4 : 2,
+        phaseSystem: poles >= 4 ? 'three_phase' : 'single_phase',
+      },
+      connectionPoints: expected.map((pt) => ({
+        id: crypto.randomUUID(),
+        componentId: c.id,
+        x: pt.x,
+        y: pt.y,
+        label: pt.label,
+      })),
+    });
+  }, [selectedId]);
+
   const nodeResult = selectedComp
     ? simulationResult?.nodes[selectedComp.id]
     : null;
@@ -287,6 +339,55 @@ const PropertyPanel: React.FC = () => {
 
   const renderHrcFuseProps = () => (
     <>
+      {selectedComp!.type === 'hrc_fuse' && (
+        <Label text="Poles">
+          <div className="flex gap-1">
+            {([1, 3] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => {
+                  const points =
+                    p === 3
+                      ? [
+                          { x: -24, y: -25, label: 'IN_L1' },
+                          { x: -24, y: 25, label: 'OUT_L1' },
+                          { x: 0, y: -25, label: 'IN_L2' },
+                          { x: 0, y: 25, label: 'OUT_L2' },
+                          { x: 24, y: -25, label: 'IN_L3' },
+                          { x: 24, y: 25, label: 'OUT_L3' },
+                        ]
+                      : [
+                          { x: 0, y: -25, label: 'IN' },
+                          { x: 0, y: 25, label: 'OUT' },
+                        ];
+                  updateComponent(selectedComp!.id, {
+                    properties: {
+                      ...selectedComp!.properties,
+                      poles: p,
+                      phaseSystem: p === 3 ? 'three_phase' : 'single_phase',
+                    },
+                    connectionPoints: points.map((pt) => ({
+                      id: crypto.randomUUID(),
+                      componentId: selectedComp!.id,
+                      x: pt.x,
+                      y: pt.y,
+                      label: pt.label,
+                    })),
+                  });
+                }}
+                className={`px-2 py-1 rounded text-xs ${
+                  (selectedComp!.properties.poles ?? 1) === p
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-600 text-gray-300'
+                }`}
+              >
+                {p}P
+              </button>
+            ))}
+          </div>
+        </Label>
+      )}
       <Label text="Fuse rating">
         <select
           value={selectedComp!.properties.ratingAmps ?? 32}
@@ -320,6 +421,118 @@ const PropertyPanel: React.FC = () => {
           ))}
         </div>
       </Label>
+      {selectedComp!.type === 'hrc_fuse' && (
+        <>
+          <Label text="HRC class">
+            <select
+              value={selectedComp!.properties.hrcType ?? 'gG'}
+              onChange={(e) =>
+                updateProp({
+                  hrcType: e.target.value as 'gG' | 'gL' | 'aM' | 'aR' | 'gR',
+                })
+              }
+              className="input-field"
+            >
+              <option value="gG">gG (general purpose)</option>
+              <option value="gL">gL (distribution)</option>
+              <option value="aM">aM (motor short-circuit)</option>
+              <option value="aR">aR (semiconductor fast)</option>
+              <option value="gR">gR (semiconductor full-range)</option>
+            </select>
+          </Label>
+          <Label text="HRC breaking capacity (kA)">
+            <input
+              type="number"
+              value={selectedComp!.properties.hrcBreakingCapacityKa ?? 80}
+              onChange={(e) =>
+                updateProp({
+                  hrcBreakingCapacityKa: Math.max(10, Number(e.target.value) || 10),
+                })
+              }
+              className="input-field"
+              min={10}
+              max={200}
+            />
+          </Label>
+          <Label text="Fusing factor">
+            <input
+              type="number"
+              step={0.01}
+              value={selectedComp!.properties.hrcFusingFactor ?? 1.6}
+              onChange={(e) =>
+                updateProp({
+                  hrcFusingFactor: Math.max(1.1, Number(e.target.value) || 1.1),
+                })
+              }
+              className="input-field"
+              min={1.1}
+              max={3}
+            />
+          </Label>
+          <Label text="I²t let-through (A²s)">
+            <input
+              type="number"
+              value={selectedComp!.properties.hrcI2tA2s ?? 12000}
+              onChange={(e) =>
+                updateProp({ hrcI2tA2s: Math.max(1, Number(e.target.value) || 1) })
+              }
+              className="input-field"
+              min={1}
+            />
+          </Label>
+        </>
+      )}
+      {selectedComp!.type === 'control_circuit_fuse' && (
+        <>
+          <Label text="Control supply source">
+            <select
+              value={
+                selectedComp!.properties.controlCircuitSupplyMode ?? 'single_phase_ln'
+              }
+              onChange={(e) =>
+                updateProp({
+                  controlCircuitSupplyMode: e.target.value as
+                    | 'single_phase_ln'
+                    | 'derived_from_3ph_ll'
+                    | 'monitoring_3ph',
+                  phaseSystem:
+                    e.target.value === 'monitoring_3ph'
+                      ? 'three_phase'
+                      : 'single_phase',
+                })
+              }
+              className="input-field"
+            >
+              <option value="single_phase_ln">Single-phase (L-N)</option>
+              <option value="derived_from_3ph_ll">Derived from 3-phase (L-L)</option>
+              <option value="monitoring_3ph">True 3-phase monitoring</option>
+            </select>
+          </Label>
+          <Label text="Control voltage">
+            <div className="flex gap-1">
+              {([24, 110, 230] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => updateProp({ controlCircuitVoltage: v })}
+                  className={`px-2 py-1 rounded text-xs ${
+                    (selectedComp!.properties.controlCircuitVoltage ?? 230) === v
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-600 text-gray-300'
+                  }`}
+                >
+                  {v}V
+                </button>
+              ))}
+            </div>
+          </Label>
+          <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+            In most panels control is single-phase (direct L-N or derived from
+            3-phase via L-L/transformer). True 3-phase control is typically for
+            phase-monitoring/protection relays.
+          </p>
+        </>
+      )}
       <Label text="State">
         <button
           onClick={() => toggleComponent(selectedComp!.id)}
@@ -369,7 +582,9 @@ const PropertyPanel: React.FC = () => {
         <select
           value={selectedComp!.properties.rcdSensitivity || 30}
           onChange={(e) =>
-            updateProp({ rcdSensitivity: Number(e.target.value) as 10 | 30 | 100 | 300 })
+            updateProp({
+              rcdSensitivity: Number(e.target.value) as 10 | 30 | 100 | 300,
+            })
           }
           className="input-field"
         >
@@ -380,12 +595,73 @@ const PropertyPanel: React.FC = () => {
           ))}
         </select>
       </Label>
+      <Label text="RCD type">
+        <select
+          value={selectedComp!.properties.rcdType ?? 'A'}
+          onChange={(e) =>
+            updateProp({ rcdType: e.target.value as 'AC' | 'A' | 'B' })
+          }
+          className="input-field"
+        >
+          <option value="AC">Type AC (AC only)</option>
+          <option value="A">Type A (AC + pulsating DC)</option>
+          <option value="B">Type B (AC + DC + HF)</option>
+        </select>
+      </Label>
+      <Label text="Trip time">
+        <select
+          value={selectedComp!.properties.rcdTripTimeMs ?? 30}
+          onChange={(e) =>
+            updateProp({ rcdTripTimeMs: Math.max(1, Number(e.target.value) || 1) })
+          }
+          className="input-field"
+        >
+          {[10, 30, 100, 300].map((t) => (
+            <option key={t} value={t}>
+              {t} ms
+            </option>
+          ))}
+        </select>
+      </Label>
       <Label text="Poles">
         <div className="flex gap-1">
           {[2, 4].map((p) => (
             <button
               key={p}
-              onClick={() => updateProp({ poles: p })}
+              onClick={() => {
+                const points =
+                  p === 4
+                    ? [
+                        { x: -24, y: -25, label: 'IN_L1' },
+                        { x: -8, y: -25, label: 'IN_L2' },
+                        { x: 8, y: -25, label: 'IN_L3' },
+                        { x: 24, y: -25, label: 'IN_N' },
+                        { x: -24, y: 25, label: 'OUT_L1' },
+                        { x: -8, y: 25, label: 'OUT_L2' },
+                        { x: 8, y: 25, label: 'OUT_L3' },
+                        { x: 24, y: 25, label: 'OUT_N' },
+                      ]
+                    : [
+                        { x: -14, y: -25, label: 'IN_L' },
+                        { x: -14, y: 25, label: 'OUT_L' },
+                        { x: 14, y: -25, label: 'IN_N' },
+                        { x: 14, y: 25, label: 'OUT_N' },
+                      ];
+                updateComponent(selectedComp!.id, {
+                  properties: {
+                    ...selectedComp!.properties,
+                    poles: p,
+                    phaseSystem: p === 4 ? 'three_phase' : 'single_phase',
+                  },
+                  connectionPoints: points.map((pt) => ({
+                    id: crypto.randomUUID(),
+                    componentId: selectedComp!.id,
+                    x: pt.x,
+                    y: pt.y,
+                    label: pt.label,
+                  })),
+                });
+              }}
               className={`px-2 py-1 rounded text-xs ${
                 selectedComp!.properties.poles === p
                   ? 'bg-blue-600 text-white'
@@ -404,6 +680,17 @@ const PropertyPanel: React.FC = () => {
         >
           RESET RCD
         </button>
+      )}
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        RCD compares line and neutral current continuously. Leakage imbalance
+        above setting trips quickly for shock/fire protection.
+      </p>
+      {selectedComp!.type === 'hrc_fuse' && (
+        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+          HRC fuse is a one-time high-speed fault interrupter. Select class and
+          rupturing capacity above prospective short-circuit current for safe
+          discrimination and cable/device protection.
+        </p>
       )}
     </>
   );
@@ -472,6 +759,53 @@ const PropertyPanel: React.FC = () => {
 
   const renderEarthLeakageRelayCbctProps = () => (
     <>
+      <Label text="Application">
+        <div className="flex gap-1">
+          {([1, 3] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => {
+                const points =
+                  p === 3
+                    ? [
+                        { x: -12, y: -25, label: 'IN_L1' },
+                        { x: -12, y: 25, label: 'OUT_L1' },
+                        { x: 0, y: -25, label: 'IN_L2' },
+                        { x: 0, y: 25, label: 'OUT_L2' },
+                        { x: 12, y: -25, label: 'IN_L3' },
+                        { x: 12, y: 25, label: 'OUT_L3' },
+                      ]
+                    : [
+                        { x: 0, y: -25, label: 'IN' },
+                        { x: 0, y: 25, label: 'OUT' },
+                      ];
+                updateComponent(selectedComp!.id, {
+                  properties: {
+                    ...selectedComp!.properties,
+                    poles: p,
+                    phaseSystem: p === 3 ? 'three_phase' : 'single_phase',
+                  },
+                  connectionPoints: points.map((pt) => ({
+                    id: crypto.randomUUID(),
+                    componentId: selectedComp!.id,
+                    x: pt.x,
+                    y: pt.y,
+                    label: pt.label,
+                  })),
+                });
+              }}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.poles ?? 1) === p
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {p === 3 ? '3-phase (L1/L2/L3)' : 'Single-phase (L/N)'}
+            </button>
+          ))}
+        </div>
+      </Label>
       <Label text="Relay rating">
         <select
           value={selectedComp!.properties.ratingAmps ?? 63}
@@ -504,17 +838,50 @@ const PropertyPanel: React.FC = () => {
           ))}
         </select>
       </Label>
-      <Label text="State">
-        <button
-          onClick={() => toggleComponent(selectedComp!.id)}
-          className={`w-full px-3 py-2 rounded text-sm font-medium transition-colors ${
-            selectedComp!.state === 'on'
-              ? 'bg-green-600 text-white hover:bg-green-700'
-              : 'bg-gray-600 text-white hover:bg-gray-700'
-          }`}
+      <Label text="Trip delay">
+        <select
+          value={selectedComp!.properties.elrTripDelayMs ?? 0}
+          onChange={(e) =>
+            updateProp({ elrTripDelayMs: Math.max(0, Number(e.target.value) || 0) })
+          }
+          className="input-field"
         >
-          {selectedComp!.state === 'on' ? 'Armed' : 'Isolated'}
-        </button>
+          {[0, 100, 300, 500, 1000].map((d) => (
+            <option key={d} value={d}>
+              {d === 0 ? 'Instantaneous' : `${d} ms`}
+            </option>
+          ))}
+        </select>
+      </Label>
+      <Label text="State">
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedComp!.state !== 'on') toggleComponent(selectedComp!.id);
+            }}
+            className={`flex-1 px-2 py-1 rounded text-xs font-medium ${
+              selectedComp!.state === 'on'
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-600 text-gray-300'
+            }`}
+          >
+            ON (Armed)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedComp!.state === 'on') toggleComponent(selectedComp!.id);
+            }}
+            className={`flex-1 px-2 py-1 rounded text-xs font-medium ${
+              selectedComp!.state !== 'on'
+                ? 'bg-red-600 text-white'
+                : 'bg-gray-600 text-gray-300'
+            }`}
+          >
+            OFF (Isolated)
+          </button>
+        </div>
       </Label>
       {selectedComp!.state === 'tripped' && (
         <button
@@ -526,7 +893,8 @@ const PropertyPanel: React.FC = () => {
       )}
       <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
         ELR + CBCT trips on earth-fault path detection. Use for industrial
-        feeder leakage protection where an RCD is not preferred.
+        feeder leakage protection where an RCD is not preferred. Pass all active
+        conductors through CBCT core (L/N or L1/L2/L3), never earth conductor.
       </p>
     </>
   );
@@ -2341,10 +2709,104 @@ const PropertyPanel: React.FC = () => {
           max={65535}
         />
       </Label>
+      <Label text="Subnet mask">
+        <input
+          type="text"
+          value={selectedComp!.properties.gatewaySubnet ?? '255.255.255.0'}
+          onChange={(e) => updateProp({ gatewaySubnet: e.target.value })}
+          className="input-field"
+        />
+      </Label>
+      <Label text="Default gateway">
+        <input
+          type="text"
+          value={selectedComp!.properties.gatewayDefaultRoute ?? '192.168.1.1'}
+          onChange={(e) => updateProp({ gatewayDefaultRoute: e.target.value })}
+          className="input-field"
+        />
+      </Label>
+      <Label text="RTU baud rate">
+        <select
+          value={selectedComp!.properties.serialBaudRate ?? 9600}
+          onChange={(e) =>
+            updateProp({
+              serialBaudRate: Number(e.target.value) as
+                | 9600
+                | 19200
+                | 38400
+                | 57600
+                | 115200,
+            })
+          }
+          className="input-field"
+        >
+          {[9600, 19200, 38400, 57600, 115200].map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </Label>
+      <Label text="RTU parity">
+        <select
+          value={selectedComp!.properties.serialParity ?? 'none'}
+          onChange={(e) =>
+            updateProp({ serialParity: e.target.value as 'none' | 'even' | 'odd' })
+          }
+          className="input-field"
+        >
+          <option value="none">None</option>
+          <option value="even">Even</option>
+          <option value="odd">Odd</option>
+        </select>
+      </Label>
+      <Label text="RTU stop bits">
+        <select
+          value={selectedComp!.properties.serialStopBits ?? 1}
+          onChange={(e) => updateProp({ serialStopBits: Number(e.target.value) as 1 | 2 })}
+          className="input-field"
+        >
+          <option value={1}>1</option>
+          <option value={2}>2</option>
+        </select>
+      </Label>
+      <Label text="RTU data bits">
+        <select
+          value={selectedComp!.properties.serialDataBits ?? 8}
+          onChange={(e) => updateProp({ serialDataBits: Number(e.target.value) as 7 | 8 })}
+          className="input-field"
+        >
+          <option value={7}>7</option>
+          <option value={8}>8</option>
+        </select>
+      </Label>
+      <Label text="Default RTU slave ID">
+        <input
+          type="number"
+          value={selectedComp!.properties.modbusDefaultSlaveId ?? 1}
+          onChange={(e) =>
+            updateProp({
+              modbusDefaultSlaveId: Math.max(1, Math.min(247, Number(e.target.value) || 1)),
+            })
+          }
+          className="input-field"
+          min={1}
+          max={247}
+        />
+      </Label>
       <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
-        Use this for BMS supervisory comms. It is a documentation/control object
-        with optional control power terminals <strong>PWR_L / PWR_N</strong>.
+        Bridges Modbus TCP to Modbus RTU. Keep all downstream RTU devices on matching
+        serial settings (baud/parity/stop/data bits). Map TCP requests to RTU via slave ID.
       </p>
+      <Label text="Terminal number map">
+        <div className={`text-[10px] ${tc.textMuted} space-y-0.5`}>
+          {selectedComp!.connectionPoints.map((cp, idx) => (
+            <div key={cp.id}>
+              <strong>{idx + 1}</strong> = {cp.label}
+            </div>
+          ))}
+        </div>
+      </Label>
     </>
   );
 
@@ -2370,10 +2832,116 @@ const PropertyPanel: React.FC = () => {
           max={65535}
         />
       </Label>
+      <Label text="Subnet mask">
+        <input
+          type="text"
+          value={selectedComp!.properties.gatewaySubnet ?? '255.255.255.0'}
+          onChange={(e) => updateProp({ gatewaySubnet: e.target.value })}
+          className="input-field"
+        />
+      </Label>
+      <Label text="Default gateway">
+        <input
+          type="text"
+          value={selectedComp!.properties.gatewayDefaultRoute ?? '192.168.1.1'}
+          onChange={(e) => updateProp({ gatewayDefaultRoute: e.target.value })}
+          className="input-field"
+        />
+      </Label>
+      <Label text="BACnet device instance">
+        <input
+          type="number"
+          value={selectedComp!.properties.bacnetDeviceInstance ?? 110001}
+          onChange={(e) =>
+            updateProp({
+              bacnetDeviceInstance: Math.max(1, Number(e.target.value) || 1),
+            })
+          }
+          className="input-field"
+          min={1}
+        />
+      </Label>
+      <Label text="BBMD enabled">
+        <input
+          type="checkbox"
+          checked={selectedComp!.properties.bacnetBbmdEnabled ?? false}
+          onChange={(e) => updateProp({ bacnetBbmdEnabled: e.target.checked })}
+        />
+      </Label>
+      {(selectedComp!.properties.bacnetBbmdEnabled ?? false) && (
+        <Label text="BBMD IP">
+          <input
+            type="text"
+            value={selectedComp!.properties.bacnetBbmdIp ?? ''}
+            onChange={(e) => updateProp({ bacnetBbmdIp: e.target.value })}
+            className="input-field"
+            placeholder="192.168.1.10"
+          />
+        </Label>
+      )}
+      <Label text="MS/TP baud rate">
+        <select
+          value={selectedComp!.properties.serialBaudRate ?? 38400}
+          onChange={(e) =>
+            updateProp({
+              serialBaudRate: Number(e.target.value) as
+                | 9600
+                | 19200
+                | 38400
+                | 57600
+                | 115200,
+            })
+          }
+          className="input-field"
+        >
+          {[9600, 19200, 38400, 57600, 115200].map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </Label>
+      <Label text="MS/TP MAC address">
+        <input
+          type="number"
+          value={selectedComp!.properties.mstpMacAddress ?? 1}
+          onChange={(e) =>
+            updateProp({
+              mstpMacAddress: Math.max(0, Math.min(127, Number(e.target.value) || 0)),
+            })
+          }
+          className="input-field"
+          min={0}
+          max={127}
+        />
+      </Label>
+      <Label text="MS/TP max master">
+        <input
+          type="number"
+          value={selectedComp!.properties.mstpMaxMaster ?? 127}
+          onChange={(e) =>
+            updateProp({
+              mstpMaxMaster: Math.max(1, Math.min(127, Number(e.target.value) || 1)),
+            })
+          }
+          className="input-field"
+          min={1}
+          max={127}
+        />
+      </Label>
       <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
-        BACnet/IP endpoint for BMS integration (default UDP 47808). Optional
-        control power can be wired via <strong>PWR_L / PWR_N</strong>.
+        BACnet/IP bridge for BMS. Typical wiring uses Ethernet (`ETH0_RJ45`) and
+        RS-485 MS/TP (`MSTP_A`, `MSTP_B`, `MSTP_GND`) with optional shield grounding.
       </p>
+      <Label text="Terminal number map">
+        <div className={`text-[10px] ${tc.textMuted} space-y-0.5`}>
+          {selectedComp!.connectionPoints.map((cp, idx) => (
+            <div key={cp.id}>
+              <strong>{idx + 1}</strong> = {cp.label}
+            </div>
+          ))}
+        </div>
+      </Label>
     </>
   );
 
@@ -2427,6 +2995,15 @@ const PropertyPanel: React.FC = () => {
         Wire module power on <strong>PWR_L / PWR_N</strong>; channel points are
         represented as properties for planning-level diagrams.
       </p>
+      <Label text="Terminal number map">
+        <div className={`text-[10px] ${tc.textMuted} space-y-0.5`}>
+          {selectedComp!.connectionPoints.map((cp, idx) => (
+            <div key={cp.id}>
+              <strong>{idx + 1}</strong> = {cp.label}
+            </div>
+          ))}
+        </div>
+      </Label>
     </>
   );
 
@@ -2497,6 +3074,98 @@ const PropertyPanel: React.FC = () => {
           )}
         </>
       )}
+      {selectedComp!.type === 'communication_converter' && (
+        <>
+          <Label text="Converter mode">
+            <select
+              value={
+                selectedComp!.properties.commConverterMode ??
+                'modbus_rtu_to_modbus_tcp'
+              }
+              onChange={(e) =>
+                updateProp({
+                  commConverterMode: e.target.value as
+                    | 'rs232_to_rs485'
+                    | 'rs485_to_ethernet'
+                    | 'modbus_rtu_to_modbus_tcp'
+                    | 'bacnet_mstp_to_bacnet_ip',
+                })
+              }
+              className="input-field"
+            >
+              <option value="rs232_to_rs485">RS-232 ↔ RS-485</option>
+              <option value="rs485_to_ethernet">RS-485 ↔ Ethernet</option>
+              <option value="modbus_rtu_to_modbus_tcp">
+                Modbus RTU ↔ Modbus TCP
+              </option>
+              <option value="bacnet_mstp_to_bacnet_ip">
+                BACnet MS/TP ↔ BACnet/IP
+              </option>
+            </select>
+          </Label>
+          <Label text="Serial baud rate">
+            <select
+              value={selectedComp!.properties.serialBaudRate ?? 9600}
+              onChange={(e) =>
+                updateProp({
+                  serialBaudRate: Number(e.target.value) as
+                    | 9600
+                    | 19200
+                    | 38400
+                    | 57600
+                    | 115200,
+                })
+              }
+              className="input-field"
+            >
+              {[9600, 19200, 38400, 57600, 115200].map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </Label>
+          <Label text="Serial parity">
+            <select
+              value={selectedComp!.properties.serialParity ?? 'none'}
+              onChange={(e) =>
+                updateProp({
+                  serialParity: e.target.value as 'none' | 'even' | 'odd',
+                })
+              }
+              className="input-field"
+            >
+              <option value="none">None</option>
+              <option value="even">Even</option>
+              <option value="odd">Odd</option>
+            </select>
+          </Label>
+          <Label text="Serial stop bits">
+            <select
+              value={selectedComp!.properties.serialStopBits ?? 1}
+              onChange={(e) =>
+                updateProp({ serialStopBits: Number(e.target.value) as 1 | 2 })
+              }
+              className="input-field"
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+            </select>
+          </Label>
+          <Label text="Serial data bits">
+            <select
+              value={selectedComp!.properties.serialDataBits ?? 8}
+              onChange={(e) =>
+                updateProp({ serialDataBits: Number(e.target.value) as 7 | 8 })
+              }
+              className="input-field"
+            >
+              <option value={7}>7</option>
+              <option value={8}>8</option>
+            </select>
+          </Label>
+        </>
+      )}
       <Label
         text={
           selectedComp!.type === 'ethernet_switch'
@@ -2532,6 +3201,15 @@ const PropertyPanel: React.FC = () => {
         Use interface cards/converters/switches to isolate field devices and
         bridge BMS networks. Power terminals are optional and diagrammatic.
       </p>
+      <Label text="Terminal number map">
+        <div className={`text-[10px] ${tc.textMuted} space-y-0.5`}>
+          {selectedComp!.connectionPoints.map((cp, idx) => (
+            <div key={cp.id}>
+              <strong>{idx + 1}</strong> = {cp.label}
+            </div>
+          ))}
+        </div>
+      </Label>
     </>
   );
 
@@ -2573,6 +3251,15 @@ const PropertyPanel: React.FC = () => {
         Isolation modules break ground loops and protect BMS I/O from field-side
         transients and common-mode noise.
       </p>
+      <Label text="Terminal number map">
+        <div className={`text-[10px] ${tc.textMuted} space-y-0.5`}>
+          {selectedComp!.connectionPoints.map((cp, idx) => (
+            <div key={cp.id}>
+              <strong>{idx + 1}</strong> = {cp.label}
+            </div>
+          ))}
+        </div>
+      </Label>
     </>
   );
 

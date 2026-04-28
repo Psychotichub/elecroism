@@ -978,11 +978,61 @@ export class CircuitEngine {
         case 'mechanical_interlock':
         case 'key_interlock':
         case 'hrc_fuse':
-        case 'control_circuit_fuse':
-        case 'earth_leakage_relay_cbct':
+        case 'overload_relay':
+          if (component.state === 'on' && !skipInternalBridge) {
+            if (component.type === 'hrc_fuse') {
+              const polePairs: [string, string][] = [
+                ['IN', 'OUT'],
+                ['IN_L1', 'OUT_L1'],
+                ['IN_L2', 'OUT_L2'],
+                ['IN_L3', 'OUT_L3'],
+              ];
+              for (const [a, b] of polePairs) {
+                const ak = this.findTerminalByLabel(component, a);
+                const bk = this.findTerminalByLabel(component, b);
+                if (ak && bk) this.addEdge(graph, ak, bk);
+              }
+            } else {
+              const inKey = this.findTerminalByLabel(component, 'IN');
+              const outKey = this.findTerminalByLabel(component, 'OUT');
+              if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+            }
+          }
+          break;
         case 'rcd':
         case 'residual_current_circuit_breaker':
-        case 'overload_relay':
+          if (component.state === 'on' && !skipInternalBridge) {
+            const polePairs: [string, string][] = [
+              ['IN', 'OUT'],
+              ['IN_L', 'OUT_L'],
+              ['IN_N', 'OUT_N'],
+              ['IN_L1', 'OUT_L1'],
+              ['IN_L2', 'OUT_L2'],
+              ['IN_L3', 'OUT_L3'],
+            ];
+            for (const [a, b] of polePairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
+          }
+          break;
+        case 'earth_leakage_relay_cbct':
+          if (component.state === 'on' && !skipInternalBridge) {
+            const pairs: [string, string][] = [
+              ['IN', 'OUT'],
+              ['IN_L1', 'OUT_L1'],
+              ['IN_L2', 'OUT_L2'],
+              ['IN_L3', 'OUT_L3'],
+            ];
+            for (const [a, b] of pairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
+          }
+          break;
+        case 'control_circuit_fuse':
           if (component.state === 'on' && !skipInternalBridge) {
             const inKey = this.findTerminalByLabel(component, 'IN');
             const outKey = this.findTerminalByLabel(component, 'OUT');

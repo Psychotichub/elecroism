@@ -31,6 +31,16 @@ const BreakerSymbol: React.FC<Props> = ({
   const isTripped = component.state === 'tripped';
   const isOn = component.state === 'on';
   const energized = nodeResult?.energized || false;
+  const isRcdLike =
+    component.type === 'rcd' ||
+    component.type === 'residual_current_circuit_breaker';
+  const poles = component.properties.poles ?? 2;
+  const poleXs =
+    isRcdLike && poles >= 4 ? [-24, -8, 8, 24] : isRcdLike ? [-14, 14] : [0];
+  const bodyWidth = isRcdLike && poles >= 4 ? 76 : 50;
+  const bodyX = -bodyWidth / 2;
+  const selWidth = bodyWidth + 8;
+  const selX = -selWidth / 2;
 
   useEffect(() => {
     if (!isTripped) return;
@@ -51,6 +61,8 @@ const BreakerSymbol: React.FC<Props> = ({
       : component.type === 'rcd'
         ? 'RCD'
         : 'BRK';
+  const rcdType = component.properties.rcdType ?? 'A';
+  const rcdTripMs = component.properties.rcdTripTimeMs ?? 30;
 
   return (
     <Group
@@ -75,9 +87,9 @@ const BreakerSymbol: React.FC<Props> = ({
       <ScaledSymbolInner component={component}>
       {selected && (
         <Rect
-          x={-21}
+          x={selX}
           y={-30}
-          width={42}
+          width={selWidth}
           height={60}
           stroke="#3B82F6"
           strokeWidth={2}
@@ -87,9 +99,9 @@ const BreakerSymbol: React.FC<Props> = ({
       )}
 
       <Rect
-        x={-17}
+        x={bodyX}
         y={-26}
-        width={34}
+        width={bodyWidth}
         height={52}
         fillLinearGradientStartPoint={{ x: 0, y: -26 }}
         fillLinearGradientEndPoint={{ x: 0, y: 26 }}
@@ -107,9 +119,9 @@ const BreakerSymbol: React.FC<Props> = ({
         shadowOffsetY={1.2}
       />
       <Rect
-        x={-15}
+        x={bodyX + 2}
         y={-24}
-        width={30}
+        width={bodyWidth - 4}
         height={48}
         fill="#FFFFFF"
         opacity={0.14}
@@ -117,30 +129,36 @@ const BreakerSymbol: React.FC<Props> = ({
         listening={false}
       />
 
-      <Rect
-        x={-6}
-        y={-30}
-        width={12}
-        height={6}
-        fill="#D1D5DB"
-        stroke="#6B7280"
-        strokeWidth={DETAIL}
-        cornerRadius={1.5}
-        listening={false}
-      />
-      <Rect
-        x={-6}
-        y={24}
-        width={12}
-        height={6}
-        fill="#D1D5DB"
-        stroke="#6B7280"
-        strokeWidth={DETAIL}
-        cornerRadius={1.5}
-        listening={false}
-      />
-      <Circle x={0} y={-27} radius={1.4} fill="#6B7280" listening={false} />
-      <Circle x={0} y={27} radius={1.4} fill="#6B7280" listening={false} />
+      {poleXs.map((x) => (
+        <React.Fragment key={`term-${x}`}>
+          <Rect
+            x={x - 3}
+            y={-30}
+            width={6}
+            height={6}
+            fill="#D1D5DB"
+            stroke="#6B7280"
+            strokeWidth={DETAIL}
+            cornerRadius={1.2}
+            listening={false}
+          />
+          <Rect
+            x={x - 3}
+            y={24}
+            width={6}
+            height={6}
+            fill="#D1D5DB"
+            stroke="#6B7280"
+            strokeWidth={DETAIL}
+            cornerRadius={1.2}
+            listening={false}
+          />
+          <Circle x={x} y={-27} radius={1.15} fill="#6B7280" listening={false} />
+          <Circle x={x} y={27} radius={1.15} fill="#6B7280" listening={false} />
+          <Line points={[x, -26, x, -30]} stroke="#374151" strokeWidth={1.7} />
+          <Line points={[x, 26, x, 30]} stroke="#374151" strokeWidth={1.7} />
+        </React.Fragment>
+      ))}
 
       <Rect
         x={-5}
@@ -186,6 +204,19 @@ const BreakerSymbol: React.FC<Props> = ({
         fill="#6B7280"
         listening={false}
       />
+      {(component.type === 'rcd' ||
+        component.type === 'residual_current_circuit_breaker') && (
+        <Text
+          text={`T${rcdType} ${rcdTripMs}ms`}
+          x={-15}
+          y={13}
+          width={30}
+          align="center"
+          fontSize={6}
+          fill="#4B5563"
+          listening={false}
+        />
+      )}
 
       <Circle
         x={0}
@@ -203,9 +234,6 @@ const BreakerSymbol: React.FC<Props> = ({
         fill="#6B7280"
         listening={false}
       />
-
-      <Line points={[0, -26, 0, -30]} stroke="#374151" strokeWidth={2} />
-      <Line points={[0, 26, 0, 30]} stroke="#374151" strokeWidth={2} />
 
       <ComponentCanvasLabel
           componentId={component.id}

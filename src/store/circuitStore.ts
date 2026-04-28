@@ -255,24 +255,79 @@ function createConnectionPoints(
         { id: uuid(), componentId, x: 18, y: 22, label: 'SEC_N' },
       ];
     case 'modbus_tcp_gateway':
+      return [
+        // Power (typical 24VDC gateway supply)
+        { id: uuid(), componentId, x: -14, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 14, y: -24, label: 'PWR_0V' },
+        // Ethernet side (Modbus TCP / port 502)
+        { id: uuid(), componentId, x: 0, y: -30, label: 'ETH0_RJ45' },
+        // RS-485 side (Modbus RTU bus)
+        { id: uuid(), componentId, x: 30, y: -10, label: 'RS485_A' },
+        { id: uuid(), componentId, x: 30, y: 0, label: 'RS485_B' },
+        { id: uuid(), componentId, x: 30, y: 10, label: 'RS485_GND' },
+        // Shield / frame ground
+        { id: uuid(), componentId, x: -30, y: 0, label: 'SHIELD_FG' },
+      ];
     case 'bacnet_ip_gateway':
       return [
-        { id: uuid(), componentId, x: -12, y: -22, label: 'PWR_L' },
-        { id: uuid(), componentId, x: 12, y: -22, label: 'PWR_N' },
+        // Power + BACnet/IP Ethernet
+        { id: uuid(), componentId, x: -14, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 14, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: 0, y: -30, label: 'ETH0_RJ45' },
+        // RS-485 side (BACnet MS/TP or Modbus RTU field bus)
+        { id: uuid(), componentId, x: 30, y: -10, label: 'MSTP_A' },
+        { id: uuid(), componentId, x: 30, y: 0, label: 'MSTP_B' },
+        { id: uuid(), componentId, x: 30, y: 10, label: 'MSTP_GND' },
+        // Shield / frame ground
+        { id: uuid(), componentId, x: -30, y: 0, label: 'SHIELD_FG' },
+      ];
+    case 'communication_converter':
+      return [
+        // TOP = power + ethernet
+        { id: uuid(), componentId, x: -18, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 0, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: 18, y: -24, label: 'ETH0_RJ45' },
+        // RIGHT = RS-485
+        { id: uuid(), componentId, x: 30, y: -10, label: 'RS485_A' },
+        { id: uuid(), componentId, x: 30, y: 0, label: 'RS485_B' },
+        { id: uuid(), componentId, x: 30, y: 10, label: 'RS485_GND' },
+        // LEFT = RS-232 + shield
+        { id: uuid(), componentId, x: -30, y: -12, label: 'RS232_TX' },
+        { id: uuid(), componentId, x: -30, y: -2, label: 'RS232_RX' },
+        { id: uuid(), componentId, x: -30, y: 8, label: 'RS232_GND' },
+        { id: uuid(), componentId, x: -30, y: 18, label: 'SHIELD_FG' },
       ];
     case 'modbus_rtu_module':
       return [
-        { id: uuid(), componentId, x: -12, y: -22, label: 'PWR_L' },
-        { id: uuid(), componentId, x: 12, y: -22, label: 'PWR_N' },
-        { id: uuid(), componentId, x: -12, y: 22, label: 'RS485_A' },
-        { id: uuid(), componentId, x: 12, y: 22, label: 'RS485_B' },
+        // TOP = 1,2,3
+        { id: uuid(), componentId, x: -18, y: -24, label: 'PWR_L' },
+        { id: uuid(), componentId, x: 0, y: -24, label: 'PWR_N' },
+        { id: uuid(), componentId, x: 18, y: -24, label: 'PWR_PE' },
+
+        // BOTTOM = 4,5,6
+        { id: uuid(), componentId, x: -18, y: 24, label: 'RS485_A' },
+        { id: uuid(), componentId, x: 0, y: 24, label: 'RS485_B' },
+        { id: uuid(), componentId, x: 18, y: 24, label: 'RS485_GND' },
+
+        // LEFT = 7,8,9,10,11
+        { id: uuid(), componentId, x: -30, y: -18, label: 'SHIELD_FG' },
+        { id: uuid(), componentId, x: -30, y: -9, label: 'AO+' },
+        { id: uuid(), componentId, x: -30, y: 0, label: 'AO-' },
+        { id: uuid(), componentId, x: -30, y: 9, label: 'DO_COM' },
+        { id: uuid(), componentId, x: -30, y: 18, label: 'DO_NO' },
+
+        // RIGHT = 12,13,14,15,16
+        { id: uuid(), componentId, x: 30, y: -18, label: 'DI1' },
+        { id: uuid(), componentId, x: 30, y: -9, label: 'DI2' },
+        { id: uuid(), componentId, x: 30, y: 0, label: 'AI+' },
+        { id: uuid(), componentId, x: 30, y: 9, label: 'AI-' },
+        { id: uuid(), componentId, x: 30, y: 18, label: 'DO_NC' },
       ];
     case 'di_module':
     case 'do_module':
     case 'ai_module':
     case 'ao_module':
     case 'relay_interface_card':
-    case 'communication_converter':
     case 'iot_gateway':
     case 'cloud_monitoring_module':
     case 'energy_management_controller':
@@ -398,6 +453,12 @@ function createConnectionPoints(
       ];
     case 'rcd':
     case 'residual_current_circuit_breaker':
+      return [
+        { id: uuid(), componentId, x: -14, y: -25, label: 'IN_L' },
+        { id: uuid(), componentId, x: -14, y: 25, label: 'OUT_L' },
+        { id: uuid(), componentId, x: 14, y: -25, label: 'IN_N' },
+        { id: uuid(), componentId, x: 14, y: 25, label: 'OUT_N' },
+      ];
     case 'overload_relay':
       return [
         { id: uuid(), componentId, x: 0, y: -25, label: 'IN' },
@@ -873,9 +934,16 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
     case 'modbus_tcp_gateway':
       return {
         gatewayIp: '192.168.1.100',
+        gatewaySubnet: '255.255.255.0',
+        gatewayDefaultRoute: '192.168.1.1',
         gatewayPort: 502,
+        serialBaudRate: 9600,
+        serialParity: 'none',
+        serialStopBits: 1,
+        serialDataBits: 8,
+        modbusDefaultSlaveId: 1,
         phaseSystem: 'single_phase',
-      };
+      } as ComponentProperties;
     case 'modbus_rtu_module':
       return {
         ioChannels: 1,
@@ -885,8 +953,19 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
       return {
         gatewayIp: '192.168.1.110',
         gatewayPort: 47808,
+        gatewaySubnet: '255.255.255.0',
+        gatewayDefaultRoute: '192.168.1.1',
+        bacnetDeviceInstance: 110001,
+        bacnetBbmdEnabled: false,
+        bacnetBbmdIp: '',
+        serialBaudRate: 38400,
+        serialParity: 'none',
+        serialStopBits: 1,
+        serialDataBits: 8,
+        mstpMacAddress: 1,
+        mstpMaxMaster: 127,
         phaseSystem: 'single_phase',
-      };
+      } as ComponentProperties;
     case 'di_module':
       return { ioChannels: 8, phaseSystem: 'single_phase' };
     case 'do_module':
@@ -909,8 +988,13 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
       return {
         gatewayIp: '192.168.1.120',
         gatewayPort: 502,
+        commConverterMode: 'modbus_rtu_to_modbus_tcp',
+        serialBaudRate: 9600,
+        serialParity: 'none',
+        serialStopBits: 1,
+        serialDataBits: 8,
         phaseSystem: 'single_phase',
-      };
+      } as ComponentProperties;
     case 'iot_gateway':
       return {
         gatewayIp: '10.10.10.10',
@@ -1134,18 +1218,27 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
       return {
         ratingAmps: 32,
         breakingCapacity: 10000,
+        poles: 1,
+        hrcType: 'gG',
+        hrcBreakingCapacityKa: 80,
+        hrcFusingFactor: 1.6,
+        hrcI2tA2s: 12000,
         phaseSystem: 'single_phase',
       };
     case 'control_circuit_fuse':
       return {
         ratingAmps: 2,
         breakingCapacity: 6000,
+        controlCircuitSupplyMode: 'single_phase_ln',
+        controlCircuitVoltage: 230,
         phaseSystem: 'single_phase',
       };
     case 'earth_leakage_relay_cbct':
       return {
         ratingAmps: 63,
         earthLeakageTripMa: 30,
+        elrTripDelayMs: 0,
+        poles: 1,
         phaseSystem: 'single_phase',
       };
     case 'rcd':
@@ -1153,6 +1246,8 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
       return {
         ratingAmps: 40,
         rcdSensitivity: 30,
+        rcdType: 'A',
+        rcdTripTimeMs: 30,
         poles: 2,
         phaseSystem: 'single_phase',
       };
@@ -1278,7 +1373,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         multimeterHighVoltage: true,
         multimeterMaxVoltage: 1000,
         phaseSystem: 'single_phase',
-      };
+      } as ComponentProperties;
     case 'junction':
       return { phaseSystem: 'single_phase' };
     case 'wire':

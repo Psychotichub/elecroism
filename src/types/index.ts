@@ -170,8 +170,20 @@ export interface ComponentProperties {
   ratingAmps?: number;
   tripCurve?: 'B' | 'C' | 'D';
   breakingCapacity?: 6000 | 10000;
+  hrcType?: 'gG' | 'gL' | 'aM' | 'aR' | 'gR';
+  hrcBreakingCapacityKa?: number;
+  hrcFusingFactor?: number;
+  hrcI2tA2s?: number;
+  controlCircuitSupplyMode?:
+    | 'single_phase_ln'
+    | 'derived_from_3ph_ll'
+    | 'monitoring_3ph';
+  controlCircuitVoltage?: 24 | 110 | 230;
+  elrTripDelayMs?: number;
   mpcbTripClass?: '10A' | '10' | '20' | '30';
   rcdSensitivity?: 10 | 30 | 100 | 300;
+  rcdType?: 'AC' | 'A' | 'B';
+  rcdTripTimeMs?: number;
   earthLeakageTripMa?: 30 | 100 | 300 | 500;
 
   /** Air circuit breaker: instantaneous pickup as multiple of Ir (e.g. 10) */
@@ -289,7 +301,24 @@ export interface ComponentProperties {
   multimeterInputProbeY?: number;
   /** Communication endpoint settings for gateway-type components. */
   gatewayIp?: string;
+  gatewaySubnet?: string;
+  gatewayDefaultRoute?: string;
   gatewayPort?: number;
+  serialBaudRate?: 9600 | 19200 | 38400 | 57600 | 115200;
+  serialParity?: 'none' | 'even' | 'odd';
+  serialStopBits?: 1 | 2;
+  serialDataBits?: 7 | 8;
+  modbusDefaultSlaveId?: number;
+  commConverterMode?:
+    | 'rs232_to_rs485'
+    | 'rs485_to_ethernet'
+    | 'modbus_rtu_to_modbus_tcp'
+    | 'bacnet_mstp_to_bacnet_ip';
+  bacnetDeviceInstance?: number;
+  bacnetBbmdEnabled?: boolean;
+  bacnetBbmdIp?: string;
+  mstpMacAddress?: number;
+  mstpMaxMaster?: number;
   ioChannels?: number;
   aiSignalType?: '0_10v' | '4_20ma';
   aoSignalType?: '0_10v' | '4_20ma';

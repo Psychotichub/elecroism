@@ -420,6 +420,7 @@ const CircuitCanvas: React.FC = () => {
           <EarthLeakageRelayCbctSymbol
             key={comp.id}
             {...commonProps}
+            onToggle={() => toggleComponent(comp.id)}
           />
         );
       case 'three_phase_mcb':
@@ -897,10 +898,10 @@ const CircuitCanvas: React.FC = () => {
                     key={`${comp.id}-${cp.id}-hotspot`}
                     x={absX}
                     y={absY}
-                    radius={8}
+                    radius={4.5}
                     fill="#3B82F6"
                     opacity={0.01}
-                    hitStrokeWidth={18}
+                    hitStrokeWidth={8}
                     onClick={(e) => {
                       e.cancelBubble = true;
                       handleConnectionPointClick(comp.id, cp.id);
@@ -927,14 +928,26 @@ const CircuitCanvas: React.FC = () => {
               })
             )}
 
+            {hoveredConnectionPoint && (
+              <Circle
+                x={hoveredConnectionPoint.x}
+                y={hoveredConnectionPoint.y}
+                radius={3}
+                stroke="#22C55E"
+                strokeWidth={0.6}
+                fill="rgba(34,197,94,0.08)"
+                listening={false}
+              />
+            )}
+
             {wireDockHint &&
               (() => {
                 const stroke = wireDockHint.aligned ? '#16A34A' : '#F59E0B';
                 const fill = wireDockHint.aligned
                   ? 'rgba(22,163,74,0.18)'
                   : 'rgba(245,158,11,0.18)';
-                const half = 7;
-                const tickLen = 5;
+                const half = 4;
+                const tickLen = 3;
                 // The "perp" glyph mimics AutoCAD's perpendicular osnap: a
                 // small square with a stem and a tick perpendicular to the
                 // terminal's outward axis, so the user can read the dock
@@ -975,21 +988,21 @@ const CircuitCanvas: React.FC = () => {
                       width={half * 2}
                       height={half * 2}
                       stroke={stroke}
-                      strokeWidth={1.5}
+                      strokeWidth={0.6}
                       fill={fill}
                       listening={false}
                     />
                     <Line
                       points={stemPoints}
                       stroke={stroke}
-                      strokeWidth={1.5}
+                      strokeWidth={0.6}
                       lineCap="round"
                       listening={false}
                     />
                     <Line
                       points={tickPoints}
                       stroke={stroke}
-                      strokeWidth={1.5}
+                      strokeWidth={0.6}
                       lineCap="round"
                       listening={false}
                     />
