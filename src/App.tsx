@@ -4,6 +4,7 @@ import CircuitCanvas from './components/Canvas/CircuitCanvas';
 import PropertyPanel from './components/Panels/PropertyPanel';
 import StatusBar from './components/Panels/StatusBar';
 import FaultDialog from './components/Dialogs/FaultDialog';
+import ContinuityBuzzer from './components/Audio/ContinuityBuzzer';
 import { useThemeStore } from './store/themeStore';
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
       </div>
       <StatusBar />
       <FaultDialog />
+      <ContinuityBuzzer />
     </div>
   );
 }

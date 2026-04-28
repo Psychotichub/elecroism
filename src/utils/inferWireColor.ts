@@ -5,7 +5,7 @@ function labelImpliesNeutral(label: string): boolean {
   const u = label.toUpperCase().trim();
   if (!u) return false;
   if (u === 'N') return true;
-  return /\b(IN_N|OUT_N|N_OUT|NEUTRAL)\b/.test(u);
+  return /\b(IN_N|OUT_N|N_OUT|AC_N|SEC_N|PWR_N|NEUTRAL)\b/.test(u);
 }
 
 function labelImpliesEarth(label: string): boolean {

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Group, Circle, Line, Text, Arc } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
+import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
 interface Props {
   component: CircuitComponent;
@@ -180,15 +181,15 @@ const PowerSourceSymbol: React.FC<Props> = ({
         </React.Fragment>
       ))}
 
-      <Text
-        text={component.label}
+      <ComponentCanvasLabel
+        componentId={component.id}
+        label={component.label}
         x={-28}
         y={labelY}
         width={56}
-        fontSize={9}
-        fill="#6B7280"
-        align="center"
-        listening={false}
+        fontSize={component.properties.labelFontSize ?? 9}
+        offsetX={component.properties.labelOffsetX ?? 0}
+        offsetY={component.properties.labelOffsetY ?? 0}
       />
 
       {showConnectionPoints &&

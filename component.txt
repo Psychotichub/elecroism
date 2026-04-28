@@ -1,0 +1,129 @@
+a real-world industrial list of components used to build an electrical control panel integrated with BMS (Building Management System). I’ll structure it the way panels are actually designed: power side, protection, control, automation, and communication.
+*make sure if the component have same name it can be changed from properties.
+*make component group name expandable.
+* make a task and do one by one component
+1. Power Incomer Section (Main Supply Entry)
+Air Circuit Breaker (for main LV incomer)
+or Molded Case Circuit Breaker (for smaller panels)
+Busbar system (copper/aluminium)
+Busbar supports & insulators
+Phase indicators (L1/L2/L3 lamps or digital meters)
+2. Protection Devices
+Overcurrent & short circuit:
+MCCB / MCB
+HRC fuses (for transformer protection)
+Earth leakage:
+Residual Current Circuit Breaker
+Earth leakage relay + CBCT (for industrial panels)
+Motor protection:
+Motor Protection Circuit Breaker
+Thermal overload relays (older systems)
+3. Switching & Control Devices
+Magnetic contactors
+Auxiliary contact blocks
+Timer relays
+Control relays (24V / 230V)
+Interposing relays (BMS interface)
+Push buttons (local control: ON/OFF/RESET)
+Selector switches (AUTO / MANUAL)
+4. BMS Interface Devices (Critical Section)
+Digital Input (DI) modules
+Digital Output (DO) modules
+Analog Input (AI) modules (0–10V / 4–20mA)
+Analog Output (AO) modules
+Signal conversion:
+Relay interface cards
+Signal isolators
+Optocoupler modules
+5. Motorized & Remote Control Devices
+Motorized MCCB (remote ON/OFF)
+Motor operator kits for breakers
+Shunt trip coils (remote OFF)
+Closing coils (remote ON for ACB)
+UVR (Undervoltage release)
+6. Measurement & Monitoring Instruments
+Digital multifunction meter (V, A, kW, kWh, PF)
+Energy meters (Modbus-enabled)
+Current transformers (CTs)
+Voltage transformers (VTs, for MV systems)
+Power quality analyzers
+7. BMS Communication System
+Modbus RTU (RS485) modules
+Modbus TCP gateways
+BACnet/IP gateways
+Ethernet switches (industrial grade)
+Communication converters (RS232/RS485/Ethernet)
+8. Control Power Supply System
+Control transformer (415V → 230V / 24V)
+SMPS power supply (24V DC typical for BMS)
+UPS (for critical control continuity)
+DC battery backup (in critical panels)
+Fuses / MCB for control circuits
+9. Safety & Interlocks
+Emergency stop push button (E-Stop)
+Door interlock switches
+Mechanical interlocks (breaker ON/OFF prevention)
+Key interlocks (safe isolation control)
+Earth bar / grounding system
+10. Wiring & Termination System
+Terminal blocks (ferrule type, spring type)
+Neutral link & earth link
+Cable ducts (trunking)
+Ferrules & cable markers
+Control wiring (1.5 mm² / 2.5 mm² typical)
+Power cables (sized by load)
+11. Panel Infrastructure
+MS or GI sheet enclosure
+IP-rated enclosure (IP54/IP65)
+Cooling fans / filters
+Panel heaters (anti-condensation)
+DIN rails
+Mounting plates
+12. Optional Smart / IoT Layer (Modern panels)
+Smart relays
+IoT gateways
+Cloud monitoring modules
+Energy management controllers
+13. Typical system architecture (simplified)
+Utility Supply
+     ↓
+ACB / MCCB (Incomer)
+     ↓
+Busbar System
+     ↓
+Outgoing MCCB / Contactors
+     ↓
+Loads (Motors, HVAC, Lighting)
+
+        ↑
+        │
+   BMS SYSTEM
+ (Modbus / BACnet)
+        │
+ DI / DO / AI / AO Modules
+        │
+ Control relays + contactors
+Key engineering concept
+
+A BMS-controlled panel is built on 3 layers:
+
+1. Power layer
+
+→ ACB, MCCB, busbars, protection
+
+2. Control layer
+
+→ relays, contactors, coils
+
+3. Intelligence layer
+
+→ BMS (monitoring + automation)
+
+Final takeaway
+
+An electrical panel with BMS is not just “switching devices”—it is a hierarchical system:
+
+Protection → MCCB/ACB
+Switching → contactors/relays
+Control → coils + interposing relays
+Intelligence → BMS communication modules

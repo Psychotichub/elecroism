@@ -25,6 +25,8 @@ const BreakerSymbol: React.FC<Props> = ({
   showConnectionPoints,
   selected,
 }) => {
+  const OUTLINE = 1.6;
+  const DETAIL = 0.9;
   const [flashVisible, setFlashVisible] = useState(true);
   const isTripped = component.state === 'tripped';
   const isOn = component.state === 'on';
@@ -43,6 +45,12 @@ const BreakerSymbol: React.FC<Props> = ({
     : isOn
     ? '#22C55E'
     : '#9CA3AF';
+  const title =
+    component.type === 'residual_current_circuit_breaker'
+      ? 'RCCB'
+      : component.type === 'rcd'
+        ? 'RCD'
+        : 'BRK';
 
   return (
     <Group
@@ -83,11 +91,56 @@ const BreakerSymbol: React.FC<Props> = ({
         y={-26}
         width={34}
         height={52}
-        fill={energized ? '#F3F4F6' : '#E5E7EB'}
+        fillLinearGradientStartPoint={{ x: 0, y: -26 }}
+        fillLinearGradientEndPoint={{ x: 0, y: 26 }}
+        fillLinearGradientColorStops={
+          energized
+            ? [0, '#F8FAFC', 0.55, '#E5E7EB', 1, '#CBD5E1']
+            : [0, '#E5E7EB', 1, '#CBD5E1']
+        }
         stroke="#374151"
-        strokeWidth={1.5}
+        strokeWidth={OUTLINE}
         cornerRadius={3}
+        shadowColor="#0F172A"
+        shadowBlur={4}
+        shadowOpacity={0.22}
+        shadowOffsetY={1.2}
       />
+      <Rect
+        x={-15}
+        y={-24}
+        width={30}
+        height={48}
+        fill="#FFFFFF"
+        opacity={0.14}
+        cornerRadius={2}
+        listening={false}
+      />
+
+      <Rect
+        x={-6}
+        y={-30}
+        width={12}
+        height={6}
+        fill="#D1D5DB"
+        stroke="#6B7280"
+        strokeWidth={DETAIL}
+        cornerRadius={1.5}
+        listening={false}
+      />
+      <Rect
+        x={-6}
+        y={24}
+        width={12}
+        height={6}
+        fill="#D1D5DB"
+        stroke="#6B7280"
+        strokeWidth={DETAIL}
+        cornerRadius={1.5}
+        listening={false}
+      />
+      <Circle x={0} y={-27} radius={1.4} fill="#6B7280" listening={false} />
+      <Circle x={0} y={27} radius={1.4} fill="#6B7280" listening={false} />
 
       <Rect
         x={-5}
@@ -97,12 +150,29 @@ const BreakerSymbol: React.FC<Props> = ({
         fill={handleColor}
         cornerRadius={2}
       />
+      <Rect
+        x={-4}
+        y={-22}
+        width={8}
+        height={3}
+        fill="#F8FAFC"
+        opacity={0.28}
+        cornerRadius={1}
+        listening={false}
+      />
+      <Line
+        points={[-3, -16, 3, -16]}
+        stroke="#111827"
+        opacity={0.35}
+        strokeWidth={1}
+        listening={false}
+      />
 
       <Text
-        text="RCD"
+        text={title}
         x={-10}
         y={-5}
-        fontSize={8}
+        fontSize={9}
         fill="#374151"
         fontStyle="bold"
         listening={false}
@@ -138,11 +208,14 @@ const BreakerSymbol: React.FC<Props> = ({
       <Line points={[0, 26, 0, 30]} stroke="#374151" strokeWidth={2} />
 
       <ComponentCanvasLabel
+          componentId={component.id}
         label={component.label}
         x={-26}
         y={34}
         width={52}
-        fontSize={8}
+        fontSize={component.properties.labelFontSize ?? 8}
+        offsetX={component.properties.labelOffsetX ?? 0}
+        offsetY={component.properties.labelOffsetY ?? 0}
       />
 
       {showConnectionPoints &&
@@ -151,11 +224,11 @@ const BreakerSymbol: React.FC<Props> = ({
             key={cp.id}
             x={cp.x}
             y={cp.y}
-            radius={5}
+            radius={4.5}
             fill="#3B82F6"
-            opacity={0.6}
+            opacity={0.7}
             stroke="#2563EB"
-            strokeWidth={1}
+            strokeWidth={1.2}
           />
         ))}
       </ScaledSymbolInner>

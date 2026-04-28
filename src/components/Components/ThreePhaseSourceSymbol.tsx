@@ -2,6 +2,7 @@ import React from 'react';
 import { Group, Circle, Line, Text, Arc } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
+import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
 interface Props {
   component: CircuitComponent;
@@ -104,15 +105,15 @@ const ThreePhaseSourceSymbol: React.FC<Props> = ({
         listening={false}
       />
 
-      <Text
-        text={component.label}
+      <ComponentCanvasLabel
+        componentId={component.id}
+        label={component.label}
         x={-28}
         y={26}
         width={56}
-        fontSize={9}
-        fill="#6B7280"
-        align="center"
-        listening={false}
+        fontSize={component.properties.labelFontSize ?? 9}
+        offsetX={component.properties.labelOffsetX ?? 0}
+        offsetY={component.properties.labelOffsetY ?? 0}
       />
 
       <Line points={[-20, -22, -20, -32]} stroke="#7C3F19" strokeWidth={2} />

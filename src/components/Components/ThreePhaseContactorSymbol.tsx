@@ -59,7 +59,7 @@ const ThreePhaseContactorSymbol: React.FC<Props> = ({
           x={minX - 4}
           y={-32}
           width={bodyW + 8}
-          height={64}
+          height={90}
           stroke="#3B82F6"
           strokeWidth={2}
           dash={[4, 4]}
@@ -142,6 +142,121 @@ const ThreePhaseContactorSymbol: React.FC<Props> = ({
         points={[maxX, 0, coilBX, 0]}
         stroke="#374151"
         strokeWidth={1.5}
+      />
+
+      <Rect
+        x={-18}
+        y={32}
+        width={36}
+        height={24}
+        fill={isOn ? '#F0FDF4' : '#F9FAFB'}
+        stroke="#9CA3AF"
+        strokeWidth={1}
+        cornerRadius={2}
+        dash={[3, 2]}
+      />
+
+      <Line points={[-12, 38, -12, 35]} stroke="#374151" strokeWidth={1.5} />
+      <Line points={[-12, 50, -12, 53]} stroke="#374151" strokeWidth={1.5} />
+      {isOn ? (
+        <Line
+          points={[-12, 38, -12, 50]}
+          stroke="#22C55E"
+          strokeWidth={1.5}
+        />
+      ) : (
+        <>
+          <Line
+            points={[-12, 38, -12, 42]}
+            stroke="#374151"
+            strokeWidth={1.2}
+          />
+          <Line
+            points={[-12, 46, -8, 50]}
+            stroke="#374151"
+            strokeWidth={1.2}
+          />
+        </>
+      )}
+      <Text
+        text="13"
+        x={-22}
+        y={32}
+        width={20}
+        fontSize={6}
+        fill="#111827"
+        align="right"
+        listening={false}
+      />
+      <Text
+        text="14"
+        x={-22}
+        y={50}
+        width={20}
+        fontSize={6}
+        fill="#111827"
+        align="right"
+        listening={false}
+      />
+
+      <Line points={[12, 38, 12, 35]} stroke="#374151" strokeWidth={1.5} />
+      <Line points={[12, 50, 12, 53]} stroke="#374151" strokeWidth={1.5} />
+      {isOn ? (
+        <>
+          <Line
+            points={[12, 38, 12, 42]}
+            stroke="#374151"
+            strokeWidth={1.2}
+          />
+          <Line
+            points={[12, 46, 16, 50]}
+            stroke="#374151"
+            strokeWidth={1.2}
+          />
+        </>
+      ) : (
+        <Line points={[12, 38, 12, 50]} stroke="#22C55E" strokeWidth={1.5} />
+      )}
+      <Text
+        text="21"
+        x={2}
+        y={32}
+        width={20}
+        fontSize={6}
+        fill="#111827"
+        align="left"
+        listening={false}
+      />
+      <Text
+        text="22"
+        x={2}
+        y={50}
+        width={20}
+        fontSize={6}
+        fill="#111827"
+        align="left"
+        listening={false}
+      />
+
+      <Text
+        text="NO"
+        x={-18}
+        y={43}
+        width={12}
+        fontSize={5}
+        fill="#6B7280"
+        align="center"
+        listening={false}
+      />
+      <Text
+        text="NC"
+        x={6}
+        y={43}
+        width={12}
+        fontSize={5}
+        fill="#6B7280"
+        align="center"
+        listening={false}
       />
 
       {showConnectionPoints &&

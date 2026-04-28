@@ -28,6 +28,12 @@ export class CircuitEngine {
     return 230;
   }
 
+  private defaultDcLoadVoltage(circuit: Circuit): number {
+    const dc = circuit.components.find((c) => c.type === 'dc_power_source');
+    if (dc) return dc.properties.voltage ?? 24;
+    return 24;
+  }
+
   simulate(circuit: Circuit, depth = 0, wallMs = Date.now()): SimulationResult {
     if (depth > 6) {
       return this.buildDegradedResult(circuit);
@@ -99,6 +105,29 @@ export class CircuitEngine {
             voltageV = energized ? defaultSingleVoltage : 0;
           }
         } else {
+          if (component.type === 'multimeter') {
+            const reading = this.measureMultimeter(
+              component,
+              circuit,
+              potentials,
+              terminalGraph
+            );
+            nodes[component.id] = {
+              nodeId: component.id,
+              voltageV: reading.voltageV,
+              currentA: reading.currentA,
+              powerW: reading.continuity ? 1 : 0,
+              powerVA: 0,
+              powerFactor: 1,
+              energized: reading.connected,
+            };
+            (
+              nodes[component.id] as NodeResult & {
+                meterSignal?: 'ac' | 'dc';
+              }
+            ).meterSignal = reading.signal;
+            continue;
+          }
           energized =
             hasPotential ||
             component.type === 'power_source' ||
@@ -114,7 +143,12 @@ export class CircuitEngine {
             phaseVoltageRmsV = vLL / Math.sqrt(3);
           } else if (
             component.type === 'three_phase_contactor' ||
-            component.type === 'four_phase_contactor'
+            component.type === 'four_phase_contactor' ||
+            // Energy meter: pass-through 3φ device — show U_L-L from the
+            // upstream supply so the panel display matches what the meter
+            // would read on its V terminals.
+            component.type === 'energy_meter' ||
+            component.type === 'digital_multifunction_meter'
           ) {
             const vLL =
               component.properties.lineVoltage ||
@@ -130,6 +164,49 @@ export class CircuitEngine {
             voltageV = energized
               ? (component.properties.voltage ?? 24)
               : 0;
+          } else if (
+            component.type === 'ac_dc_converter' ||
+            component.type === 'smps'
+          ) {
+            const acLcp = component.connectionPoints.find(
+              (cp) => cp.label.toUpperCase() === 'AC_L'
+            );
+            const acNcp = component.connectionPoints.find(
+              (cp) => cp.label.toUpperCase() === 'AC_N'
+            );
+            const acOk =
+              !!acLcp &&
+              !!acNcp &&
+              this.linePotentialAt(
+                potentials,
+                this.terminalKey(component.id, acLcp.id)
+              ) &&
+              potentials.neutral.has(
+                this.terminalKey(component.id, acNcp.id)
+              );
+            energized = acOk;
+            voltageV = acOk
+              ? (component.properties.voltage ?? 24)
+              : 0;
+          } else if (component.type === 'control_transformer') {
+            const pL = component.connectionPoints.find(
+              (cp) => cp.label.toUpperCase() === 'PRI_L'
+            );
+            const pN = component.connectionPoints.find(
+              (cp) => cp.label.toUpperCase() === 'PRI_N'
+            );
+            const priOk =
+              !!pL &&
+              !!pN &&
+              this.linePotentialAt(
+                potentials,
+                this.terminalKey(component.id, pL.id)
+              ) &&
+              potentials.neutral.has(
+                this.terminalKey(component.id, pN.id)
+              );
+            energized = priOk;
+            voltageV = priOk ? (component.properties.voltage ?? 24) : 0;
           } else {
             voltageV = energized ? defaultSingleVoltage : 0;
           }
@@ -160,6 +237,30 @@ export class CircuitEngine {
       circuit,
       potentials
     );
+    const phaseFaultAnchors = this.getThreePhaseCrossPhaseAnchors(potentials);
+    const severeFaultAnchors = new Set<string>([
+      ...lnFaultAnchors,
+      ...phaseFaultAnchors,
+    ]);
+    if (phaseFaultAnchors.size > 0) {
+      const phaseFaultLocations = this.formatFaultAnchorLocations(
+        circuit,
+        phaseFaultAnchors,
+        3
+      );
+      faults.push({
+        id: crypto.randomUUID(),
+        type: 'short_circuit',
+        affectedComponentId:
+          circuit.components.find((c) => c.type === 'three_phase_source')?.id ??
+          circuit.components[0]?.id ??
+          '',
+        message:
+          `Three-phase short circuit: L1/L2/L3 are electrically tied together${phaseFaultLocations ? ` (at ${phaseFaultLocations})` : ''}.`,
+        severity: 'critical',
+        timestamp: wallMs,
+      });
+    }
     const prospectiveShortCurrentA = 5000;
 
     const seriesPathCurrents = new Map<string, number>();
@@ -173,11 +274,11 @@ export class CircuitEngine {
         contactorPickup
       );
       if (
-        lnFaultAnchors.size > 0 &&
+        severeFaultAnchors.size > 0 &&
         this.seriesDeviceOnLivePathToLnFault(
           component,
           circuit,
-          lnFaultAnchors,
+          severeFaultAnchors,
           contactorPickup
         )
       ) {
@@ -193,7 +294,9 @@ export class CircuitEngine {
           component.type === 'four_pole_motorized_mccb' ||
           component.type === 'air_circuit_breaker' ||
           component.type === 'three_phase_contactor' ||
-          component.type === 'four_phase_contactor'
+          component.type === 'four_phase_contactor' ||
+          component.type === 'energy_meter' ||
+          component.type === 'digital_multifunction_meter'
             ? component.properties.lineVoltage ||
               this.getDefaultThreePhaseLineVoltage(circuit)
             : defaultSingleVoltage;
@@ -212,11 +315,11 @@ export class CircuitEngine {
       if (component.state === 'off' || component.state === 'tripped') continue;
       const branchCurrent = seriesPathCurrents.get(component.id) || 0;
       const lnFaultPath =
-        lnFaultAnchors.size > 0 &&
+        severeFaultAnchors.size > 0 &&
         this.seriesDeviceOnLivePathToLnFault(
           component,
           circuit,
-          lnFaultAnchors,
+          severeFaultAnchors,
           contactorPickup
         );
       const fault = this.checkFaults(component, branchCurrent, {
@@ -277,6 +380,7 @@ export class CircuitEngine {
     }
 
     this.updateWireStates(circuit, nodes, potentials);
+    this.updateMultimeterCurrentReadings(circuit, nodes);
 
     let totalPowerW = 0;
     let totalCurrentA = 0;
@@ -405,9 +509,15 @@ export class CircuitEngine {
   private isSeriesProtectionDevice(c: CircuitComponent): boolean {
     return (
       c.type === 'mcb' ||
+      c.type === 'hrc_fuse' ||
+      c.type === 'control_circuit_fuse' ||
+      c.type === 'earth_leakage_relay_cbct' ||
       c.type === 'rcd' ||
+      c.type === 'residual_current_circuit_breaker' ||
       c.type === 'overload_relay' ||
       c.type === 'three_phase_mcb' ||
+      c.type === 'mccb' ||
+      c.type === 'motor_protection_circuit_breaker' ||
       c.type === 'four_phase_mcb' ||
       c.type === 'motorized_mccb' ||
       c.type === 'four_pole_motorized_mccb' ||
@@ -436,24 +546,42 @@ export class CircuitEngine {
       c.type === 'switch' ||
       c.type === 'push_button' ||
       c.type === 'mcb' ||
+      c.type === 'hrc_fuse' ||
+      c.type === 'control_circuit_fuse' ||
+      c.type === 'earth_leakage_relay_cbct' ||
       c.type === 'rcd' ||
+      c.type === 'residual_current_circuit_breaker' ||
       c.type === 'overload_relay' ||
       c.type === 'contactor' ||
       c.type === 'relay' ||
+      c.type === 'smart_relay' ||
       c.type === 'timer' ||
       c.type === 'three_phase_mcb' ||
+      c.type === 'motor_protection_circuit_breaker' ||
       c.type === 'four_phase_mcb' ||
       c.type === 'motorized_mccb' ||
       c.type === 'four_pole_motorized_mccb' ||
       c.type === 'air_circuit_breaker' ||
       c.type === 'three_phase_contactor' ||
-      c.type === 'four_phase_contactor'
+      c.type === 'four_phase_contactor' ||
+      // Newly-added series devices: each can interrupt or pass current
+      // through its IN/OUT (or COM/AUTO/MAN, or per-pole) bridges.
+      c.type === 'estop' ||
+      c.type === 'door_interlock' ||
+      c.type === 'mechanical_interlock' ||
+      c.type === 'key_interlock' ||
+      c.type === 'selector_switch' ||
+      c.type === 'interposing_relay' ||
+      c.type === 'aux_contact_block' ||
+      c.type === 'energy_meter' ||
+      c.type === 'digital_multifunction_meter'
+      || c.type === 'terminal_block'
     );
   }
 
   /** Live terminal used for “downstream of this series device” checks. */
   private getLoadLiveTerminalKey(component: CircuitComponent): string | null {
-    if (component.type === 'socket') {
+    if (component.type === 'socket' || component.type === 'indicator_lamp') {
       const cp = component.connectionPoints.find(
         (p) => p.label.toUpperCase() === 'L'
       );
@@ -578,6 +706,25 @@ export class CircuitEngine {
   }
 
   /**
+   * Anchors where two or more 3-phase line potentials collapse to one node.
+   * This models phase-to-phase bolted faults (e.g. L1 tied to L2 on busbar).
+   */
+  private getThreePhaseCrossPhaseAnchors(potentials: PotentialSets): Set<string> {
+    const anchors = new Set<string>();
+    for (const key of potentials.liveL1) {
+      if (potentials.liveL2.has(key) || potentials.liveL3.has(key)) {
+        anchors.add(key);
+      }
+    }
+    for (const key of potentials.liveL2) {
+      if (potentials.liveL3.has(key)) {
+        anchors.add(key);
+      }
+    }
+    return anchors;
+  }
+
+  /**
    * True if removing this device’s IN↔OUT bridge breaks reachability from the
    * source live to at least one L–N fault anchor (fault current passes here).
    */
@@ -627,8 +774,58 @@ export class CircuitEngine {
     return keys;
   }
 
+  private getDcConductorStartKeys(circuit: Circuit): string[] {
+    const keys: string[] = [];
+    for (const source of circuit.components) {
+      if (source.type !== 'dc_power_source') continue;
+      if (source.state === 'off' || source.state === 'tripped') continue;
+      for (const cp of source.connectionPoints) {
+        const key = this.terminalKey(source.id, cp.id);
+        const tokens = this.tokenizeLabel(cp.label);
+        if (tokens.includes('PLUS') || tokens.includes('MINUS')) {
+          keys.push(key);
+        }
+      }
+    }
+    return keys;
+  }
+
   private terminalKey(componentId: string, pointId: string): string {
     return `${componentId}:${pointId}`;
+  }
+
+  private splitTerminalKey(key: string): {
+    componentId: string;
+    pointId: string;
+  } | null {
+    const sep = key.lastIndexOf(':');
+    if (sep <= 0 || sep >= key.length - 1) return null;
+    return {
+      componentId: key.slice(0, sep),
+      pointId: key.slice(sep + 1),
+    };
+  }
+
+  private formatFaultAnchorLocations(
+    circuit: Circuit,
+    anchors: Set<string>,
+    limit = 3
+  ): string {
+    if (anchors.size === 0) return '';
+    const out: string[] = [];
+    for (const key of anchors) {
+      if (out.length >= limit) break;
+      const parsed = this.splitTerminalKey(key);
+      if (!parsed) continue;
+      const component = circuit.components.find((c) => c.id === parsed.componentId);
+      if (!component) continue;
+      const cp = component.connectionPoints.find((p) => p.id === parsed.pointId);
+      const terminalLabel = cp?.label ?? parsed.pointId;
+      out.push(`${component.label}.${terminalLabel}`);
+    }
+    const hidden = anchors.size - out.length;
+    if (hidden > 0) out.push(`+${hidden} more`);
+    return out.join(', ');
   }
 
   private addEdge(graph: Map<string, Set<string>>, a: string, b: string): void {
@@ -650,9 +847,12 @@ export class CircuitEngine {
     return (
       type === 'contactor' ||
       type === 'relay' ||
+      type === 'smart_relay' ||
       type === 'timer' ||
       type === 'three_phase_contactor' ||
-      type === 'four_phase_contactor'
+      type === 'four_phase_contactor' ||
+      // Interposing (interface) relay: 24 V DC coil drives a single dry NO.
+      type === 'interposing_relay'
     );
   }
 
@@ -753,8 +953,18 @@ export class CircuitEngine {
 
       switch (component.type) {
         case 'busbar':
+        case 'busbar_system':
+        case 'neutral_bar_system':
+        case 'earth_bar_grounding_system':
         case 'junction':
           this.connectAll(graph, keys);
+          break;
+        case 'terminal_block':
+          if (!skipInternalBridge) {
+            const inKey = this.findTerminalByLabel(component, 'IN');
+            const outKey = this.findTerminalByLabel(component, 'OUT');
+            if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+          }
           break;
         case 'push_button':
           if (this.pushButtonConducting(component) && !skipInternalBridge) {
@@ -764,7 +974,14 @@ export class CircuitEngine {
           }
           break;
         case 'switch':
+        case 'door_interlock':
+        case 'mechanical_interlock':
+        case 'key_interlock':
+        case 'hrc_fuse':
+        case 'control_circuit_fuse':
+        case 'earth_leakage_relay_cbct':
         case 'rcd':
+        case 'residual_current_circuit_breaker':
         case 'overload_relay':
           if (component.state === 'on' && !skipInternalBridge) {
             const inKey = this.findTerminalByLabel(component, 'IN');
@@ -797,37 +1014,83 @@ export class CircuitEngine {
           break;
         case 'contactor':
         case 'relay':
+        case 'smart_relay':
         case 'timer':
-          if (
-            !skipInternalBridge &&
-            contactorPickupSet &&
-            contactorPickupSet.has(component.id)
-          ) {
+          if (!skipInternalBridge && contactorPickupSet) {
+            const pickedUp = contactorPickupSet.has(component.id);
+            if (pickedUp) {
+              const inKey = this.findTerminalByLabel(component, 'IN');
+              const outKey = this.findTerminalByLabel(component, 'OUT');
+              if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+            }
+            this.bridgeAuxContacts(graph, component, pickedUp);
+          }
+          break;
+        case 'interposing_relay':
+          // Same as a normal relay: IN↔OUT bridges only when the A1/A2 coil
+          // sees its operating voltage. No separate 13/14/21/22 aux block —
+          // interposing relays are typically packaged with one dry NO.
+          if (!skipInternalBridge && contactorPickupSet) {
+            const pickedUp = contactorPickupSet.has(component.id);
+            if (pickedUp) {
+              const inKey = this.findTerminalByLabel(component, 'IN');
+              const outKey = this.findTerminalByLabel(component, 'OUT');
+              if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+            }
+          }
+          break;
+        case 'aux_contact_block':
+          // 1NO + 1NC block: "on" -> 13-14 closed, 21-22 open.
+          // "off" -> 13-14 open, 21-22 closed.
+          if (!skipInternalBridge) {
+            const noIn = this.findTerminalByLabel(component, '13');
+            const noOut = this.findTerminalByLabel(component, '14');
+            const ncIn = this.findTerminalByLabel(component, '21');
+            const ncOut = this.findTerminalByLabel(component, '22');
+            if (component.state === 'on') {
+              if (noIn && noOut) this.addEdge(graph, noIn, noOut);
+            } else {
+              if (ncIn && ncOut) this.addEdge(graph, ncIn, ncOut);
+            }
+          }
+          break;
+        case 'estop':
+          // Mushroom-head NC: IN↔OUT closed while not latched (state==='on').
+          // Pressing latches it open until reset (state==='off').
+          if (component.state === 'on' && !skipInternalBridge) {
             const inKey = this.findTerminalByLabel(component, 'IN');
             const outKey = this.findTerminalByLabel(component, 'OUT');
             if (inKey && outKey) this.addEdge(graph, inKey, outKey);
           }
           break;
-        case 'three_phase_contactor':
-        case 'four_phase_contactor':
-          if (
-            !skipInternalBridge &&
-            contactorPickupSet &&
-            contactorPickupSet.has(component.id)
-          ) {
-            const pairs: [string, string][] =
-              component.type === 'four_phase_contactor'
-                ? [
-                    ['IN_L1', 'OUT_L1'],
-                    ['IN_L2', 'OUT_L2'],
-                    ['IN_L3', 'OUT_L3'],
-                    ['IN_N', 'OUT_N'],
-                  ]
-                : [
-                    ['IN_L1', 'OUT_L1'],
-                    ['IN_L2', 'OUT_L2'],
-                    ['IN_L3', 'OUT_L3'],
-                  ];
+        case 'selector_switch': {
+          // 3-position rotary: COM↔AUTO when AUTO, COM↔MAN when MANUAL,
+          // nothing when OFF. State is held in `properties.selectorPosition`
+          // so it survives undo/redo and serialization like other config.
+          if (skipInternalBridge) break;
+          const pos = component.properties.selectorPosition ?? 'OFF';
+          const com = this.findTerminalByLabel(component, 'COM');
+          if (!com) break;
+          if (pos === 'AUTO') {
+            const target = this.findTerminalByLabel(component, 'AUTO');
+            if (target) this.addEdge(graph, com, target);
+          } else if (pos === 'MANUAL') {
+            const target = this.findTerminalByLabel(component, 'MAN');
+            if (target) this.addEdge(graph, com, target);
+          }
+          break;
+        }
+        case 'energy_meter':
+        case 'digital_multifunction_meter':
+          // Multifunction meter is a pass-through (CTs are clamp-on / shunt
+          // internally — current still flows uninterrupted).
+          if (!skipInternalBridge) {
+            const pairs: [string, string][] = [
+              ['IN_L1', 'OUT_L1'],
+              ['IN_L2', 'OUT_L2'],
+              ['IN_L3', 'OUT_L3'],
+              ['IN_N', 'OUT_N'],
+            ];
             for (const [a, b] of pairs) {
               const ak = this.findTerminalByLabel(component, a);
               const bk = this.findTerminalByLabel(component, b);
@@ -835,7 +1098,50 @@ export class CircuitEngine {
             }
           }
           break;
+        case 'control_transformer':
+          // Simplified isolated AC transformer behaviour: when primary (PRI_L/N)
+          // is energized, secondary exposes its own line/neutral pair.
+          if (!skipInternalBridge) {
+            const pL = this.findTerminalByLabel(component, 'PRI_L');
+            const pN = this.findTerminalByLabel(component, 'PRI_N');
+            const sL = this.findTerminalByLabel(component, 'SEC_L');
+            const sN = this.findTerminalByLabel(component, 'SEC_N');
+            if (pL && pN && sL && sN) {
+              this.addEdge(graph, pL, sL);
+              this.addEdge(graph, pN, sN);
+            }
+          }
+          break;
+        case 'three_phase_contactor':
+        case 'four_phase_contactor':
+          if (!skipInternalBridge && contactorPickupSet) {
+            const pickedUp = contactorPickupSet.has(component.id);
+            if (pickedUp) {
+              const pairs: [string, string][] =
+                component.type === 'four_phase_contactor'
+                  ? [
+                      ['IN_L1', 'OUT_L1'],
+                      ['IN_L2', 'OUT_L2'],
+                      ['IN_L3', 'OUT_L3'],
+                      ['IN_N', 'OUT_N'],
+                    ]
+                  : [
+                      ['IN_L1', 'OUT_L1'],
+                      ['IN_L2', 'OUT_L2'],
+                      ['IN_L3', 'OUT_L3'],
+                    ];
+              for (const [a, b] of pairs) {
+                const ak = this.findTerminalByLabel(component, a);
+                const bk = this.findTerminalByLabel(component, b);
+                if (ak && bk) this.addEdge(graph, ak, bk);
+              }
+            }
+            this.bridgeAuxContacts(graph, component, pickedUp);
+          }
+          break;
         case 'three_phase_mcb':
+        case 'mccb':
+        case 'motor_protection_circuit_breaker':
         case 'four_phase_mcb':
         case 'motorized_mccb':
         case 'four_pole_motorized_mccb':
@@ -884,6 +1190,31 @@ export class CircuitEngine {
     );
     if (!found) return null;
     return this.terminalKey(component.id, found.id);
+  }
+
+  /**
+   * IEC contactor auxiliary contacts:
+   *  - 13-14 NO: closed when the coil is energised (contactor "picked up")
+   *  - 21-22 NC: closed when the coil is de-energised
+   * The NO contact is what the start/stop circuit uses to "hold" the
+   * contactor in once the start button has been released; the NC contact is
+   * commonly used for interlocking another contactor or feeding indicator
+   * lamps.
+   */
+  private bridgeAuxContacts(
+    graph: Map<string, Set<string>>,
+    component: CircuitComponent,
+    pickedUp: boolean
+  ): void {
+    if (pickedUp) {
+      const k13 = this.findTerminalByLabel(component, '13');
+      const k14 = this.findTerminalByLabel(component, '14');
+      if (k13 && k14) this.addEdge(graph, k13, k14);
+    } else {
+      const k21 = this.findTerminalByLabel(component, '21');
+      const k22 = this.findTerminalByLabel(component, '22');
+      if (k21 && k22) this.addEdge(graph, k21, k22);
+    }
   }
 
   private bfsFrom(
@@ -982,13 +1313,65 @@ export class CircuitEngine {
       }
     }
 
+    let live = this.bfsFrom(graph, liveStarts);
+    let neutral = this.bfsFrom(graph, neutralStarts);
+    const liveL1 = this.bfsFrom(graph, l1Starts);
+    const liveL2 = this.bfsFrom(graph, l2Starts);
+    const liveL3 = this.bfsFrom(graph, l3Starts);
+
+    /** AC→DC converters and SMPSs: when AC_L is on a line network and AC_N is
+     * on neutral, the DC outputs become live/neutral starts. Iterate so
+     * chained PSU stages (DC bus feeding another DC stage via mixed wiring)
+     * stabilise. */
+    for (let iter = 0; iter < 8; iter++) {
+      let added = false;
+      for (const c of circuit.components) {
+        if (c.type !== 'ac_dc_converter' && c.type !== 'smps') continue;
+        if (c.state === 'off' || c.state === 'tripped') continue;
+        const acLcp = c.connectionPoints.find(
+          (cp) => cp.label.toUpperCase() === 'AC_L'
+        );
+        const acNcp = c.connectionPoints.find(
+          (cp) => cp.label.toUpperCase() === 'AC_N'
+        );
+        const plusCp = c.connectionPoints.find(
+          (cp) => cp.label.toUpperCase() === 'DC_PLUS'
+        );
+        const minusCp = c.connectionPoints.find(
+          (cp) => cp.label.toUpperCase() === 'DC_MINUS'
+        );
+        if (!acLcp || !acNcp || !plusCp || !minusCp) continue;
+        const acLk = this.terminalKey(c.id, acLcp.id);
+        const acNk = this.terminalKey(c.id, acNcp.id);
+        const acHot =
+          live.has(acLk) ||
+          liveL1.has(acLk) ||
+          liveL2.has(acLk) ||
+          liveL3.has(acLk);
+        if (!acHot || !neutral.has(acNk)) continue;
+        const plusK = this.terminalKey(c.id, plusCp.id);
+        const minusK = this.terminalKey(c.id, minusCp.id);
+        if (!live.has(plusK)) {
+          liveStarts.push(plusK);
+          added = true;
+        }
+        if (!neutral.has(minusK)) {
+          neutralStarts.push(minusK);
+          added = true;
+        }
+      }
+      if (!added) break;
+      live = this.bfsFrom(graph, liveStarts);
+      neutral = this.bfsFrom(graph, neutralStarts);
+    }
+
     return {
-      live: this.bfsFrom(graph, liveStarts),
-      neutral: this.bfsFrom(graph, neutralStarts),
+      live,
+      neutral,
       pe: this.bfsFrom(graph, peStarts),
-      liveL1: this.bfsFrom(graph, l1Starts),
-      liveL2: this.bfsFrom(graph, l2Starts),
-      liveL3: this.bfsFrom(graph, l3Starts),
+      liveL1,
+      liveL2,
+      liveL3,
     };
   }
 
@@ -999,6 +1382,118 @@ export class CircuitEngine {
       potentials.liveL2.has(key) ||
       potentials.liveL3.has(key)
     );
+  }
+
+  private keyPotentialTag(
+    potentials: PotentialSets,
+    key: string
+  ): 'N' | 'L' | 'L1' | 'L2' | 'L3' | 'NONE' {
+    if (potentials.liveL1.has(key)) return 'L1';
+    if (potentials.liveL2.has(key)) return 'L2';
+    if (potentials.liveL3.has(key)) return 'L3';
+    if (potentials.live.has(key)) return 'L';
+    if (potentials.neutral.has(key)) return 'N';
+    return 'NONE';
+  }
+
+  private estimateVoltageBetweenTags(
+    a: 'N' | 'L' | 'L1' | 'L2' | 'L3' | 'NONE',
+    b: 'N' | 'L' | 'L1' | 'L2' | 'L3' | 'NONE',
+    circuit: Circuit,
+    signal: 'ac' | 'dc'
+  ): number {
+    if (a === 'NONE' || b === 'NONE' || a === b) return 0;
+    if (signal === 'dc') {
+      return this.defaultDcLoadVoltage(circuit);
+    }
+    const vLL = this.getDefaultThreePhaseLineVoltage(circuit);
+    const vLN = this.defaultSinglePhaseLoadVoltage(circuit);
+    if (a === 'N' || b === 'N') return vLN;
+    const threeA = a === 'L1' || a === 'L2' || a === 'L3';
+    const threeB = b === 'L1' || b === 'L2' || b === 'L3';
+    if (threeA && threeB) return vLL;
+    return vLN;
+  }
+
+  private measureMultimeter(
+    component: CircuitComponent,
+    circuit: Circuit,
+    potentials: PotentialSets,
+    graph: Map<string, Set<string>>
+  ): {
+    connected: boolean;
+    voltageV: number;
+    currentA: number;
+    continuity: boolean;
+    signal: 'ac' | 'dc';
+  } {
+    const com = component.connectionPoints.find(
+      (cp) => cp.label.toUpperCase() === 'COM'
+    );
+    const input = component.connectionPoints.find(
+      (cp) => cp.label.toUpperCase().includes('V') || cp.label.includes('Ω')
+    );
+    if (!com || !input) {
+      return {
+        connected: false,
+        voltageV: 0,
+        currentA: 0,
+        continuity: false,
+        signal: 'ac',
+      };
+    }
+    const kCom =
+      this.resolveMultimeterProbeKey(component, circuit, 'com') ??
+      this.terminalKey(component.id, com.id);
+    const kIn =
+      this.resolveMultimeterProbeKey(component, circuit, 'input') ??
+      this.terminalKey(component.id, input.id);
+    const connected = this.componentTouchesAnyPotential(component, potentials);
+    const continuity = this.bfsFrom(graph, [kCom]).has(kIn);
+    const tCom = this.keyPotentialTag(potentials, kCom);
+    const tIn = this.keyPotentialTag(potentials, kIn);
+    const selectedSignal =
+      ((component.properties as { multimeterSignal?: 'auto' | 'ac' | 'dc' })
+        .multimeterSignal ?? 'auto');
+    const dcReach = this.bfsFrom(graph, this.getDcConductorStartKeys(circuit));
+    const autoSignal: 'ac' | 'dc' =
+      dcReach.has(kCom) && dcReach.has(kIn) ? 'dc' : 'ac';
+    const signal = selectedSignal === 'auto' ? autoSignal : selectedSignal;
+    const voltageV = this.estimateVoltageBetweenTags(tCom, tIn, circuit, signal);
+    return {
+      connected,
+      voltageV,
+      currentA: 0,
+      continuity,
+      signal,
+    };
+  }
+
+  private resolveMultimeterProbeKey(
+    component: CircuitComponent,
+    circuit: Circuit,
+    which: 'com' | 'input'
+  ): string | null {
+    const p = component.properties as {
+      multimeterComTargetComponentId?: string;
+      multimeterComTargetPointId?: string;
+      multimeterInputTargetComponentId?: string;
+      multimeterInputTargetPointId?: string;
+    };
+    const targetComponentId =
+      which === 'com'
+        ? p.multimeterComTargetComponentId
+        : p.multimeterInputTargetComponentId;
+    const targetPointId =
+      which === 'com'
+        ? p.multimeterComTargetPointId
+        : p.multimeterInputTargetPointId;
+    if (!targetComponentId || !targetPointId) return null;
+    const targetComp = circuit.components.find((c) => c.id === targetComponentId);
+    if (!targetComp) return null;
+    const targetPoint = targetComp.connectionPoints.find((cp) => cp.id === targetPointId);
+    if (!targetPoint) return null;
+    return this.terminalKey(targetComponentId, targetPointId);
   }
 
   private componentTouchesAnyPotential(
@@ -1090,6 +1585,19 @@ export class CircuitEngine {
           { pointId: t2.id, needLive: false, needNeutral: true, needPe: false },
         ];
       }
+      case 'indicator_lamp': {
+        const l = component.connectionPoints.find(
+          (cp) => cp.label.toUpperCase() === 'L'
+        );
+        const n = component.connectionPoints.find(
+          (cp) => cp.label.toUpperCase() === 'N'
+        );
+        if (!l || !n) return null;
+        return [
+          { pointId: l.id, needLive: true, needNeutral: false, needPe: false },
+          { pointId: n.id, needLive: false, needNeutral: true, needPe: false },
+        ];
+      }
       case 'three_phase_motor': {
         const l1 = component.connectionPoints.find(
           (cp) => cp.label.toUpperCase() === 'L1'
@@ -1133,17 +1641,20 @@ export class CircuitEngine {
   }
 
   private isLoadComponent(component: CircuitComponent): boolean {
-    switch (component.type) {
-      case 'lamp':
-      case 'heater':
-      case 'generic_load':
-      case 'motor':
-      case 'socket':
-      case 'three_phase_motor':
-        return true;
-      default:
-        return false;
-    }
+    return (
+      component.type === 'lamp' ||
+      component.type === 'heater' ||
+      component.type === 'panel_heater' ||
+      component.type === 'cooling_fan' ||
+      component.type === 'generic_load' ||
+      component.type === 'motor' ||
+      component.type === 'socket' ||
+      component.type === 'three_phase_motor' ||
+      // Panel-front signal lamp behaves like a tiny resistive 1 W lamp; it
+      // counts as a load so the existing energization / current path logic
+      // gives it a glow when both terminals see a valid L↔N pair.
+      component.type === 'indicator_lamp'
+    );
   }
 
   private calculateCurrent(
@@ -1156,12 +1667,18 @@ export class CircuitEngine {
     switch (component.type) {
       case 'lamp':
       case 'heater':
+      case 'panel_heater':
+      case 'cooling_fan':
       case 'generic_load':
         return (p.powerWatts || 60) / (voltage * pf);
       case 'motor':
         return ((p.powerWatts || 1000) / (voltage * pf)) * 1.25;
       case 'socket':
         return p.powerWatts ? p.powerWatts / (voltage * pf) : 0;
+      // Panel indicator: low power, fixed 1 W default — small but non-zero
+      // current so it appears in totals and on series-meter readouts.
+      case 'indicator_lamp':
+        return (p.powerWatts || 1) / (voltage * pf);
       default:
         return 0;
     }
@@ -1375,6 +1892,10 @@ export class CircuitEngine {
 
     if (
       component.type === 'mcb' ||
+      component.type === 'hrc_fuse' ||
+      component.type === 'control_circuit_fuse' ||
+      component.type === 'earth_leakage_relay_cbct' ||
+      component.type === 'motor_protection_circuit_breaker' ||
       component.type === 'three_phase_mcb' ||
       component.type === 'four_phase_mcb' ||
       component.type === 'motorized_mccb' ||
@@ -1383,8 +1904,16 @@ export class CircuitEngine {
       const tag =
         component.type === 'three_phase_mcb'
           ? '3P MCB'
+          : component.type === 'motor_protection_circuit_breaker'
+            ? 'MPCB'
           : component.type === 'four_phase_mcb'
             ? '4P MCB'
+            : component.type === 'hrc_fuse'
+              ? 'HRC Fuse'
+              : component.type === 'control_circuit_fuse'
+                ? 'Control Fuse'
+              : component.type === 'earth_leakage_relay_cbct'
+                ? 'ELR+CBCT'
             : component.type === 'four_pole_motorized_mccb'
               ? '4P Motorized MCCB'
               : component.type === 'motorized_mccb'
@@ -1396,7 +1925,16 @@ export class CircuitEngine {
                 : 'MCB';
       const inA = Math.max(0.1, p.ratingAmps ?? 16);
       const curve = (p.tripCurve || 'C').toString().trim().toUpperCase() || 'C';
-      const kMag = this.mcbMagneticInMultiple(component);
+      const kMag =
+        component.type === 'hrc_fuse'
+          ? 8
+          : component.type === 'control_circuit_fuse'
+            ? 6
+          : component.type === 'earth_leakage_relay_cbct'
+            ? 5
+            : component.type === 'motor_protection_circuit_breaker'
+              ? 12
+            : this.mcbMagneticInMultiple(component);
       const magneticA = kMag * inA;
       if (currentA >= magneticA) {
         return {
@@ -1408,12 +1946,36 @@ export class CircuitEngine {
           timestamp: wall,
         };
       }
-      if (p.ratingAmps && currentA > p.ratingAmps) {
+      const thermalPickup =
+        component.type === 'motor_protection_circuit_breaker'
+          ? (p.ratingAmps ?? 12) * 1.1
+          : p.ratingAmps;
+      if (thermalPickup && currentA > thermalPickup) {
         return {
           id: crypto.randomUUID(),
           type: 'overload',
           affectedComponentId: component.id,
-          message: `${tag} "${component.label}" thermal overload: ${currentA.toFixed(1)}A > ${p.ratingAmps}A (In); magnetic at ${kMag}×In (${magneticA.toFixed(0)}A)`,
+          message: `${tag} "${component.label}" thermal overload: ${currentA.toFixed(1)}A > ${
+            component.type === 'motor_protection_circuit_breaker'
+              ? thermalPickup.toFixed(1)
+              : `${p.ratingAmps}`
+          }A; magnetic at ${kMag}×In (${magneticA.toFixed(0)}A)`,
+          severity: 'critical',
+          timestamp: wall,
+        };
+      }
+      if (
+        component.type === 'earth_leakage_relay_cbct' &&
+        ctx.lnFaultPath &&
+        currentA > 0.1
+      ) {
+        return {
+          id: crypto.randomUUID(),
+          type: 'earth_fault',
+          affectedComponentId: component.id,
+          message: `ELR+CBCT "${component.label}" earth-fault trip at ${
+            p.earthLeakageTripMa ?? 30
+          }mA setting`,
           severity: 'critical',
           timestamp: wall,
         };
@@ -1445,7 +2007,11 @@ export class CircuitEngine {
       };
     }
 
-    if (component.type === 'rcd' && currentA > 1000) {
+    if (
+      (component.type === 'rcd' ||
+        component.type === 'residual_current_circuit_breaker') &&
+      currentA > 1000
+    ) {
       return {
         id: crypto.randomUUID(),
         type: 'short_circuit',
@@ -1482,6 +2048,28 @@ export class CircuitEngine {
         ? Math.max(fromNode?.currentA || 0, toNode?.currentA || 0)
         : 0;
     });
+  }
+
+  private updateMultimeterCurrentReadings(
+    circuit: Circuit,
+    nodes: Record<string, NodeResult>
+  ): void {
+    for (const c of circuit.components) {
+      if (c.type !== 'multimeter') continue;
+      const node = nodes[c.id];
+      if (!node) continue;
+      const touching = circuit.wires.filter(
+        (w) => w.fromComponentId === c.id || w.toComponentId === c.id
+      );
+      if (touching.length === 0) {
+        node.currentA = 0;
+        continue;
+      }
+      node.currentA = touching.reduce(
+        (m, w) => Math.max(m, Math.abs(w.currentAmps || 0)),
+        0
+      );
+    }
   }
 
 }

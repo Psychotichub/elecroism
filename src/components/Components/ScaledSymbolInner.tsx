@@ -12,7 +12,15 @@ type Props = {
 const ScaledSymbolInner: React.FC<Props> = ({ component, children }) => {
   const s = clampComponentScale(component.scale);
   return (
-    <Group scaleX={s} scaleY={s}>
+    <Group
+      scaleX={s}
+      scaleY={s}
+      shadowColor="#0B1220"
+      shadowBlur={6}
+      shadowOpacity={0.22}
+      shadowOffsetX={0}
+      shadowOffsetY={2}
+    >
       {children}
     </Group>
   );

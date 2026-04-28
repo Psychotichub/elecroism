@@ -228,12 +228,15 @@ const AirCircuitBreakerSymbol: React.FC<Props> = ({
       )}
 
       <ComponentCanvasLabel
+          componentId={component.id}
         label={component.label}
         x={minX - 6}
         y={52}
         width={bodyW + 12}
-        fontSize={8}
-      />
+        fontSize={component.properties.labelFontSize ?? 8}
+                offsetX={component.properties.labelOffsetX ?? 0}
+          offsetY={component.properties.labelOffsetY ?? 0}
+        />
 
       {component.connectionPoints
         .filter((cp) => isControlOrAuxTerminal(cp.label))

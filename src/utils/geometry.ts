@@ -66,6 +66,64 @@ export function connectionPointWorld(
   return { x: component.x + r.x, y: component.y + r.y };
 }
 
+/**
+ * Outward orientation of a connection point in world space.
+ *  - 'h' means the terminal's stub is horizontal (terminal sits on the
+ *    left/right edge of the body), so a wire entering or leaving it
+ *    perpendicular to the body should run horizontally.
+ *  - 'v' means the terminal's stub is vertical (top/bottom edge), so the
+ *    perpendicular leg should run vertically.
+ *
+ * The dominant local axis is rotated by the component rotation to give a
+ * world-space orientation, so rotated components still wire perpendicular.
+ */
+export function terminalOutwardOrientation(
+  component: CircuitComponent,
+  cp: ConnectionPoint
+): 'h' | 'v' {
+  const lx = cp.x;
+  const ly = cp.y;
+  let dx = 0;
+  let dy = 0;
+  if (lx === 0 && ly === 0) {
+    dx = 1;
+  } else if (Math.abs(lx) >= Math.abs(ly)) {
+    dx = lx >= 0 ? 1 : -1;
+  } else {
+    dy = ly >= 0 ? 1 : -1;
+  }
+  const r = rotatePoint(dx, dy, component.rotation);
+  return Math.abs(r.x) >= Math.abs(r.y) ? 'h' : 'v';
+}
+
+/**
+ * Build an orthogonal (Manhattan) path from `(lastX, lastY)` to `(x, y)`.
+ * `firstAxis` selects which leg leaves the previous point: 'h' draws a
+ * horizontal leg first then a vertical one; 'v' is the inverse.
+ * Returns the points appended after `(lastX, lastY)`, omitting any segment
+ * that would be zero-length.
+ */
+export function orthogonalLeg(
+  lastX: number,
+  lastY: number,
+  x: number,
+  y: number,
+  firstAxis: 'h' | 'v'
+): number[] {
+  const cornerX = firstAxis === 'h' ? x : lastX;
+  const cornerY = firstAxis === 'h' ? lastY : y;
+  const out: number[] = [];
+  if (cornerX !== lastX || cornerY !== lastY) {
+    out.push(cornerX, cornerY);
+  }
+  const tailX = out.length ? cornerX : lastX;
+  const tailY = out.length ? cornerY : lastY;
+  if (x !== tailX || y !== tailY) {
+    out.push(x, y);
+  }
+  return out;
+}
+
 /** Bottom-right style handle anchor in world space (from CP hull + pad). */
 export function componentResizeHandleWorld(
   component: CircuitComponent

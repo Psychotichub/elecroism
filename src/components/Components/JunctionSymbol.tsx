@@ -56,12 +56,15 @@ const JunctionSymbol: React.FC<Props> = ({
       />
 
       <ComponentCanvasLabel
+          componentId={component.id}
         label={component.label}
         x={-36}
         y={14}
         width={72}
-        fontSize={8}
-      />
+        fontSize={component.properties.labelFontSize ?? 8}
+                offsetX={component.properties.labelOffsetX ?? 0}
+          offsetY={component.properties.labelOffsetY ?? 0}
+        />
 
       {showConnectionPoints &&
         component.connectionPoints.map((cp) => (

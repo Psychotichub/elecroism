@@ -2,25 +2,42 @@ export type ComponentType =
   | 'switch'
   | 'socket'
   | 'mcb'
+  | 'hrc_fuse'
+  | 'control_circuit_fuse'
+  | 'earth_leakage_relay_cbct'
   | 'rcd'
+  | 'residual_current_circuit_breaker'
   | 'lamp'
   | 'motor'
   | 'heater'
+  | 'panel_heater'
+  | 'cooling_fan'
   | 'busbar'
+  | 'busbar_system'
+  | 'neutral_bar_system'
+  | 'earth_bar_grounding_system'
+  | 'terminal_block'
   | 'wire'
   | 'power_source'
   /** Adjustable nominal DC supply (+ / −). */
   | 'dc_power_source'
+  /** AC mains → DC bus (rectifier / PSU): AC_L/AC_N → DC_PLUS/DC_MINUS, output V adjustable. */
+  | 'ac_dc_converter'
+  /** Isolating control transformer: primary AC to reduced secondary AC. */
+  | 'control_transformer'
   | 'junction'
   | 'push_button'
   | 'generic_load'
   | 'contactor'
   | 'relay'
+  | 'smart_relay'
   | 'timer'
   | 'overload_relay'
   | 'three_phase_source'
   | 'three_phase_motor'
   | 'three_phase_mcb'
+  | 'mccb'
+  | 'motor_protection_circuit_breaker'
   | 'four_phase_mcb'
   | 'air_circuit_breaker'
   /** 3P MCCB with motor operator + BMS control terminals (MOT / shunt / aux / trip). */
@@ -28,7 +45,77 @@ export type ComponentType =
   /** 4P (L1–L3 + N) motorized MCCB + same BMS control block as 3P mMCCB. */
   | 'four_pole_motorized_mccb'
   | 'three_phase_contactor'
-  | 'four_phase_contactor';
+  | 'four_phase_contactor'
+  /** Latched safety mushroom-head NC button (twist-to-release). */
+  | 'estop'
+  /** 3-position rotary selector (AUTO / OFF / MANUAL). */
+  | 'selector_switch'
+  /** Panel-front colored indicator (L1/L2/L3 lamp). */
+  | 'indicator_lamp'
+  | 'phase_indicator_bank'
+  /** Switch-mode power supply: AC mains \u2192 DC bus (24/12/48 V typ.). */
+  | 'smps'
+  /** Small DC-coil interface relay used between BMS DOs and main coils. */
+  | 'interposing_relay'
+  | 'aux_contact_block'
+  /** 3\u03c6 multifunction meter (V / A / kW / kWh + Modbus tag). */
+  | 'energy_meter'
+  | 'digital_multifunction_meter'
+  | 'multimeter'
+  /** Guarded switch operated by panel-door position (closed door = contact closed). */
+  | 'door_interlock'
+  | 'mechanical_interlock'
+  /** Ethernet gateway for Modbus TCP supervisory integration. */
+  | 'modbus_tcp_gateway'
+  /** Serial Modbus RTU (RS485) communication module. */
+  | 'modbus_rtu_module'
+  /** Ethernet gateway for BACnet/IP supervisory integration. */
+  | 'bacnet_ip_gateway'
+  /** BMS digital input module. */
+  | 'di_module'
+  /** BMS digital output module. */
+  | 'do_module'
+  /** BMS analog input module. */
+  | 'ai_module'
+  /** BMS analog output module. */
+  | 'ao_module'
+  /** Relay interface card (field isolation / fan-out). */
+  | 'relay_interface_card'
+  /** Serial/Ethernet protocol converter (RS232/485/Ethernet). */
+  | 'communication_converter'
+  /** IoT edge gateway for cloud telemetry uplink. */
+  | 'iot_gateway'
+  /** Cloud monitoring module for remote dashboards/alerts. */
+  | 'cloud_monitoring_module'
+  /** Supervisory energy management controller. */
+  | 'energy_management_controller'
+  /** Industrial Ethernet switch for BMS network fan-out. */
+  | 'ethernet_switch'
+  /** Analog signal isolator module. */
+  | 'signal_isolator'
+  /** Optocoupler-based digital isolation module. */
+  | 'optocoupler_module'
+  | 'ups_module'
+  | 'dc_battery_backup'
+  | 'motor_operator_kit'
+  | 'shunt_trip_coil'
+  | 'closing_coil'
+  | 'uvr_release'
+  | 'key_interlock'
+  | 'neutral_link'
+  | 'earth_link'
+  | 'current_transformer'
+  | 'voltage_transformer'
+  | 'din_rail'
+  | 'mounting_plate'
+  | 'cable_duct'
+  | 'busbar_support_insulator'
+  | 'ferrule_cable_markers'
+  | 'control_wiring'
+  | 'power_cables'
+  | 'ms_gi_sheet_enclosure'
+  | 'ip_rated_enclosure'
+  | 'power_quality_analyzer';
 
 export type ComponentState = 'on' | 'off' | 'tripped' | 'fault';
 
@@ -83,7 +170,9 @@ export interface ComponentProperties {
   ratingAmps?: number;
   tripCurve?: 'B' | 'C' | 'D';
   breakingCapacity?: 6000 | 10000;
+  mpcbTripClass?: '10A' | '10' | '20' | '30';
   rcdSensitivity?: 10 | 30 | 100 | 300;
+  earthLeakageTripMa?: 30 | 100 | 300 | 500;
 
   /** Air circuit breaker: instantaneous pickup as multiple of Ir (e.g. 10) */
   acbInstantaneousMult?: number;
@@ -165,8 +254,51 @@ export interface ComponentProperties {
 
   buttonType?: 'NO' | 'NC';
 
+  /** 3-position rotary selector position for `selector_switch`. */
+  selectorPosition?: 'OFF' | 'AUTO' | 'MANUAL';
+
+  /** Indicator lamp colour (panel-front L1/L2/L3 light). */
+  indicatorColor?: 'red' | 'green' | 'amber' | 'blue' | 'white';
+  /** Indicator lamp phase tag (visual label only, e.g. "L1"). */
+  indicatorPhaseTag?: 'L' | 'L1' | 'L2' | 'L3' | 'N' | 'PE' | 'AUX';
+
+  /** Interposing-relay coil voltage label (V) — 24 V DC typical for BMS DOs. */
+  relayCoilVoltage?: number;
+  /** Coil supply for interposing relay (panel schedule label). */
+  relayCoilSupply?: '24dc' | '110dc' | '230ac';
+
+  /** SMPS / energy-meter shared field-bus communication protocol tag. */
+  meterProtocol?: 'none' | 'modbus_rtu' | 'modbus_tcp' | 'bacnet_ip';
+  /** CT primary rating (A) for energy meter — documentation only. */
+  meterCtPrimary?: number;
+  /** Modbus / BACnet address for energy meter. */
+  meterCommAddress?: number;
+  /** Whether the energy-meter symbol shows a kWh accumulator on the face. */
+  meterShowKwh?: boolean;
+  multimeterMode?: 'voltage' | 'current' | 'continuity';
+  multimeterSignal?: 'auto' | 'ac' | 'dc';
+  multimeterHighVoltage?: boolean;
+  multimeterMaxVoltage?: number;
+  multimeterComTargetComponentId?: string;
+  multimeterComTargetPointId?: string;
+  multimeterInputTargetComponentId?: string;
+  multimeterInputTargetPointId?: string;
+  multimeterComProbeX?: number;
+  multimeterComProbeY?: number;
+  multimeterInputProbeX?: number;
+  multimeterInputProbeY?: number;
+  /** Communication endpoint settings for gateway-type components. */
+  gatewayIp?: string;
+  gatewayPort?: number;
+  ioChannels?: number;
+  aiSignalType?: '0_10v' | '4_20ma';
+  aoSignalType?: '0_10v' | '4_20ma';
+
   color?: string;
   fontSize?: number;
+  labelOffsetX?: number;
+  labelOffsetY?: number;
+  labelFontSize?: number;
 }
 
 export interface Wire {
@@ -209,6 +341,8 @@ export interface NodeResult {
   lineCurrentRmsA?: number;
   /** Per-phase RMS voltage phase-to-neutral (V), wye */
   phaseVoltageRmsV?: number;
+  /** Meter-specific detected signal type for display hints. */
+  meterSignal?: 'ac' | 'dc';
 }
 
 export interface SimulationResult {

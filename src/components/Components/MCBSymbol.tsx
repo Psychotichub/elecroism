@@ -204,12 +204,15 @@ const MCBSymbol: React.FC<Props> = ({
       )}
 
       <ComponentCanvasLabel
+          componentId={component.id}
         label={component.label}
         x={-bodyW / 2 - 10}
         y={32}
         width={bodyW + 20}
-        fontSize={8}
-      />
+        fontSize={component.properties.labelFontSize ?? 8}
+                offsetX={component.properties.labelOffsetX ?? 0}
+          offsetY={component.properties.labelOffsetY ?? 0}
+        />
 
       {showConnectionPoints &&
         component.connectionPoints.map((cp) => (

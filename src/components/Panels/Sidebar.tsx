@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import type { ComponentType } from '../../types';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import {
@@ -9,7 +9,16 @@ import {
   FiSun,
   FiActivity,
   FiLink,
+  FiAlertOctagon,
+  FiBatteryCharging,
+  FiChevronRight,
+  FiChevronDown,
+  FiSliders,
+  FiBox,
 } from 'react-icons/fi';
+
+/** Persisted across reloads so users keep their preferred groups expanded. */
+const COLLAPSE_STORAGE_KEY = 'electrosim.sidebarCollapsedGroups.v1';
 
 interface ComponentItem {
   type: ComponentType;
@@ -39,14 +48,36 @@ const GROUPS: ComponentGroup[] = [
         detail: 'Adjustable V · + / −',
       },
       {
+        type: 'ac_dc_converter',
+        label: 'AC/DC Converter',
+        icon: <FiZap />,
+        detail: 'Mains → DC bus, output V adj.',
+      },
+      {
         type: 'three_phase_source',
         label: '3φ Supply 400V',
         icon: <FiZap />,
         detail: 'L1 L2 L3 + N',
       },
-      { type: 'busbar', label: 'Busbar (L)', icon: <FiActivity />, detail: 'Live' },
-      { type: 'busbar', label: 'Busbar (N)', icon: <FiActivity />, detail: 'Neutral' },
-      { type: 'busbar', label: 'Busbar (PE)', icon: <FiActivity />, detail: 'Earth' },
+      { type: 'busbar', label: 'Busbar', icon: <FiActivity />, detail: 'Generic distribution bar' },
+      {
+        type: 'busbar_system',
+        label: 'Busbar system',
+        icon: <FiActivity />,
+        detail: 'Main copper/aluminium distribution bar',
+      },
+      {
+        type: 'neutral_bar_system',
+        label: 'Neutral bar system',
+        icon: <FiActivity />,
+        detail: 'Neutral distribution bar',
+      },
+      {
+        type: 'earth_bar_grounding_system',
+        label: 'Earth bar / grounding',
+        icon: <FiActivity />,
+        detail: 'Protective earth distribution bar',
+      },
     ],
   },
   {
@@ -59,13 +90,49 @@ const GROUPS: ComponentGroup[] = [
         icon: <FiShield />,
         detail: '1P · set rating in properties',
       },
+      {
+        type: 'hrc_fuse',
+        label: 'HRC fuse',
+        icon: <FiShield />,
+        detail: 'Cartridge fuse · replace after trip',
+      },
+      {
+        type: 'control_circuit_fuse',
+        label: 'Control circuit fuse',
+        icon: <FiShield />,
+        detail: 'Low-amp fuse for control supply branch',
+      },
+      {
+        type: 'earth_leakage_relay_cbct',
+        label: 'ELR + CBCT',
+        icon: <FiShield />,
+        detail: 'Earth fault relay with toroid CT',
+      },
       { type: 'rcd', label: 'RCD', icon: <FiShield />, detail: 'Set sensitivity in properties' },
+      {
+        type: 'residual_current_circuit_breaker',
+        label: 'Residual current CB',
+        icon: <FiShield />,
+        detail: 'RCCB earth-leakage protection',
+      },
       { type: 'overload_relay', label: 'Overload Relay', icon: <FiShield /> },
       {
         type: 'three_phase_mcb',
         label: '3P MCB',
         icon: <FiShield />,
         detail: 'L1–L3 · rating in properties',
+      },
+      {
+        type: 'mccb',
+        label: 'MCCB',
+        icon: <FiShield />,
+        detail: '3P molded case circuit breaker',
+      },
+      {
+        type: 'motor_protection_circuit_breaker',
+        label: 'MPCB',
+        icon: <FiShield />,
+        detail: 'Motor protection breaker, 3P',
       },
       {
         type: 'four_phase_mcb',
@@ -109,20 +176,368 @@ const GROUPS: ComponentGroup[] = [
         icon: <FiCircle />,
         detail: 'NO / NC in properties',
       },
+      {
+        type: 'selector_switch',
+        label: 'Selector AUTO/MAN',
+        icon: <FiToggleLeft />,
+        detail: '3-pos: COM → AUTO / MAN / OFF',
+      },
       { type: 'contactor', label: 'Contactor', icon: <FiToggleLeft /> },
       { type: 'relay', label: 'Relay', icon: <FiToggleLeft /> },
+      {
+        type: 'smart_relay',
+        label: 'Smart relay',
+        icon: <FiActivity />,
+        detail: 'Programmable compact control relay',
+      },
+      {
+        type: 'interposing_relay',
+        label: 'Interposing relay',
+        icon: <FiToggleLeft />,
+        detail: '24 V DC coil · BMS interface',
+      },
+      {
+        type: 'aux_contact_block',
+        label: 'Aux contact block',
+        icon: <FiToggleLeft />,
+        detail: '1NO (13-14) + 1NC (21-22)',
+      },
       { type: 'timer', label: 'Timer', icon: <FiToggleLeft /> },
       {
         type: 'three_phase_contactor',
         label: '3P Contactor (KM)',
         icon: <FiToggleLeft />,
-        detail: 'L1–L3 + A1 A2',
+        detail: 'L1–L3 + A1 A2 · 13/14 NO · 21/22 NC',
       },
       {
         type: 'four_phase_contactor',
         label: '4P Contactor (KM)',
         icon: <FiToggleLeft />,
-        detail: 'L1–L3–N + A1 A2',
+        detail: 'L1–L3–N + A1 A2 · 13/14 · 21/22',
+      },
+    ],
+  },
+  {
+    name: 'Safety',
+    emoji: '🛑',
+    items: [
+      {
+        type: 'estop',
+        label: 'Emergency Stop',
+        icon: <FiAlertOctagon />,
+        detail: 'NC mushroom · click latches',
+      },
+      {
+        type: 'door_interlock',
+        label: 'Door interlock',
+        icon: <FiShield />,
+        detail: 'Panel door closed = contact closed',
+      },
+      {
+        type: 'mechanical_interlock',
+        label: 'Mechanical interlock',
+        icon: <FiShield />,
+        detail: 'Mechanical ON/OFF prevention link',
+      },
+    ],
+  },
+  {
+    name: 'Indicators & Metering',
+    emoji: '📟',
+    items: [
+      {
+        type: 'indicator_lamp',
+        label: 'Indicator lamp',
+        icon: <FiSun />,
+        detail: 'Colour + L1/L2/L3 tag in properties',
+      },
+      {
+        type: 'phase_indicator_bank',
+        label: 'Phase indicator bank',
+        icon: <FiSun />,
+        detail: 'L1/L2/L3 panel phase presence lamps',
+      },
+      {
+        type: 'energy_meter',
+        label: 'Energy meter',
+        icon: <FiActivity />,
+        detail: 'V / A / kW · Modbus tag',
+      },
+      {
+        type: 'digital_multifunction_meter',
+        label: 'Digital multifunction meter',
+        icon: <FiActivity />,
+        detail: 'V/A/kW/PF panel metering',
+      },
+      {
+        type: 'multimeter',
+        label: 'Digital multimeter',
+        icon: <FiActivity />,
+        detail: 'Voltage / current / continuity + buzzer',
+      },
+    ],
+  },
+  {
+    name: 'Control Power',
+    emoji: '🔋',
+    items: [
+      {
+        type: 'control_transformer',
+        label: 'Control transformer',
+        icon: <FiSliders />,
+        detail: '415V/230V to 24V control supply',
+      },
+      {
+        type: 'smps',
+        label: 'SMPS 24V',
+        icon: <FiBatteryCharging />,
+        detail: 'Mains AC → DC bus · adjustable V',
+      },
+      {
+        type: 'ups_module',
+        label: 'UPS module',
+        icon: <FiBatteryCharging />,
+        detail: 'Control continuity backup',
+      },
+      {
+        type: 'dc_battery_backup',
+        label: 'DC battery backup',
+        icon: <FiBatteryCharging />,
+        detail: 'Critical control reserve',
+      },
+      {
+        type: 'motor_operator_kit',
+        label: 'Motor operator kit',
+        icon: <FiToggleLeft />,
+        detail: 'Breaker remote ON/OFF actuator',
+      },
+      {
+        type: 'shunt_trip_coil',
+        label: 'Shunt trip coil',
+        icon: <FiToggleLeft />,
+        detail: 'Breaker remote OFF trip coil',
+      },
+      {
+        type: 'closing_coil',
+        label: 'Closing coil',
+        icon: <FiToggleLeft />,
+        detail: 'Breaker remote ON closing actuator',
+      },
+      {
+        type: 'uvr_release',
+        label: 'UVR release',
+        icon: <FiToggleLeft />,
+        detail: 'Undervoltage release hold coil',
+      },
+    ],
+  },
+  {
+    name: 'BMS Communication',
+    emoji: '🌐',
+    items: [
+      {
+        type: 'modbus_rtu_module',
+        label: 'Modbus RTU module',
+        icon: <FiActivity />,
+        detail: 'RS485 serial Modbus interface',
+      },
+      {
+        type: 'modbus_tcp_gateway',
+        label: 'Modbus TCP gateway',
+        icon: <FiActivity />,
+        detail: 'Ethernet supervisory integration',
+      },
+      {
+        type: 'bacnet_ip_gateway',
+        label: 'BACnet/IP gateway',
+        icon: <FiActivity />,
+        detail: 'BAS integration via UDP/IP',
+      },
+      {
+        type: 'communication_converter',
+        label: 'Comm converter',
+        icon: <FiActivity />,
+        detail: 'RS232/RS485/Ethernet bridge',
+      },
+      {
+        type: 'iot_gateway',
+        label: 'IoT gateway',
+        icon: <FiActivity />,
+        detail: 'Edge-to-cloud telemetry bridge',
+      },
+      {
+        type: 'cloud_monitoring_module',
+        label: 'Cloud monitoring module',
+        icon: <FiActivity />,
+        detail: 'Remote dashboard and alert uplink',
+      },
+      {
+        type: 'energy_management_controller',
+        label: 'Energy management controller',
+        icon: <FiActivity />,
+        detail: 'Supervisory optimization/control node',
+      },
+      {
+        type: 'ethernet_switch',
+        label: 'Industrial Ethernet switch',
+        icon: <FiActivity />,
+        detail: 'Network fan-out for BMS devices',
+      },
+    ],
+  },
+  {
+    name: 'BMS I/O',
+    emoji: '🧩',
+    items: [
+      {
+        type: 'di_module',
+        label: 'DI module',
+        icon: <FiActivity />,
+        detail: 'Digital inputs from field contacts',
+      },
+      {
+        type: 'do_module',
+        label: 'DO module',
+        icon: <FiActivity />,
+        detail: 'Digital outputs to relays/coils',
+      },
+      {
+        type: 'ai_module',
+        label: 'AI module',
+        icon: <FiActivity />,
+        detail: 'Analog input (0-10V / 4-20mA)',
+      },
+      {
+        type: 'ao_module',
+        label: 'AO module',
+        icon: <FiActivity />,
+        detail: 'Analog output (0-10V / 4-20mA)',
+      },
+      {
+        type: 'relay_interface_card',
+        label: 'Relay interface card',
+        icon: <FiActivity />,
+        detail: 'Field relay isolation/fan-out',
+      },
+      {
+        type: 'signal_isolator',
+        label: 'Signal isolator',
+        icon: <FiActivity />,
+        detail: 'Galvanic isolation for analog loops',
+      },
+      {
+        type: 'optocoupler_module',
+        label: 'Optocoupler module',
+        icon: <FiActivity />,
+        detail: 'Digital optical isolation',
+      },
+    ],
+  },
+  {
+    name: 'Infrastructure',
+    emoji: '🧱',
+    items: [
+      {
+        type: 'panel_heater',
+        label: 'Panel heater',
+        icon: <FiSun />,
+        detail: 'Anti-condensation enclosure heater',
+      },
+      {
+        type: 'cooling_fan',
+        label: 'Cooling fan',
+        icon: <FiActivity />,
+        detail: 'Panel ventilation / heat removal',
+      },
+      {
+        type: 'key_interlock',
+        label: 'Key interlock',
+        icon: <FiShield />,
+        detail: 'Safe isolation sequence lock',
+      },
+      {
+        type: 'neutral_link',
+        label: 'Neutral link',
+        icon: <FiLink />,
+        detail: 'Neutral distribution bar',
+      },
+      {
+        type: 'earth_link',
+        label: 'Earth link',
+        icon: <FiLink />,
+        detail: 'Protective earth bar',
+      },
+      {
+        type: 'current_transformer',
+        label: 'Current transformer',
+        icon: <FiActivity />,
+        detail: 'CT ratio for metering',
+      },
+      {
+        type: 'voltage_transformer',
+        label: 'Voltage transformer',
+        icon: <FiActivity />,
+        detail: 'Potential transformer (VT)',
+      },
+      {
+        type: 'din_rail',
+        label: 'DIN rail',
+        icon: <FiSliders />,
+        detail: 'Panel mounting rail',
+      },
+      {
+        type: 'mounting_plate',
+        label: 'Mounting plate',
+        icon: <FiSliders />,
+        detail: 'Equipment backplate / chassis',
+      },
+      {
+        type: 'cable_duct',
+        label: 'Cable duct',
+        icon: <FiLink />,
+        detail: 'Wiring trunking / segregation path',
+      },
+      {
+        type: 'busbar_support_insulator',
+        label: 'Busbar support',
+        icon: <FiShield />,
+        detail: 'Insulated busbar support block',
+      },
+      {
+        type: 'ferrule_cable_markers',
+        label: 'Ferrules & markers',
+        icon: <FiLink />,
+        detail: 'Cable-end ferrules and wire IDs',
+      },
+      {
+        type: 'control_wiring',
+        label: 'Control wiring',
+        icon: <FiLink />,
+        detail: '1.5/2.5 sqmm control cabling',
+      },
+      {
+        type: 'power_cables',
+        label: 'Power cables',
+        icon: <FiLink />,
+        detail: 'Load-sized feeder/power cabling',
+      },
+      {
+        type: 'ms_gi_sheet_enclosure',
+        label: 'MS/GI sheet enclosure',
+        icon: <FiBox />,
+        detail: 'Sheet-metal panel body/chassis',
+      },
+      {
+        type: 'ip_rated_enclosure',
+        label: 'IP rated enclosure',
+        icon: <FiBox />,
+        detail: 'Panel housing IP54/IP65',
+      },
+      {
+        type: 'power_quality_analyzer',
+        label: 'Power quality analyzer',
+        icon: <FiActivity />,
+        detail: 'Harmonics/events monitoring',
       },
     ],
   },
@@ -159,13 +574,55 @@ const GROUPS: ComponentGroup[] = [
     emoji: '🔗',
     items: [
       { type: 'junction', label: 'Junction Point', icon: <FiLink /> },
+      { type: 'terminal_block', label: 'Terminal block', icon: <FiLink />, detail: 'Pass-through terminal (IN/OUT)' },
     ],
   },
 ];
 
+function loadCollapsed(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(COLLAPSE_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return new Set(parsed.filter((s) => typeof s === 'string'));
+    }
+  } catch {
+    // ignore corrupt storage
+  }
+  return new Set();
+}
+
+function saveCollapsed(set: Set<string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      COLLAPSE_STORAGE_KEY,
+      JSON.stringify(Array.from(set))
+    );
+  } catch {
+    // storage may be disabled (e.g. private mode); failure is non-fatal
+  }
+}
+
 const Sidebar: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed());
+
+  useEffect(() => {
+    saveCollapsed(collapsed);
+  }, [collapsed]);
+
+  const toggleGroup = (name: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   const handleDragStart = (e: React.DragEvent, item: ComponentItem) => {
     e.dataTransfer.setData('componentType', item.type);
@@ -190,35 +647,56 @@ const Sidebar: React.FC = () => {
         </h2>
       </div>
       <div className="flex-1 overflow-y-auto py-1">
-        {GROUPS.map((group) => (
-          <div key={group.name} className="mb-1">
-            <div className={`px-3 py-1.5 text-xs font-semibold ${tc.groupLabel} uppercase tracking-wider`}>
-              {group.emoji} {group.name}
-            </div>
-            {group.items.map((item, idx) => (
-              <div
-                key={`${item.type}-${idx}`}
-                draggable
-                onDragStart={(e) => handleDragStart(e, item)}
-                className={`flex items-center gap-2 px-3 py-1.5 mx-1 rounded cursor-grab ${tc.itemHover} transition-colors active:cursor-grabbing`}
+        {GROUPS.map((group) => {
+          const isCollapsed = collapsed.has(group.name);
+          return (
+            <div key={group.name} className="mb-1">
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.name)}
+                aria-expanded={!isCollapsed}
+                aria-controls={`sidebar-group-${group.name}`}
+                className={`w-full flex items-center gap-1 px-3 py-1.5 text-xs font-semibold ${tc.groupLabel} uppercase tracking-wider ${tc.itemHover} transition-colors text-left rounded`}
               >
-                <span className={`text-base ${tc.groupLabel}`}>
-                  {item.icon}
+                <span className="text-[10px] opacity-80">
+                  {isCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                 </span>
-                <div className="flex flex-col">
-                  <span className={`text-xs ${tc.text}`}>
-                    {item.label}
-                  </span>
-                  {item.detail && (
-                    <span className={`text-[10px] ${tc.textMuted}`}>
-                      {item.detail}
-                    </span>
-                  )}
+                <span>
+                  {group.emoji} {group.name}
+                </span>
+                <span className={`ml-auto text-[10px] ${tc.textMuted} normal-case font-normal`}>
+                  {group.items.length}
+                </span>
+              </button>
+              {!isCollapsed && (
+                <div id={`sidebar-group-${group.name}`}>
+                  {group.items.map((item, idx) => (
+                    <div
+                      key={`${item.type}-${idx}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item)}
+                      className={`flex items-center gap-2 px-3 py-1.5 mx-1 rounded cursor-grab ${tc.itemHover} transition-colors active:cursor-grabbing`}
+                    >
+                      <span className={`text-base ${tc.groupLabel}`}>
+                        {item.icon}
+                      </span>
+                      <div className="flex flex-col">
+                        <span className={`text-xs ${tc.text}`}>
+                          {item.label}
+                        </span>
+                        {item.detail && (
+                          <span className={`text-[10px] ${tc.textMuted}`}>
+                            {item.detail}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

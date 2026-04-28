@@ -23,6 +23,7 @@ const CROSS_SECTIONS = [1.5, 2.5, 4, 6, 10];
 function defaultPhaseSystemForType(t: ComponentType): PhaseSystem {
   switch (t) {
     case 'dc_power_source':
+    case 'ac_dc_converter':
       return 'single_phase';
     case 'three_phase_source':
     case 'three_phase_motor':
@@ -93,7 +94,11 @@ const PropertyPanel: React.FC = () => {
     );
   }
 
-  const updateProp = (updates: Partial<ComponentProperties>) => {
+  const updateProp = (
+    updates: Partial<ComponentProperties> & {
+      multimeterSignal?: 'auto' | 'ac' | 'dc';
+    }
+  ) => {
     if (!selectedComp) return;
     updateComponent(selectedComp.id, {
       properties: { ...selectedComp.properties, ...updates },
@@ -280,6 +285,69 @@ const PropertyPanel: React.FC = () => {
     </>
   );
 
+  const renderHrcFuseProps = () => (
+    <>
+      <Label text="Fuse rating">
+        <select
+          value={selectedComp!.properties.ratingAmps ?? 32}
+          onChange={(e) =>
+            updateProp({ ratingAmps: Number(e.target.value) })
+          }
+          className="input-field"
+        >
+          {[6, 10, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125, 160].map((a) => (
+            <option key={a} value={a}>
+              {a}A
+            </option>
+          ))}
+        </select>
+      </Label>
+      <Label text="Breaking capacity">
+        <div className="flex gap-1">
+          {([6000, 10000] as const).map((b) => (
+            <button
+              key={b}
+              type="button"
+              onClick={() => updateProp({ breakingCapacity: b })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.breakingCapacity ?? 10000) === b
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {b / 1000}kA
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="State">
+        <button
+          onClick={() => toggleComponent(selectedComp!.id)}
+          className={`w-full px-3 py-2 rounded text-sm font-medium transition-colors ${
+            selectedComp!.state === 'on'
+              ? 'bg-green-600 text-white hover:bg-green-700'
+              : 'bg-gray-600 text-white hover:bg-gray-700'
+          }`}
+        >
+          {selectedComp!.state === 'on' ? 'Healthy (closed)' : 'Isolated (open)'}
+        </button>
+      </Label>
+      {selectedComp!.state === 'tripped' && (
+        <button
+          onClick={() => resetTripped(selectedComp!.id)}
+          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+        >
+          Replace / reset fuse
+        </button>
+      )}
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Fast fault clearing is modeled with a higher instantaneous threshold than
+        MCB curves. Use this on branch feeders where one-time cartridge fuses are
+        specified.
+      </p>
+    </>
+  );
+
   const renderRCDProps = () => (
     <>
       <Label text="Rating">
@@ -337,6 +405,129 @@ const PropertyPanel: React.FC = () => {
           RESET RCD
         </button>
       )}
+    </>
+  );
+
+  const renderMpcbProps = () => (
+    <>
+      <Label text="Motor FLA setting">
+        <select
+          value={selectedComp!.properties.ratingAmps ?? 12}
+          onChange={(e) =>
+            updateProp({ ratingAmps: Number(e.target.value) })
+          }
+          className="input-field"
+        >
+          {[2, 4, 6, 9, 12, 16, 20, 25, 32, 40, 50, 63].map((a) => (
+            <option key={a} value={a}>
+              {a}A
+            </option>
+          ))}
+        </select>
+      </Label>
+      <Label text="Trip class">
+        <div className="flex gap-1">
+          {(['10A', '10', '20', '30'] as const).map((cls) => (
+            <button
+              key={cls}
+              type="button"
+              onClick={() => updateProp({ mpcbTripClass: cls })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.mpcbTripClass ?? '10') === cls
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {cls}
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="State">
+        <button
+          onClick={() => toggleComponent(selectedComp!.id)}
+          className={`w-full px-3 py-2 rounded text-sm font-medium transition-colors ${
+            selectedComp!.state === 'on'
+              ? 'bg-green-600 text-white hover:bg-green-700'
+              : 'bg-gray-600 text-white hover:bg-gray-700'
+          }`}
+        >
+          {selectedComp!.state === 'on' ? 'ON' : 'OFF'}
+        </button>
+      </Label>
+      {selectedComp!.state === 'tripped' && (
+        <button
+          onClick={() => resetTripped(selectedComp!.id)}
+          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+        >
+          RESET MPCB
+        </button>
+      )}
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Motor protector with adjustable thermal pickup near motor FLA and
+        magnetic short-circuit trip. Place ahead of contactor + overload loop.
+      </p>
+    </>
+  );
+
+  const renderEarthLeakageRelayCbctProps = () => (
+    <>
+      <Label text="Relay rating">
+        <select
+          value={selectedComp!.properties.ratingAmps ?? 63}
+          onChange={(e) =>
+            updateProp({ ratingAmps: Number(e.target.value) })
+          }
+          className="input-field"
+        >
+          {[25, 40, 63, 100, 125].map((a) => (
+            <option key={a} value={a}>
+              {a}A
+            </option>
+          ))}
+        </select>
+      </Label>
+      <Label text="Earth leakage setting">
+        <select
+          value={selectedComp!.properties.earthLeakageTripMa ?? 30}
+          onChange={(e) =>
+            updateProp({
+              earthLeakageTripMa: Number(e.target.value) as 30 | 100 | 300 | 500,
+            })
+          }
+          className="input-field"
+        >
+          {[30, 100, 300, 500].map((s) => (
+            <option key={s} value={s}>
+              {s}mA
+            </option>
+          ))}
+        </select>
+      </Label>
+      <Label text="State">
+        <button
+          onClick={() => toggleComponent(selectedComp!.id)}
+          className={`w-full px-3 py-2 rounded text-sm font-medium transition-colors ${
+            selectedComp!.state === 'on'
+              ? 'bg-green-600 text-white hover:bg-green-700'
+              : 'bg-gray-600 text-white hover:bg-gray-700'
+          }`}
+        >
+          {selectedComp!.state === 'on' ? 'Armed' : 'Isolated'}
+        </button>
+      </Label>
+      {selectedComp!.state === 'tripped' && (
+        <button
+          onClick={() => resetTripped(selectedComp!.id)}
+          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+        >
+          RESET ELR
+        </button>
+      )}
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        ELR + CBCT trips on earth-fault path detection. Use for industrial
+        feeder leakage protection where an RCD is not preferred.
+      </p>
     </>
   );
 
@@ -467,6 +658,50 @@ const PropertyPanel: React.FC = () => {
           min={0}
         />
       </Label>
+    </>
+  );
+
+  const renderAcDcConverterProps = () => (
+    <>
+      <Label text="DC output voltage (V)">
+        <input
+          type="number"
+          value={selectedComp!.properties.voltage ?? 24}
+          onChange={(e) =>
+            updateProp({
+              voltage: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="input-field"
+          min={0}
+          step={0.1}
+        />
+      </Label>
+      <Label text="Presets">
+        <div className="flex gap-1 flex-wrap">
+          {[5, 12, 24, 48, 110].map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => updateProp({ voltage: preset })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.voltage ?? 24) === preset
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {preset} V
+            </button>
+          ))}
+        </div>
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Wire <strong>AC_L</strong> and <strong>AC_N</strong> to mains. The
+        converter only energizes its DC bus when both are present (polarity
+        respected). <strong>DC_PLUS</strong> behaves like L, <strong>DC_MINUS</strong>{' '}
+        like N for downstream devices. Output current isn’t back-propagated to
+        the AC side in the simulator.
+      </p>
     </>
   );
 
@@ -1809,6 +2044,925 @@ const PropertyPanel: React.FC = () => {
     );
   };
 
+  const renderEStopProps = () => (
+    <>
+      <Label text="State">
+        <span
+          className={`text-xs font-medium ${
+            selectedComp!.state === 'on' ? 'text-green-400' : 'text-red-400'
+          }`}
+        >
+          {selectedComp!.state === 'on'
+            ? 'NC contact CLOSED (head not pressed)'
+            : 'LATCHED — circuit OPEN'}
+        </span>
+      </Label>
+      <button
+        type="button"
+        onClick={() => toggleComponent(selectedComp!.id)}
+        className={`w-full px-3 py-2 rounded text-xs font-semibold ${
+          selectedComp!.state === 'on'
+            ? 'bg-red-600 text-white hover:bg-red-700'
+            : 'bg-emerald-600 text-white hover:bg-emerald-700'
+        }`}
+      >
+        {selectedComp!.state === 'on'
+          ? 'PRESS — Latch open'
+          : 'TWIST TO RELEASE — Reset'}
+      </button>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Wire <strong>IN/OUT</strong> in series with the contactor coil A1/A2
+        loop. Pressing the head latches the contact open until reset, killing
+        every coil downstream.
+      </p>
+    </>
+  );
+
+  const renderDoorInterlockProps = () => (
+    <>
+      <Label text="Door state">
+        <span
+          className={`text-xs font-medium ${
+            selectedComp!.state === 'on' ? 'text-green-400' : 'text-yellow-300'
+          }`}
+        >
+          {selectedComp!.state === 'on'
+            ? 'Door CLOSED — interlock contact CLOSED'
+            : 'Door OPEN — interlock contact OPEN'}
+        </span>
+      </Label>
+      <button
+        type="button"
+        onClick={() => toggleComponent(selectedComp!.id)}
+        className={`w-full px-3 py-2 rounded text-xs font-semibold ${
+          selectedComp!.state === 'on'
+            ? 'bg-yellow-600 text-white hover:bg-yellow-700'
+            : 'bg-emerald-600 text-white hover:bg-emerald-700'
+        }`}
+      >
+        {selectedComp!.state === 'on' ? 'Open door' : 'Close door'}
+      </button>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Use this in series with coil circuits so opening the panel door removes
+        control power to hazardous motion.
+      </p>
+    </>
+  );
+
+  const renderSelectorSwitchProps = () => {
+    const positions: ('OFF' | 'AUTO' | 'MANUAL')[] = ['OFF', 'AUTO', 'MANUAL'];
+    const cur = selectedComp!.properties.selectorPosition ?? 'OFF';
+    return (
+      <>
+        <Label text="Position">
+          <div className="flex gap-1">
+            {positions.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => updateProp({ selectorPosition: p })}
+                className={`flex-1 px-2 py-1 rounded text-xs ${
+                  cur === p
+                    ? p === 'AUTO'
+                      ? 'bg-emerald-600 text-white'
+                      : p === 'MANUAL'
+                        ? 'bg-sky-600 text-white'
+                        : 'bg-gray-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </Label>
+        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+          AUTO bridges <strong>COM ↔ AUTO</strong> (BMS / interlock control of
+          the coil). MANUAL bridges <strong>COM ↔ MAN</strong> (panel push-
+          buttons). OFF opens both, isolating the contactor.
+        </p>
+      </>
+    );
+  };
+
+  const renderIndicatorLampProps = () => {
+    const colors: {
+      v: 'red' | 'green' | 'amber' | 'blue' | 'white';
+      label: string;
+      hex: string;
+    }[] = [
+      { v: 'red', label: 'Red', hex: '#EF4444' },
+      { v: 'green', label: 'Green', hex: '#22C55E' },
+      { v: 'amber', label: 'Amber', hex: '#F59E0B' },
+      { v: 'blue', label: 'Blue', hex: '#3B82F6' },
+      { v: 'white', label: 'White', hex: '#F3F4F6' },
+    ];
+    const tags: ComponentProperties['indicatorPhaseTag'][] = [
+      'L',
+      'L1',
+      'L2',
+      'L3',
+      'N',
+      'PE',
+      'AUX',
+    ];
+    return (
+      <>
+        <Label text="Lens colour">
+          <div className="flex gap-1 flex-wrap">
+            {colors.map((c) => (
+              <button
+                key={c.v}
+                type="button"
+                onClick={() => updateProp({ indicatorColor: c.v })}
+                className={`w-7 h-7 rounded border-2 flex items-center justify-center ${
+                  selectedComp!.properties.indicatorColor === c.v
+                    ? 'border-blue-500'
+                    : 'border-transparent hover:border-gray-500'
+                }`}
+                style={{ backgroundColor: c.hex }}
+                title={c.label}
+              />
+            ))}
+          </div>
+        </Label>
+        <Label text="Phase tag (label)">
+          <div className="flex gap-1 flex-wrap">
+            {tags.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => updateProp({ indicatorPhaseTag: t })}
+                className={`px-2 py-1 rounded text-xs ${
+                  (selectedComp!.properties.indicatorPhaseTag ?? 'L') === t
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-600 text-gray-300'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </Label>
+        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+          Wire <strong>L</strong> to the phase you want indicated and{' '}
+          <strong>N</strong> to neutral. The lamp lights any time both terminals
+          see a valid live ↔ neutral pair.
+        </p>
+      </>
+    );
+  };
+
+  const renderPhaseIndicatorBankProps = () => (
+    <>
+      <Label text="Line voltage (V L-L)">
+        <input
+          type="number"
+          value={selectedComp!.properties.lineVoltage ?? 400}
+          onChange={(e) =>
+            updateProp({ lineVoltage: Math.max(1, Number(e.target.value) || 1) })
+          }
+          className="input-field"
+          min={1}
+        />
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Three phase presence indicator bank (L1/L2/L3) with shared neutral.
+        Use for panel-front phase healthy indication.
+      </p>
+    </>
+  );
+
+  const renderSmpsProps = () => (
+    <>
+      <Label text="DC output voltage (V)">
+        <input
+          type="number"
+          value={selectedComp!.properties.voltage ?? 24}
+          onChange={(e) =>
+            updateProp({
+              voltage: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="input-field"
+          min={0}
+          step={0.1}
+        />
+      </Label>
+      <Label text="Presets">
+        <div className="flex gap-1 flex-wrap">
+          {[5, 12, 24, 48, 110].map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => updateProp({ voltage: p })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.voltage ?? 24) === p
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {p} V
+            </button>
+          ))}
+        </div>
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Wire <strong>AC_L</strong> + <strong>AC_N</strong> to mains; the DC
+        bus (<strong>V+ / V−</strong>) only energizes when both AC terminals
+        are correctly placed (polarity respected). Same engine model as the
+        AC/DC converter; choose this symbol when you specifically want a
+        <em> switching</em> PSU on the diagram.
+      </p>
+    </>
+  );
+
+  const renderControlTransformerProps = () => (
+    <>
+      <Label text="Secondary voltage (V)">
+        <input
+          type="number"
+          value={selectedComp!.properties.voltage ?? 24}
+          onChange={(e) =>
+            updateProp({
+              voltage: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="input-field"
+          min={0}
+          step={1}
+        />
+      </Label>
+      <Label text="Typical presets">
+        <div className="flex gap-1 flex-wrap">
+          {[24, 48, 110, 230].map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => updateProp({ voltage: p })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.voltage ?? 24) === p
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {p} V
+            </button>
+          ))}
+        </div>
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Primary is <strong>PRI_L / PRI_N</strong>; secondary is{' '}
+        <strong>SEC_L / SEC_N</strong>. Use this when the control circuit needs
+        isolation and a stepped-down AC control voltage.
+      </p>
+    </>
+  );
+
+  const renderModbusTcpGatewayProps = () => (
+    <>
+      <Label text="Gateway IP">
+        <input
+          type="text"
+          value={selectedComp!.properties.gatewayIp ?? '192.168.1.100'}
+          onChange={(e) => updateProp({ gatewayIp: e.target.value })}
+          className="input-field"
+        />
+      </Label>
+      <Label text="TCP port">
+        <input
+          type="number"
+          value={selectedComp!.properties.gatewayPort ?? 502}
+          onChange={(e) =>
+            updateProp({ gatewayPort: Math.max(1, Number(e.target.value) || 1) })
+          }
+          className="input-field"
+          min={1}
+          max={65535}
+        />
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Use this for BMS supervisory comms. It is a documentation/control object
+        with optional control power terminals <strong>PWR_L / PWR_N</strong>.
+      </p>
+    </>
+  );
+
+  const renderBacnetIpGatewayProps = () => (
+    <>
+      <Label text="Gateway IP">
+        <input
+          type="text"
+          value={selectedComp!.properties.gatewayIp ?? '192.168.1.110'}
+          onChange={(e) => updateProp({ gatewayIp: e.target.value })}
+          className="input-field"
+        />
+      </Label>
+      <Label text="UDP port">
+        <input
+          type="number"
+          value={selectedComp!.properties.gatewayPort ?? 47808}
+          onChange={(e) =>
+            updateProp({ gatewayPort: Math.max(1, Number(e.target.value) || 1) })
+          }
+          className="input-field"
+          min={1}
+          max={65535}
+        />
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        BACnet/IP endpoint for BMS integration (default UDP 47808). Optional
+        control power can be wired via <strong>PWR_L / PWR_N</strong>.
+      </p>
+    </>
+  );
+
+  const renderBmsIOModuleProps = () => (
+    <>
+      <Label text="Channels">
+        <input
+          type="number"
+          value={
+            selectedComp!.properties.ioChannels ??
+            (selectedComp!.type === 'ai_module' || selectedComp!.type === 'ao_module'
+              ? 4
+              : 8)
+          }
+          onChange={(e) =>
+            updateProp({ ioChannels: Math.max(1, Number(e.target.value) || 1) })
+          }
+          className="input-field"
+          min={1}
+          max={64}
+        />
+      </Label>
+      {(selectedComp!.type === 'ai_module' || selectedComp!.type === 'ao_module') && (
+        <Label text="Signal type">
+          <div className="flex gap-1">
+            {(['0_10v', '4_20ma'] as const).map((sig) => (
+              <button
+                key={sig}
+                type="button"
+                onClick={() =>
+                  selectedComp!.type === 'ai_module'
+                    ? updateProp({ aiSignalType: sig })
+                    : updateProp({ aoSignalType: sig })
+                }
+                className={`px-2 py-1 rounded text-xs ${
+                  (selectedComp!.type === 'ai_module'
+                    ? selectedComp!.properties.aiSignalType ?? '0_10v'
+                    : selectedComp!.properties.aoSignalType ?? '0_10v') === sig
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-600 text-gray-300'
+                }`}
+              >
+                {sig === '0_10v' ? '0-10V' : '4-20mA'}
+              </button>
+            ))}
+          </div>
+        </Label>
+      )}
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Use DI/DO for status/command points and AI/AO for analog process values.
+        Wire module power on <strong>PWR_L / PWR_N</strong>; channel points are
+        represented as properties for planning-level diagrams.
+      </p>
+    </>
+  );
+
+  const renderCommInfraProps = () => (
+    <>
+      {(selectedComp!.type === 'communication_converter' ||
+        selectedComp!.type === 'iot_gateway' ||
+        selectedComp!.type === 'cloud_monitoring_module' ||
+        selectedComp!.type === 'energy_management_controller' ||
+        selectedComp!.type === 'ethernet_switch') && (
+        <>
+          <Label
+            text={
+              selectedComp!.type === 'ethernet_switch'
+                ? 'Management IP'
+                : selectedComp!.type === 'iot_gateway'
+                  ? 'Gateway IP'
+                  : selectedComp!.type === 'cloud_monitoring_module'
+                    ? 'Cloud endpoint'
+                  : selectedComp!.type === 'energy_management_controller'
+                    ? 'Controller IP'
+                : 'Endpoint IP'
+            }
+          >
+            <input
+              type="text"
+              value={
+                selectedComp!.properties.gatewayIp ??
+                (selectedComp!.type === 'ethernet_switch'
+                  ? '192.168.1.200'
+                  : selectedComp!.type === 'iot_gateway'
+                    ? '10.10.10.10'
+                    : selectedComp!.type === 'cloud_monitoring_module'
+                      ? 'cloud.bms.local'
+                      : selectedComp!.type === 'energy_management_controller'
+                        ? '192.168.1.210'
+                  : '192.168.1.120')
+              }
+              onChange={(e) => updateProp({ gatewayIp: e.target.value })}
+              className="input-field"
+            />
+          </Label>
+          {(selectedComp!.type === 'communication_converter' ||
+            selectedComp!.type === 'iot_gateway' ||
+            selectedComp!.type === 'cloud_monitoring_module' ||
+            selectedComp!.type === 'energy_management_controller') && (
+            <Label text="Endpoint port">
+              <input
+                type="number"
+                value={
+                  selectedComp!.properties.gatewayPort ??
+                  (selectedComp!.type === 'iot_gateway'
+                    ? 8883
+                    : selectedComp!.type === 'cloud_monitoring_module'
+                      ? 443
+                      : selectedComp!.type === 'energy_management_controller'
+                        ? 502
+                      : 502)
+                }
+                onChange={(e) =>
+                  updateProp({ gatewayPort: Math.max(1, Number(e.target.value) || 1) })
+                }
+                className="input-field"
+                min={1}
+                max={65535}
+              />
+            </Label>
+          )}
+        </>
+      )}
+      <Label
+        text={
+          selectedComp!.type === 'ethernet_switch'
+            ? 'Ports'
+            : selectedComp!.type === 'energy_management_controller'
+              ? 'Managed points'
+            : selectedComp!.type === 'modbus_rtu_module'
+              ? 'RS485 drops'
+              : 'Channels / ports'
+        }
+      >
+        <input
+          type="number"
+          value={
+            selectedComp!.properties.ioChannels ??
+            (selectedComp!.type === 'ethernet_switch'
+              ? 5
+              : selectedComp!.type === 'energy_management_controller'
+                ? 16
+              : selectedComp!.type === 'modbus_rtu_module'
+                ? 1
+                : 8)
+          }
+          onChange={(e) =>
+            updateProp({ ioChannels: Math.max(1, Number(e.target.value) || 1) })
+          }
+          className="input-field"
+          min={1}
+          max={64}
+        />
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Use interface cards/converters/switches to isolate field devices and
+        bridge BMS networks. Power terminals are optional and diagrammatic.
+      </p>
+    </>
+  );
+
+  const renderSignalIsolationProps = () => (
+    <>
+      <Label text="Channels">
+        <input
+          type="number"
+          value={selectedComp!.properties.ioChannels ?? (selectedComp!.type === 'signal_isolator' ? 2 : 4)}
+          onChange={(e) =>
+            updateProp({ ioChannels: Math.max(1, Number(e.target.value) || 1) })
+          }
+          className="input-field"
+          min={1}
+          max={32}
+        />
+      </Label>
+      {selectedComp!.type === 'signal_isolator' && (
+        <Label text="Analog signal">
+          <div className="flex gap-1">
+            {(['0_10v', '4_20ma'] as const).map((sig) => (
+              <button
+                key={sig}
+                type="button"
+                onClick={() => updateProp({ aiSignalType: sig })}
+                className={`px-2 py-1 rounded text-xs ${
+                  (selectedComp!.properties.aiSignalType ?? '4_20ma') === sig
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-600 text-gray-300'
+                }`}
+              >
+                {sig === '0_10v' ? '0-10V' : '4-20mA'}
+              </button>
+            ))}
+          </div>
+        </Label>
+      )}
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Isolation modules break ground loops and protect BMS I/O from field-side
+        transients and common-mode noise.
+      </p>
+    </>
+  );
+
+  const renderPowerAuxProps = () => (
+    <>
+      {(selectedComp!.type === 'ups_module' ||
+        selectedComp!.type === 'dc_battery_backup' ||
+        selectedComp!.type === 'motor_operator_kit' ||
+        selectedComp!.type === 'shunt_trip_coil' ||
+        selectedComp!.type === 'closing_coil' ||
+        selectedComp!.type === 'uvr_release') && (
+        <Label
+          text={
+            selectedComp!.type === 'ups_module'
+              ? 'Output rating (A)'
+              : selectedComp!.type === 'dc_battery_backup'
+                ? 'Battery voltage (V)'
+                : selectedComp!.type === 'motor_operator_kit'
+                  ? 'Motor operator voltage (V)'
+                  : selectedComp!.type === 'shunt_trip_coil'
+                    ? 'Shunt trip coil voltage (V)'
+                    : selectedComp!.type === 'closing_coil'
+                      ? 'Closing coil voltage (V)'
+                      : 'UVR hold voltage (V)'
+          }
+        >
+          <input
+            type="number"
+            value={
+              selectedComp!.type === 'ups_module'
+                ? selectedComp!.properties.ratingAmps ?? 10
+                : selectedComp!.type === 'dc_battery_backup'
+                  ? selectedComp!.properties.voltage ?? 24
+                  : selectedComp!.type === 'motor_operator_kit'
+                    ? selectedComp!.properties.voltage ?? 230
+                    : selectedComp!.properties.voltage ?? 24
+            }
+            onChange={(e) =>
+              selectedComp!.type === 'ups_module'
+                ? updateProp({ ratingAmps: Math.max(0, Number(e.target.value) || 0) })
+                : updateProp({ voltage: Math.max(0, Number(e.target.value) || 0) })
+            }
+            className="input-field"
+            min={0}
+          />
+        </Label>
+      )}
+      {selectedComp!.type === 'key_interlock' && (
+        <Label text="Interlock state">
+          <button
+            type="button"
+            onClick={() => toggleComponent(selectedComp!.id)}
+            className={`w-full px-3 py-2 rounded text-xs font-semibold ${
+              selectedComp!.state === 'on'
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-gray-600 text-white hover:bg-gray-700'
+            }`}
+          >
+            {selectedComp!.state === 'on' ? 'Closed (key engaged)' : 'Open (key removed)'}
+          </button>
+        </Label>
+      )}
+      {selectedComp!.type === 'current_transformer' && (
+        <Label text="CT primary /5A">
+          <input
+            type="number"
+            value={selectedComp!.properties.meterCtPrimary ?? 100}
+            onChange={(e) =>
+              updateProp({ meterCtPrimary: Math.max(1, Number(e.target.value) || 1) })
+            }
+            className="input-field"
+            min={1}
+          />
+        </Label>
+      )}
+      {selectedComp!.type === 'voltage_transformer' && (
+        <>
+          <Label text="Primary voltage (V)">
+            <input
+              type="number"
+              value={selectedComp!.properties.phaseVoltage ?? 230}
+              onChange={(e) =>
+                updateProp({ phaseVoltage: Math.max(1, Number(e.target.value) || 1) })
+              }
+              className="input-field"
+              min={1}
+            />
+          </Label>
+          <Label text="Secondary voltage (V)">
+            <input
+              type="number"
+              value={selectedComp!.properties.voltage ?? 110}
+              onChange={(e) =>
+                updateProp({ voltage: Math.max(1, Number(e.target.value) || 1) })
+              }
+              className="input-field"
+              min={1}
+            />
+          </Label>
+        </>
+      )}
+      {selectedComp!.type === 'power_quality_analyzer' && (
+        <Label text="Protocol tag">
+          <select
+            value={selectedComp!.properties.meterProtocol ?? 'modbus_tcp'}
+            onChange={(e) =>
+              updateProp({ meterProtocol: e.target.value as ComponentProperties['meterProtocol'] })
+            }
+            className="input-field"
+          >
+            <option value="none">None</option>
+            <option value="modbus_rtu">Modbus RTU</option>
+            <option value="modbus_tcp">Modbus TCP</option>
+            <option value="bacnet_ip">BACnet IP</option>
+          </select>
+        </Label>
+      )}
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Auxiliary infrastructure components are mostly planning/documentation
+        blocks, except key interlock which behaves as a series contact.
+      </p>
+    </>
+  );
+
+  const renderTerminalBlockProps = () => (
+    <>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Terminal block provides a simple pass-through from <strong>IN</strong>{' '}
+        to <strong>OUT</strong>. Use it to keep wiring organized in panel
+        schematics and marshalling layouts.
+      </p>
+    </>
+  );
+
+  const renderInterposingRelayProps = () => (
+    <>
+      <Label text="Coil voltage (V)">
+        <div className="flex gap-1 flex-wrap">
+          {[12, 24, 48, 110, 230].map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() =>
+                updateProp({
+                  relayCoilVoltage: v,
+                  relayCoilSupply:
+                    v === 230 ? '230ac' : v === 110 ? '110dc' : '24dc',
+                })
+              }
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.relayCoilVoltage ?? 24) === v
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {v} V
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="Coil supply (panel schedule)">
+        <select
+          value={selectedComp!.properties.relayCoilSupply ?? '24dc'}
+          onChange={(e) =>
+            updateProp({
+              relayCoilSupply: e.target
+                .value as ComponentProperties['relayCoilSupply'],
+            })
+          }
+          className="input-field"
+        >
+          <option value="24dc">+24 V DC (typ. BMS)</option>
+          <option value="110dc">+110 V DC</option>
+          <option value="230ac">230 V AC</option>
+        </select>
+      </Label>
+      <Label text="Contact rating (A)">
+        <input
+          type="number"
+          value={selectedComp!.properties.ratingAmps ?? 6}
+          onChange={(e) =>
+            updateProp({
+              ratingAmps: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="input-field"
+          min={0}
+        />
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Coil A1/A2 picked up → IN/OUT NO contact closes. Use one between any
+        BMS digital output and a contactor coil so the BMS never lands
+        directly on a heavy AC coil.
+      </p>
+    </>
+  );
+
+  const renderAuxContactBlockProps = () => (
+    <>
+      <Label text="Contact rating (A)">
+        <input
+          type="number"
+          value={selectedComp!.properties.ratingAmps ?? 10}
+          onChange={(e) =>
+            updateProp({
+              ratingAmps: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="input-field"
+          min={0}
+        />
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Auxiliary block has one NO pair <strong>13-14</strong> and one NC pair{' '}
+        <strong>21-22</strong>. State <strong>on</strong> closes NO, while{' '}
+        <strong>off</strong> closes NC.
+      </p>
+    </>
+  );
+
+  const renderEnergyMeterProps = () => (
+    <>
+      <Label text="Line voltage U_L-L">
+        <div className="flex gap-1 flex-wrap">
+          {[230, 400, 690].map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => updateProp({ lineVoltage: v })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.lineVoltage ?? 400) === v
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {v} V
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="CT primary (A)">
+        <input
+          type="number"
+          value={selectedComp!.properties.meterCtPrimary ?? 100}
+          onChange={(e) =>
+            updateProp({
+              meterCtPrimary: Math.max(1, Number(e.target.value) || 1),
+            })
+          }
+          className="input-field"
+          min={1}
+        />
+      </Label>
+      <Label text="Field bus protocol">
+        <select
+          value={selectedComp!.properties.meterProtocol ?? 'modbus_rtu'}
+          onChange={(e) =>
+            updateProp({
+              meterProtocol: e.target
+                .value as ComponentProperties['meterProtocol'],
+            })
+          }
+          className="input-field"
+        >
+          <option value="none">None</option>
+          <option value="modbus_rtu">Modbus RTU (RS-485)</option>
+          <option value="modbus_tcp">Modbus TCP</option>
+          <option value="bacnet_ip">BACnet IP</option>
+        </select>
+      </Label>
+      {(selectedComp!.properties.meterProtocol ?? 'modbus_rtu') !== 'none' && (
+        <Label text="Address / Unit ID">
+          <input
+            type="number"
+            value={selectedComp!.properties.meterCommAddress ?? 1}
+            onChange={(e) =>
+              updateProp({
+                meterCommAddress: Math.max(0, Number(e.target.value) || 0),
+              })
+            }
+            className="input-field"
+            min={0}
+            max={255}
+          />
+        </Label>
+      )}
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Pass-through 3φ + N meter — wires straight through the bus. The
+        display shows live U / I / kW from the simulator. CTs are clamped on
+        each pole; their primary rating is documentation only.
+      </p>
+    </>
+  );
+
+  const renderMultimeterProps = () => (
+    <>
+      <Label text="Measurement mode">
+        <div className="flex gap-1 flex-wrap">
+          {[
+            { v: 'voltage', l: 'Voltage (V)' },
+            { v: 'current', l: 'Current (A)' },
+            { v: 'continuity', l: 'Continuity (Buzzer)' },
+          ].map((m) => (
+            <button
+              key={m.v}
+              type="button"
+              onClick={() =>
+                updateProp({
+                  multimeterMode: m.v as
+                    | 'voltage'
+                    | 'current'
+                    | 'continuity',
+                })
+              }
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.multimeterMode ?? 'voltage') === m.v
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {m.l}
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="Signal type">
+        <div className="flex gap-1 flex-wrap">
+          {[
+            { v: 'auto', l: 'Auto' },
+            { v: 'ac', l: 'AC' },
+            { v: 'dc', l: 'DC' },
+          ].map((s) => (
+            <button
+              key={s.v}
+              type="button"
+              onClick={() =>
+                updateProp({
+                  multimeterSignal: s.v as 'auto' | 'ac' | 'dc',
+                })
+              }
+              className={`px-2 py-1 rounded text-xs ${
+                ((selectedComp!.properties as { multimeterSignal?: 'auto' | 'ac' | 'dc' })
+                  .multimeterSignal ?? 'auto') === s.v
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {s.l}
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="High-voltage checks">
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={selectedComp!.properties.multimeterHighVoltage !== false}
+            onChange={(e) =>
+              updateProp({ multimeterHighVoltage: e.target.checked })
+            }
+          />
+          Enable HV indication
+        </label>
+      </Label>
+      <Label text="Max HV range (V)">
+        <input
+          type="number"
+          value={selectedComp!.properties.multimeterMaxVoltage ?? 1000}
+          onChange={(e) =>
+            updateProp({
+              multimeterMaxVoltage: Math.max(
+                100,
+                Number(e.target.value) || 1000
+              ),
+            })
+          }
+          className="input-field"
+          min={100}
+          max={5000}
+        />
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Two-probe DMM: wire <strong>COM</strong> and <strong>VΩA</strong> to
+        test points. Continuity mode shows <strong>BEEP</strong> and lights the
+        buzzer indicator when both probes are electrically continuous. Choose
+        <strong> AC/DC</strong> signal type depending on the circuit under test.
+      </p>
+    </>
+  );
+
   const renderTypeSpecificProps = () => {
     if (!selectedComp) return null;
     switch (selectedComp.type) {
@@ -1818,27 +2972,86 @@ const PropertyPanel: React.FC = () => {
         return renderPushButtonProps();
       case 'mcb':
         return renderMCBProps('1p');
+      case 'hrc_fuse':
+      case 'control_circuit_fuse':
+        return renderHrcFuseProps();
       case 'three_phase_mcb':
+      case 'mccb':
       case 'four_phase_mcb':
         return renderMultipoleMcbProps();
+      case 'motor_protection_circuit_breaker':
+        return renderMpcbProps();
       case 'air_circuit_breaker':
         return renderAirCircuitBreakerProps();
       case 'motorized_mccb':
       case 'four_pole_motorized_mccb':
         return renderMotorizedMccbProps();
       case 'rcd':
+      case 'residual_current_circuit_breaker':
         return renderRCDProps();
+      case 'earth_leakage_relay_cbct':
+        return renderEarthLeakageRelayCbctProps();
       case 'socket':
         return renderSocketProps();
       case 'lamp':
       case 'motor':
       case 'heater':
+      case 'panel_heater':
+      case 'cooling_fan':
       case 'generic_load':
         return renderLoadProps();
       case 'power_source':
         return renderPowerSourceProps();
       case 'dc_power_source':
         return renderDcPowerSourceProps();
+      case 'ac_dc_converter':
+        return renderAcDcConverterProps();
+      case 'control_transformer':
+        return renderControlTransformerProps();
+      case 'modbus_tcp_gateway':
+        return renderModbusTcpGatewayProps();
+      case 'bacnet_ip_gateway':
+        return renderBacnetIpGatewayProps();
+      case 'di_module':
+      case 'do_module':
+      case 'ai_module':
+      case 'ao_module':
+        return renderBmsIOModuleProps();
+      case 'relay_interface_card':
+      case 'modbus_rtu_module':
+      case 'communication_converter':
+      case 'iot_gateway':
+      case 'cloud_monitoring_module':
+      case 'energy_management_controller':
+      case 'ethernet_switch':
+        return renderCommInfraProps();
+      case 'signal_isolator':
+      case 'optocoupler_module':
+        return renderSignalIsolationProps();
+      case 'ups_module':
+      case 'dc_battery_backup':
+      case 'motor_operator_kit':
+      case 'shunt_trip_coil':
+      case 'closing_coil':
+      case 'uvr_release':
+      case 'key_interlock':
+      case 'neutral_link':
+      case 'earth_link':
+      case 'current_transformer':
+      case 'voltage_transformer':
+      case 'din_rail':
+      case 'mounting_plate':
+      case 'cable_duct':
+      case 'busbar_support_insulator':
+      case 'ferrule_cable_markers':
+      case 'control_wiring':
+      case 'power_cables':
+      case 'ms_gi_sheet_enclosure':
+      case 'ip_rated_enclosure':
+      case 'power_quality_analyzer':
+        return renderPowerAuxProps();
+      case 'terminal_block':
+        return renderTerminalBlockProps();
       case 'three_phase_source':
         return renderThreePhaseSourceProps();
       case 'three_phase_motor':
@@ -1846,6 +3059,28 @@ const PropertyPanel: React.FC = () => {
       case 'three_phase_contactor':
       case 'four_phase_contactor':
         return renderThreePhaseContactorProps();
+      case 'estop':
+        return renderEStopProps();
+      case 'door_interlock':
+      case 'mechanical_interlock':
+        return renderDoorInterlockProps();
+      case 'selector_switch':
+        return renderSelectorSwitchProps();
+      case 'indicator_lamp':
+        return renderIndicatorLampProps();
+      case 'phase_indicator_bank':
+        return renderPhaseIndicatorBankProps();
+      case 'smps':
+        return renderSmpsProps();
+      case 'interposing_relay':
+        return renderInterposingRelayProps();
+      case 'aux_contact_block':
+        return renderAuxContactBlockProps();
+      case 'energy_meter':
+      case 'digital_multifunction_meter':
+        return renderEnergyMeterProps();
+      case 'multimeter':
+        return renderMultimeterProps();
       default:
         return null;
     }
@@ -1872,6 +3107,45 @@ const PropertyPanel: React.FC = () => {
                 className="input-field"
               />
             </Label>
+            <Label text="Label text size">
+              <input
+                type="number"
+                value={selectedComp.properties.labelFontSize ?? 9}
+                onChange={(e) =>
+                  updateProp({
+                    labelFontSize: Math.min(
+                      24,
+                      Math.max(6, Number(e.target.value) || 9)
+                    ),
+                  })
+                }
+                className="input-field"
+                min={6}
+                max={24}
+              />
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Label text="Label X offset">
+                <input
+                  type="number"
+                  value={selectedComp.properties.labelOffsetX ?? 0}
+                  onChange={(e) =>
+                    updateProp({ labelOffsetX: Number(e.target.value) || 0 })
+                  }
+                  className="input-field"
+                />
+              </Label>
+              <Label text="Label Y offset">
+                <input
+                  type="number"
+                  value={selectedComp.properties.labelOffsetY ?? 0}
+                  onChange={(e) =>
+                    updateProp({ labelOffsetY: Number(e.target.value) || 0 })
+                  }
+                  className="input-field"
+                />
+              </Label>
+            </div>
 
             <Label text="Type">
               <span className={`text-xs ${tc.textMuted} capitalize`}>
