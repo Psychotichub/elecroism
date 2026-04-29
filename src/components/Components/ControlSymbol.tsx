@@ -49,7 +49,7 @@ const ControlSymbol: React.FC<Props> = ({
         return 'SHT';
       case 'closing_coil':
         return 'CC';
-      case 'uvr_module':
+      case 'uvr_release':
         return 'UVR';
       case 'motor_operator_kit':
         return 'MOT';

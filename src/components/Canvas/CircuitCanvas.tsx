@@ -55,14 +55,116 @@ import {
   terminalOutwardOrientation,
 } from '../../utils/geometry';
 import { inferWireColor } from '../../utils/inferWireColor';
+import {
+  getCadCommandSuggestions,
+  runCadCommand,
+} from '../../utils/cadCommands';
+import {
+  clearDragComponentType,
+  getDragComponentType,
+} from '../../utils/dragState';
 
 const CircuitCanvas: React.FC = () => {
+  const resolveComponentCommand = useCallback((raw: string): ComponentType | null => {
+    const trimmed = raw.trim().toLowerCase();
+    if (!trimmed) return null;
+    const direct = getCadCommandSuggestions(trimmed).find((s) => s === trimmed);
+    const nonComponentCommands = new Set([
+      'add',
+      'clear',
+      'copy',
+      'help',
+      'line',
+      'pan',
+      'select',
+      'wire',
+      'z',
+      'ze',
+      'zi',
+      'zo',
+    ]);
+    if (direct && !nonComponentCommands.has(direct)) {
+      return direct as ComponentType;
+    }
+    if (trimmed.startsWith('add ')) {
+      const alias = trimmed.split(/\s+/)[1];
+      if (!alias) return null;
+      const exact = getCadCommandSuggestions(alias).find((s) => s === alias);
+      if (exact && !nonComponentCommands.has(exact)) {
+        return exact as ComponentType;
+      }
+    }
+    return null;
+  }, []);
+
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const ctrlOrMetaPressedRef = useRef(false);
+  const suppressStageClickRef = useRef(false);
   /** Middle-button drag pan (any tool); null when not dragging. */
   const middlePanRef = useRef<{ lastX: number; lastY: number } | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
+  const [selectionRect, setSelectionRect] = useState<{
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+  } | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteText, setPaletteText] = useState('');
+  const [paletteResult, setPaletteResult] = useState('');
+  const [palettePos, setPalettePos] = useState({ x: 20, y: 20 });
+  const [paletteSuggestionIndex, setPaletteSuggestionIndex] = useState(-1);
+  const [isPointerInsideCanvas, setIsPointerInsideCanvas] = useState(false);
+  const [pendingInsertType, setPendingInsertType] = useState<ComponentType | null>(null);
+  const [insertCursor, setInsertCursor] = useState<{ x: number; y: number } | null>(null);
+  const [dragPreviewType, setDragPreviewType] = useState<ComponentType | null>(null);
+  const [dragPreviewCursor, setDragPreviewCursor] = useState<{ x: number; y: number } | null>(
+    null
+  );
+  const paletteInputRef = useRef<HTMLInputElement>(null);
+  const lastPointerCanvasRef = useRef<{ x: number; y: number }>({ x: 20, y: 20 });
+  const paletteSuggestions = useMemo(() => {
+    return getCadCommandSuggestions(paletteText);
+  }, [paletteText]);
+  const executePaletteCommand = (rawCommand: string) => {
+    const insertType = resolveComponentCommand(rawCommand);
+    if (insertType) {
+      setPendingInsertType(insertType);
+      setPaletteResult(`Move cursor and click to place ${insertType}`);
+      setPaletteText('');
+      setPaletteSuggestionIndex(-1);
+      setPaletteOpen(false);
+      return;
+    }
+    const {
+      circuit: liveCircuit,
+      selectedId: liveSelectedId,
+      setTool: liveSetTool,
+      addComponent: liveAddComponent,
+      setSelected: liveSetSelected,
+      setZoom: liveSetZoom,
+      setPan: liveSetPan,
+      duplicateComponent: liveDuplicateComponent,
+    } = useCircuitStore.getState();
+    setPaletteResult(
+      runCadCommand({
+        raw: rawCommand,
+        circuit: liveCircuit,
+        selectedId: liveSelectedId,
+        setTool: liveSetTool,
+        addComponent: liveAddComponent,
+        setSelected: liveSetSelected,
+        setZoom: liveSetZoom,
+        setPan: liveSetPan,
+        duplicateComponent: liveDuplicateComponent,
+      })
+    );
+    setPaletteText('');
+    setPaletteSuggestionIndex(-1);
+    setPaletteOpen(false);
+  };
   const [hoveredConnectionPoint, setHoveredConnectionPoint] = useState<{
     componentId: string;
     pointId: string;
@@ -177,6 +279,80 @@ const CircuitCanvas: React.FC = () => {
     );
   }, [wireInProgress, circuit.components, hoveredConnectionPoint]);
 
+  const pendingPreviewComponent = useMemo<CircuitComponent | null>(() => {
+    const previewType = pendingInsertType ?? dragPreviewType;
+    const previewCursor = pendingInsertType ? insertCursor : dragPreviewCursor;
+    if (!previewType || !previewCursor) return null;
+    return {
+      id: '__cad_insert_preview__',
+      type: previewType,
+      label: '',
+      x: snapToGrid(previewCursor.x, circuit.gridSize),
+      y: snapToGrid(previewCursor.y, circuit.gridSize),
+      scale: 1,
+      rotation: 0,
+      state: 'off',
+      selected: false,
+      connectionPoints: [],
+      properties: {},
+    };
+  }, [pendingInsertType, insertCursor, dragPreviewType, dragPreviewCursor, circuit.gridSize]);
+
+  useEffect(() => {
+    const syncModifier = (e: KeyboardEvent) => {
+      ctrlOrMetaPressedRef.current = e.ctrlKey || e.metaKey;
+    };
+    const clearModifier = () => {
+      ctrlOrMetaPressedRef.current = false;
+    };
+    window.addEventListener('keydown', syncModifier);
+    window.addEventListener('keyup', syncModifier);
+    window.addEventListener('blur', clearModifier);
+    return () => {
+      window.removeEventListener('keydown', syncModifier);
+      window.removeEventListener('keyup', syncModifier);
+      window.removeEventListener('blur', clearModifier);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (paletteOpen) {
+      paletteInputRef.current?.focus();
+    }
+  }, [paletteOpen]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!isPointerInsideCanvas) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      const printable = e.key.length === 1;
+      const openKey = printable || e.key === ':' || e.key === '/';
+      if (!openKey) return;
+      e.preventDefault();
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        setPalettePos({
+          x: Math.max(8, Math.min(lastPointerCanvasRef.current.x + 10, rect.width - 280)),
+          y: Math.max(8, Math.min(lastPointerCanvasRef.current.y + 10, rect.height - 70)),
+        });
+      }
+      setPaletteOpen(true);
+      setPaletteSuggestionIndex(-1);
+      const seed = e.key === ':' || e.key === '/' ? '' : e.key;
+      setPaletteText(seed);
+      setTimeout(() => paletteInputRef.current?.focus(), 0);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isPointerInsideCanvas]);
+
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
@@ -188,13 +364,41 @@ const CircuitCanvas: React.FC = () => {
     };
     updateSize();
     window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      ro = new ResizeObserver(() => updateSize());
+      ro.observe(containerRef.current);
+    }
+    return () => {
+      window.removeEventListener('resize', updateSize);
+      ro?.disconnect();
+    };
   }, []);
 
   useEffect(() => {
     const restoreCursor = () => {
       if (containerRef.current) {
         containerRef.current.style.cursor = '';
+      }
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      const drag = middlePanRef.current;
+      if (!drag) return;
+      if ((e.buttons & 4) === 0) {
+        middlePanRef.current = null;
+        restoreCursor();
+        return;
+      }
+      const dx = e.clientX - drag.lastX;
+      const dy = e.clientY - drag.lastY;
+      middlePanRef.current = { lastX: e.clientX, lastY: e.clientY };
+      const { circuit, setPan: pan } = useCircuitStore.getState();
+      pan(circuit.panX + dx, circuit.panY + dy);
+    };
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 1 && middlePanRef.current) {
+        middlePanRef.current = null;
+        restoreCursor();
       }
     };
     const onPointerMove = (e: PointerEvent) => {
@@ -223,10 +427,14 @@ const CircuitCanvas: React.FC = () => {
         restoreCursor();
       }
     };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerCancel);
     return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerCancel);
@@ -245,6 +453,23 @@ const CircuitCanvas: React.FC = () => {
 
   const handleStageClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (suppressStageClickRef.current) {
+        suppressStageClickRef.current = false;
+        return;
+      }
+      if (pendingInsertType && e.target === stageRef.current) {
+        const pos = getStagePointerPosition();
+        if (!pos) return;
+        addComponent(
+          pendingInsertType,
+          snapToGrid(pos.x, circuit.gridSize),
+          snapToGrid(pos.y, circuit.gridSize)
+        );
+        setPendingInsertType(null);
+        setInsertCursor(null);
+        setPaletteResult(`Placed ${pendingInsertType}`);
+        return;
+      }
       if (e.target === stageRef.current) {
         if (tool === 'wire' && wireInProgress) {
           const pos = getStagePointerPosition();
@@ -258,11 +483,38 @@ const CircuitCanvas: React.FC = () => {
         }
       }
     },
-    [tool, wireInProgress, getStagePointerPosition, addWirePoint, setSelected]
+    [
+      pendingInsertType,
+      addComponent,
+      circuit.gridSize,
+      tool,
+      wireInProgress,
+      getStagePointerPosition,
+      addWirePoint,
+      setSelected,
+    ]
   );
 
   const handleMouseMove = useCallback(
     () => {
+      if (selectionRect && tool === 'select') {
+        const pos = getStagePointerPosition();
+        if (pos) {
+          setSelectionRect((current) =>
+            current
+              ? {
+                  ...current,
+                  endX: pos.x,
+                  endY: pos.y,
+                }
+              : current
+          );
+        }
+      }
+      if (pendingInsertType) {
+        const pos = getStagePointerPosition();
+        if (pos) setInsertCursor(pos);
+      }
       if (tool === 'wire' && wireInProgress) {
         const pos = getStagePointerPosition();
         if (pos) {
@@ -274,8 +526,86 @@ const CircuitCanvas: React.FC = () => {
         }
       }
     },
-    [tool, wireInProgress, getStagePointerPosition, hoveredConnectionPoint]
+    [
+      selectionRect,
+      pendingInsertType,
+      tool,
+      wireInProgress,
+      getStagePointerPosition,
+      hoveredConnectionPoint,
+    ]
   );
+
+  const handleStageMouseDown = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      if (tool !== 'select') return;
+      if (e.evt.button !== 0) return;
+      if (e.target !== stageRef.current) return;
+      const pos = getStagePointerPosition();
+      if (!pos) return;
+      setSelectionRect({
+        startX: pos.x,
+        startY: pos.y,
+        endX: pos.x,
+        endY: pos.y,
+      });
+    },
+    [tool, getStagePointerPosition]
+  );
+
+  const handleStageMouseUp = useCallback(() => {
+    if (tool !== 'select' || !selectionRect) return;
+    const dx = selectionRect.endX - selectionRect.startX;
+    const dy = selectionRect.endY - selectionRect.startY;
+    const dragDistanceSq = dx * dx + dy * dy;
+    if (dragDistanceSq < 16) {
+      setSelectionRect(null);
+      return;
+    }
+
+    const x1 = Math.min(selectionRect.startX, selectionRect.endX);
+    const y1 = Math.min(selectionRect.startY, selectionRect.endY);
+    const x2 = Math.max(selectionRect.startX, selectionRect.endX);
+    const y2 = Math.max(selectionRect.startY, selectionRect.endY);
+    const windowMode = selectionRect.endX >= selectionRect.startX;
+    const margin = 18;
+
+    const selectedIds = new Set(
+      circuit.components
+        .filter((comp) => {
+          const worldPoints = comp.connectionPoints.map((cp) =>
+            connectionPointWorld(comp, cp)
+          );
+          worldPoints.push({ x: comp.x, y: comp.y });
+          const xs = worldPoints.map((p) => p.x);
+          const ys = worldPoints.map((p) => p.y);
+          const bx1 = Math.min(...xs) - margin;
+          const by1 = Math.min(...ys) - margin;
+          const bx2 = Math.max(...xs) + margin;
+          const by2 = Math.max(...ys) + margin;
+
+          if (windowMode) {
+            return bx1 >= x1 && by1 >= y1 && bx2 <= x2 && by2 <= y2;
+          }
+          const intersects = bx2 >= x1 && bx1 <= x2 && by2 >= y1 && by1 <= y2;
+          return intersects;
+        })
+        .map((c) => c.id)
+    );
+
+    useCircuitStore.setState({
+      selectedId: null,
+      circuit: {
+        ...circuit,
+        components: circuit.components.map((c) => ({
+          ...c,
+          selected: selectedIds.has(c.id),
+        })),
+      },
+    });
+    suppressStageClickRef.current = true;
+    setSelectionRect(null);
+  }, [tool, selectionRect, circuit]);
 
   const handleWheel = useCallback(
     (e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -302,9 +632,11 @@ const CircuitCanvas: React.FC = () => {
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      const type = e.dataTransfer.getData(
-        'componentType'
-      ) as ComponentType;
+      setDragPreviewType(null);
+      setDragPreviewCursor(null);
+      const type =
+        (e.dataTransfer.getData('componentType') as ComponentType) ||
+        (getDragComponentType() as ComponentType | undefined);
       if (!type) return;
 
       const stage = stageRef.current;
@@ -336,9 +668,37 @@ const CircuitCanvas: React.FC = () => {
             ? { mcbInitialPoles: 2 }
             : undefined
       );
+      clearDragComponentType();
     },
     [addComponent, circuit.panX, circuit.panY, circuit.zoom, circuit.gridSize]
   );
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const type =
+        (e.dataTransfer.getData('componentType') as ComponentType) ||
+        (getDragComponentType() as ComponentType | undefined);
+      if (!type) return;
+      const rect = (
+        e.target as HTMLElement
+      ).closest('.circuit-canvas-container')?.getBoundingClientRect();
+      if (!rect) return;
+      const x = (e.clientX - rect.left - circuit.panX) / circuit.zoom;
+      const y = (e.clientY - rect.top - circuit.panY) / circuit.zoom;
+      setDragPreviewType(type);
+      setDragPreviewCursor({ x, y });
+    },
+    [circuit.panX, circuit.panY, circuit.zoom]
+  );
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && containerRef.current?.contains(next)) return;
+    clearDragComponentType();
+    setDragPreviewType(null);
+    setDragPreviewCursor(null);
+  }, []);
 
   const handleConnectionPointClick = useCallback(
     (componentId: string, pointId: string) => {
@@ -356,6 +716,17 @@ const CircuitCanvas: React.FC = () => {
     (id: string) => {
       if (tool === 'delete') {
         removeComponent(id);
+      } else if (ctrlOrMetaPressedRef.current) {
+        const { circuit: liveCircuit } = useCircuitStore.getState();
+        useCircuitStore.setState({
+          selectedId: id,
+          circuit: {
+            ...liveCircuit,
+            components: liveCircuit.components.map((c) =>
+              c.id === id ? { ...c, selected: true } : c
+            ),
+          },
+        });
       } else {
         setSelected(id);
       }
@@ -365,7 +736,7 @@ const CircuitCanvas: React.FC = () => {
 
   const renderComponent = (comp: CircuitComponent) => {
     const nodeResult = simulationResult?.nodes[comp.id];
-    const isSelected = selectedId === comp.id;
+    const isSelected = selectedId === comp.id || comp.selected;
     const showCP = tool === 'wire' || isSelected;
 
     const commonProps = {
@@ -810,6 +1181,8 @@ const CircuitCanvas: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         cancelWire();
+        setPendingInsertType(null);
+        setInsertCursor(null);
         setSelected(null);
       }
     };
@@ -822,8 +1195,40 @@ const CircuitCanvas: React.FC = () => {
       ref={containerRef}
       className={`circuit-canvas-container flex-1 overflow-hidden`}
       style={{ backgroundColor: tc.canvasHex }}
-      onDragOver={(e) => e.preventDefault()}
+      onMouseEnter={() => setIsPointerInsideCanvas(true)}
+      onMouseLeave={() => setIsPointerInsideCanvas(false)}
+      onMouseMove={(e) => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        lastPointerCanvasRef.current = { x, y };
+        if (!paletteOpen) {
+          setPalettePos({
+            x: Math.max(8, Math.min(x + 10, rect.width - 280)),
+            y: Math.max(8, Math.min(y + 10, rect.height - 70)),
+          });
+        }
+      }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onAuxClick={(e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+        }
+      }}
+      onMouseDownCapture={(e: React.MouseEvent) => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        middlePanRef.current = {
+          lastX: e.clientX,
+          lastY: e.clientY,
+        };
+        if (containerRef.current) {
+          containerRef.current.style.cursor = 'grabbing';
+        }
+      }}
       onPointerDownCapture={(e: React.PointerEvent) => {
         if (e.button !== 1) return;
         e.preventDefault();
@@ -845,7 +1250,9 @@ const CircuitCanvas: React.FC = () => {
         x={circuit.panX}
         y={circuit.panY}
         onClick={handleStageClick}
+        onMouseDown={handleStageMouseDown}
         onMouseMove={handleMouseMove}
+        onMouseUp={handleStageMouseUp}
         onWheel={handleWheel}
         draggable={tool === 'pan'}
         onDragEnd={() => {
@@ -887,6 +1294,29 @@ const CircuitCanvas: React.FC = () => {
         <Layer>
           {circuit.components.map(renderMultimeterLeads)}
         </Layer>
+        {pendingPreviewComponent && (
+          <Layer opacity={0.7} listening={false}>
+            {renderComponent(pendingPreviewComponent)}
+          </Layer>
+        )}
+        {selectionRect && tool === 'select' && (
+          <Layer listening={false}>
+            <Rect
+              x={Math.min(selectionRect.startX, selectionRect.endX)}
+              y={Math.min(selectionRect.startY, selectionRect.endY)}
+              width={Math.abs(selectionRect.endX - selectionRect.startX)}
+              height={Math.abs(selectionRect.endY - selectionRect.startY)}
+              fill={
+                selectionRect.endX >= selectionRect.startX
+                  ? 'rgba(59,130,246,0.12)'
+                  : 'rgba(34,197,94,0.12)'
+              }
+              stroke={selectionRect.endX >= selectionRect.startX ? '#3B82F6' : '#22C55E'}
+              strokeWidth={1}
+              dash={[6, 4]}
+            />
+          </Layer>
+        )}
 
         {tool === 'wire' && (
           <Layer>
@@ -1012,6 +1442,86 @@ const CircuitCanvas: React.FC = () => {
           </Layer>
         )}
       </Stage>
+      {paletteOpen && (
+        <div
+          className={`absolute z-20 px-2 py-1 rounded border ${tc.border} ${tc.toolbar} shadow-lg`}
+          style={{ left: palettePos.x, top: palettePos.y }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-blue-400">Cmd</span>
+            <input
+              ref={paletteInputRef}
+              value={paletteText}
+              onChange={(e) => {
+                setPaletteText(e.target.value);
+                setPaletteSuggestionIndex(-1);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  if (paletteSuggestions.length > 0) {
+                    setPaletteSuggestionIndex((prev) => {
+                      const next = prev + 1;
+                      return next >= paletteSuggestions.length ? 0 : next;
+                    });
+                  }
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  if (paletteSuggestions.length > 0) {
+                    setPaletteSuggestionIndex((prev) => {
+                      const next = prev - 1;
+                      return next < 0 ? paletteSuggestions.length - 1 : next;
+                    });
+                  }
+                } else if (e.key === 'Enter') {
+                  const activeText =
+                    paletteSuggestionIndex >= 0 &&
+                    paletteSuggestionIndex < paletteSuggestions.length
+                      ? paletteSuggestions[paletteSuggestionIndex]
+                      : paletteText;
+                  executePaletteCommand(activeText);
+                } else if (e.key === 'Escape') {
+                  setPaletteOpen(false);
+                  setPaletteText('');
+                  setPaletteSuggestionIndex(-1);
+                }
+              }}
+              placeholder="s | w | add mcb | z e"
+              className={`h-6 px-2 rounded border ${tc.border} ${tc.canvas} ${tc.text} text-[11px] w-52 outline-none`}
+            />
+          </div>
+          {paletteResult && (
+            <div className="text-[10px] text-emerald-400 mt-1 max-w-56 truncate">
+              {paletteResult}
+            </div>
+          )}
+          {paletteSuggestions.length > 0 && (
+            <div className="mt-1 space-y-0.5">
+              {paletteSuggestions.map((hint: string) => (
+                <div
+                  key={hint}
+                  className={`text-[10px] ${
+                    paletteSuggestions[paletteSuggestionIndex] === hint
+                      ? 'text-blue-300'
+                      : tc.textMuted
+                  } cursor-pointer hover:opacity-100 opacity-85`}
+                  onMouseEnter={() =>
+                    setPaletteSuggestionIndex(paletteSuggestions.indexOf(hint))
+                  }
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setPaletteText(hint);
+                    setPaletteSuggestionIndex(paletteSuggestions.indexOf(hint));
+                    executePaletteCommand(hint);
+                  }}
+                >
+                  {hint}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

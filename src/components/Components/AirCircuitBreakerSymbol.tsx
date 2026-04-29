@@ -241,6 +241,19 @@ const AirCircuitBreakerSymbol: React.FC<Props> = ({
       {component.connectionPoints
         .filter((cp) => isControlOrAuxTerminal(cp.label))
         .map((cp) => (
+          <Line
+            key={`cp-stub-${cp.id}`}
+            points={[minX, cp.y, cp.x, cp.y]}
+            stroke="#3730A3"
+            strokeWidth={1.2}
+            lineCap="round"
+            listening={false}
+          />
+        ))}
+
+      {component.connectionPoints
+        .filter((cp) => isControlOrAuxTerminal(cp.label))
+        .map((cp) => (
           <Text
             key={`cp-lbl-${cp.id}`}
             x={cp.x - 56}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Group, Rect, Text, Circle, Line } from 'react-konva';
-import type { CircuitComponent, NodeResult } from '../../types';
+import type { CircuitComponent, ConnectionPoint, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
@@ -22,7 +22,7 @@ const BmsIOModuleSymbol: React.FC<Props> = ({
   selected,
 }) => {
   const energized = nodeResult?.energized || false;
-  const kind =
+  const kind: 'DI' | 'DO' | 'AI' | 'AO' =
     component.type === 'di_module'
       ? 'DI'
       : component.type === 'do_module'
@@ -30,20 +30,35 @@ const BmsIOModuleSymbol: React.FC<Props> = ({
         : component.type === 'ao_module'
           ? 'AO'
           : 'AI';
+  const typeAccent =
+    kind === 'DI'
+      ? '#1D4ED8'
+      : kind === 'DO'
+        ? '#B91C1C'
+        : kind === 'AI'
+          ? '#7E22CE'
+          : '#BE185D';
   const ioText =
     kind === 'AI'
       ? `${component.properties.ioChannels ?? 4}ch ${component.properties.aiSignalType === '0_10v' ? '0-10V' : '4-20mA'}`
       : kind === 'AO'
         ? `${component.properties.ioChannels ?? 4}ch ${component.properties.aoSignalType === '0_10v' ? '0-10V' : '4-20mA'}`
-      : `${component.properties.ioChannels ?? 4}ch`;
+      : `${component.properties.ioChannels ?? 8}ch`;
 
-  const terminalLineColor = (idx: number): string => {
-    const palette = ['#1D4ED8', '#B91C1C', '#7E22CE', '#0F766E', '#7C3F19', '#BE185D'];
-    return palette[idx % palette.length];
+  const terminalLineColor = (cp: ConnectionPoint): string => {
+    const u = cp.label.toUpperCase();
+    if (u.startsWith('PWR_')) return '#7C3F19';
+    if (u.includes('SHIELD') || u.includes('FG')) return '#0F766E';
+    if (u.includes('_COM')) return '#0F172A';
+    if (u.startsWith('DI_')) return '#1D4ED8';
+    if (u.startsWith('DO_')) return '#B91C1C';
+    if (u.startsWith('AI_')) return '#7E22CE';
+    if (u.startsWith('AO_')) return '#BE185D';
+    return '#334155';
   };
   const body = { left: -30, right: 30, top: -22, bottom: 22 };
   const pinLen = 10;
-  const pinFromTerminal = (cp: { x: number; y: number }) => {
+  const pinFromTerminal = (cp: ConnectionPoint) => {
     const dL = Math.abs(cp.x - body.left);
     const dR = Math.abs(cp.x - body.right);
     const dT = Math.abs(cp.y - body.top);
@@ -100,36 +115,51 @@ const BmsIOModuleSymbol: React.FC<Props> = ({
           strokeWidth={1.5}
           cornerRadius={4}
         />
+        <Rect
+          x={-30}
+          y={-22}
+          width={60}
+          height={6}
+          fill={typeAccent}
+          opacity={0.9}
+          cornerRadius={[4, 4, 0, 0]}
+          listening={false}
+        />
         <Text
           text={`BMS ${kind}`}
           x={-28}
-          y={-14}
+          y={-13}
           width={56}
           align="center"
           fontSize={9}
           fontStyle="bold"
-          fill="#0C4A6E"
+          fill="#FFFFFF"
           listening={false}
         />
         <Text
           text={ioText}
           x={-28}
-          y={-2}
+          y={-1}
           width={56}
           align="center"
           fontSize={7}
           fill="#475569"
           listening={false}
         />
-        {energized && <Circle x={22} y={-14} radius={2.8} fill="#22C55E" />}
+        {energized && <Circle x={24} y={-19} radius={2.4} fill="#22C55E" />}
         <ComponentCanvasLabel
-          componentId={component.id} label={component.label} x={-34} y={28} width={68}           fontSize={component.properties.labelFontSize ?? 8}
-                  offsetX={component.properties.labelOffsetX ?? 0}
+          componentId={component.id}
+          label={component.label}
+          x={-34}
+          y={28}
+          width={68}
+          fontSize={component.properties.labelFontSize ?? 8}
+          offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />
         {component.connectionPoints.map((cp, idx) => {
           const pin = pinFromTerminal(cp);
-          const c = terminalLineColor(idx);
+          const c = terminalLineColor(cp);
           const nx =
             pin.side === 'left'
               ? pin.sx + 2
@@ -158,6 +188,16 @@ const BmsIOModuleSymbol: React.FC<Props> = ({
                 width={8}
                 align="center"
                 fontSize={3.5}
+                fill={c}
+                listening={false}
+              />
+              <Text
+                text={cp.label}
+                x={pin.side === 'left' ? pin.ex - 24 : pin.side === 'right' ? pin.ex + 2 : pin.ex + 2}
+                y={pin.side === 'top' ? pin.ey - 9 : pin.side === 'bottom' ? pin.ey + 2 : pin.ey - 4}
+                width={pin.side === 'left' ? 22 : 24}
+                align={pin.side === 'left' ? 'right' : 'left'}
+                fontSize={3.8}
                 fill={c}
                 listening={false}
               />

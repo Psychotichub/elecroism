@@ -119,7 +119,14 @@ export type ComponentType =
 
 export type ComponentState = 'on' | 'off' | 'tripped' | 'fault';
 
-export type WireColor = 'brown' | 'blue' | 'green_yellow' | 'black' | 'grey' | 'red';
+export type WireColor =
+  | 'brown'
+  | 'blue'
+  | 'green_yellow'
+  | 'black'
+  | 'grey'
+  | 'red'
+  | 'ethernet';
 
 export type PhaseSystem = 'single_phase' | 'three_phase';
 
@@ -273,6 +280,8 @@ export interface ComponentProperties {
   indicatorColor?: 'red' | 'green' | 'amber' | 'blue' | 'white';
   /** Indicator lamp phase tag (visual label only, e.g. "L1"). */
   indicatorPhaseTag?: 'L' | 'L1' | 'L2' | 'L3' | 'N' | 'PE' | 'AUX';
+  /** Indicator lamp wiring family to accept for energization. */
+  indicatorSupplyType?: 'ac' | 'dc';
 
   /** Interposing-relay coil voltage label (V) — 24 V DC typical for BMS DOs. */
   relayCoilVoltage?: number;
@@ -330,6 +339,20 @@ export interface ComponentProperties {
   labelFontSize?: number;
 }
 
+/** Merged into `ComponentProperties` (declaration merge) for AC→DC converter faceplate fields. */
+export interface ComponentProperties {
+  /** AC–DC converter: nominal AC input (Vrms) — faceplate / documentation. */
+  acDcInputVoltageV?: number;
+  /** AC–DC converter: mains frequency (display). */
+  acDcMainsFrequencyHz?: 50 | 60;
+  /** AC–DC converter: include optional isolation/step-down transformer stage. */
+  acDcHasTransformer?: boolean;
+  /** AC–DC converter: diode rectifier topology (educational / faceplate). */
+  acDcRectifierType?: 'half_wave' | 'full_wave' | 'bridge';
+  /** AC–DC converter: output regulation stage (linear regulator after filter). */
+  acDcHasRegulator?: boolean;
+}
+
 export interface Wire {
   id: string;
   fromComponentId: string;
@@ -338,6 +361,10 @@ export interface Wire {
   toPointId: string;
   points: number[];
   color: WireColor;
+  /** Logical category for filtering/validation (power/control/communication). */
+  wireCategory?: 'power' | 'control' | 'comm';
+  /** Optional protocol tag for communication links. */
+  wireProtocol?: 'none' | 'ethernet' | 'modbus_tcp' | 'bacnet_ip' | 'other';
   crossSection: number;
   energized: boolean;
   currentAmps: number;

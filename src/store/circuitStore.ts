@@ -94,7 +94,7 @@ function syncWireEndpoints(circuit: Circuit): Circuit {
 
 /** BMS / motor-pack control terminals (diagram only — not in power graph). */
 function acbControlConnectionPoints(componentId: string): ConnectionPoint[] {
-  const x = -46;
+  const x = -56;
   const rows: [number, string][] = [
     [-26, 'CC_A1'],
     [-18, 'CC_A2'],
@@ -115,19 +115,55 @@ function acbControlConnectionPoints(componentId: string): ConnectionPoint[] {
   }));
 }
 
+function acbPowerConnectionPoints(componentId: string): ConnectionPoint[] {
+  // Match the visual lead tips in AirCircuitBreakerSymbol
+  // (top at -36, bottom at +42) so orthogonal docking feels correct.
+  const xs = [-30, -10, 10, 30];
+  return [
+    { id: uuid(), componentId, x: xs[0], y: -36, label: 'IN_L1' },
+    { id: uuid(), componentId, x: xs[0], y: 42, label: 'OUT_L1' },
+    { id: uuid(), componentId, x: xs[1], y: -36, label: 'IN_L2' },
+    { id: uuid(), componentId, x: xs[1], y: 42, label: 'OUT_L2' },
+    { id: uuid(), componentId, x: xs[2], y: -36, label: 'IN_L3' },
+    { id: uuid(), componentId, x: xs[2], y: 42, label: 'OUT_L3' },
+    { id: uuid(), componentId, x: xs[3], y: -36, label: 'IN_N' },
+    { id: uuid(), componentId, x: xs[3], y: 42, label: 'OUT_N' },
+  ];
+}
+
 function ensureAcbControlConnectionPoints(
   component: CircuitComponent
 ): CircuitComponent {
   if (component.type !== 'air_circuit_breaker') return component;
-  if (component.connectionPoints.some((p) => p.label === 'CC_A1')) {
-    return component;
-  }
+  const desired = [
+    ...acbPowerConnectionPoints(component.id),
+    ...acbControlConnectionPoints(component.id),
+  ];
+  const existingByLabel = new Map(
+    component.connectionPoints.map((cp) => [cp.label, cp] as const)
+  );
+  const normalized = desired.map((cp) => {
+    const old = existingByLabel.get(cp.label);
+    return old
+      ? { ...old, x: cp.x, y: cp.y }
+      : { ...cp, id: uuid(), componentId: component.id };
+  });
+  const unchanged =
+    normalized.length === component.connectionPoints.length &&
+    normalized.every((cp, i) => {
+      const old = component.connectionPoints[i];
+      return (
+        old &&
+        old.id === cp.id &&
+        old.label === cp.label &&
+        old.x === cp.x &&
+        old.y === cp.y
+      );
+    });
+  if (unchanged) return component;
   return {
     ...component,
-    connectionPoints: [
-      ...component.connectionPoints,
-      ...acbControlConnectionPoints(component.id),
-    ],
+    connectionPoints: normalized,
   };
 }
 
@@ -242,10 +278,10 @@ function createConnectionPoints(
       ];
     case 'ac_dc_converter':
       return [
-        { id: uuid(), componentId, x: -18, y: -22, label: 'AC_L' },
-        { id: uuid(), componentId, x: 18, y: -22, label: 'AC_N' },
-        { id: uuid(), componentId, x: -18, y: 22, label: 'DC_PLUS' },
-        { id: uuid(), componentId, x: 18, y: 22, label: 'DC_MINUS' },
+        { id: uuid(), componentId, x: -22, y: -26, label: 'AC_L' },
+        { id: uuid(), componentId, x: 22, y: -26, label: 'AC_N' },
+        { id: uuid(), componentId, x: -22, y: 26, label: 'DC_PLUS' },
+        { id: uuid(), componentId, x: 22, y: 26, label: 'DC_MINUS' },
       ];
     case 'control_transformer':
       return [
@@ -324,40 +360,225 @@ function createConnectionPoints(
         { id: uuid(), componentId, x: 30, y: 18, label: 'DO_NC' },
       ];
     case 'di_module':
+      return [
+        { id: uuid(), componentId, x: -22, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 22, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: -30, y: -12, label: 'DI_COM' },
+        { id: uuid(), componentId, x: -30, y: -4, label: 'DI_1' },
+        { id: uuid(), componentId, x: -30, y: 4, label: 'DI_2' },
+        { id: uuid(), componentId, x: -30, y: 12, label: 'DI_3' },
+        { id: uuid(), componentId, x: 30, y: -12, label: 'DI_4' },
+        { id: uuid(), componentId, x: 30, y: -4, label: 'DI_5' },
+        { id: uuid(), componentId, x: 30, y: 4, label: 'DI_6' },
+        { id: uuid(), componentId, x: 30, y: 12, label: 'DI_7' },
+        { id: uuid(), componentId, x: 0, y: 24, label: 'DI_8' },
+      ];
     case 'do_module':
+      return [
+        { id: uuid(), componentId, x: -22, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 22, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: -30, y: -12, label: 'DO_COM' },
+        { id: uuid(), componentId, x: -30, y: -4, label: 'DO_1' },
+        { id: uuid(), componentId, x: -30, y: 4, label: 'DO_2' },
+        { id: uuid(), componentId, x: -30, y: 12, label: 'DO_3' },
+        { id: uuid(), componentId, x: 30, y: -12, label: 'DO_4' },
+        { id: uuid(), componentId, x: 30, y: -4, label: 'DO_5' },
+        { id: uuid(), componentId, x: 30, y: 4, label: 'DO_6' },
+        { id: uuid(), componentId, x: 30, y: 12, label: 'DO_7' },
+        { id: uuid(), componentId, x: 0, y: 24, label: 'DO_8' },
+      ];
     case 'ai_module':
+      return [
+        { id: uuid(), componentId, x: -22, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 22, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: -30, y: -8, label: 'AI_COM' },
+        { id: uuid(), componentId, x: -30, y: 0, label: 'AI_1' },
+        { id: uuid(), componentId, x: -30, y: 8, label: 'AI_2' },
+        { id: uuid(), componentId, x: 30, y: -8, label: 'AI_3' },
+        { id: uuid(), componentId, x: 30, y: 0, label: 'AI_4' },
+        { id: uuid(), componentId, x: 30, y: 8, label: 'SHIELD_FG' },
+      ];
     case 'ao_module':
+      return [
+        { id: uuid(), componentId, x: -22, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 22, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: -30, y: -8, label: 'AO_COM' },
+        { id: uuid(), componentId, x: -30, y: 0, label: 'AO_1' },
+        { id: uuid(), componentId, x: -30, y: 8, label: 'AO_2' },
+        { id: uuid(), componentId, x: 30, y: -8, label: 'AO_3' },
+        { id: uuid(), componentId, x: 30, y: 0, label: 'AO_4' },
+        { id: uuid(), componentId, x: 30, y: 8, label: 'SHIELD_FG' },
+      ];
     case 'relay_interface_card':
+      return [
+        { id: uuid(), componentId, x: -18, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 0, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: 18, y: -24, label: 'ETH0_RJ45' },
+        { id: uuid(), componentId, x: -30, y: -14, label: 'DO_1' },
+        { id: uuid(), componentId, x: -30, y: -6, label: 'DO_2' },
+        { id: uuid(), componentId, x: -30, y: 2, label: 'DO_3' },
+        { id: uuid(), componentId, x: -30, y: 10, label: 'DO_4' },
+        { id: uuid(), componentId, x: 30, y: -14, label: 'DO_5' },
+        { id: uuid(), componentId, x: 30, y: -6, label: 'DO_6' },
+        { id: uuid(), componentId, x: 30, y: 2, label: 'DO_7' },
+        { id: uuid(), componentId, x: 30, y: 10, label: 'DO_8' },
+      ];
     case 'iot_gateway':
+      return [
+        { id: uuid(), componentId, x: -18, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 0, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: 18, y: -24, label: 'ETH0_RJ45' },
+        { id: uuid(), componentId, x: -30, y: -10, label: 'RS485_A' },
+        { id: uuid(), componentId, x: -30, y: 0, label: 'RS485_B' },
+        { id: uuid(), componentId, x: -30, y: 10, label: 'RS485_GND' },
+        { id: uuid(), componentId, x: 30, y: -8, label: 'DI_1' },
+        { id: uuid(), componentId, x: 30, y: 0, label: 'DO_1' },
+        { id: uuid(), componentId, x: 30, y: 8, label: 'SHIELD_FG' },
+      ];
     case 'cloud_monitoring_module':
+      return [
+        { id: uuid(), componentId, x: -18, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 0, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: 18, y: -24, label: 'ETH0_RJ45' },
+        { id: uuid(), componentId, x: -30, y: -8, label: 'ETH1_RJ45' },
+        { id: uuid(), componentId, x: -30, y: 0, label: 'SHIELD_FG' },
+        { id: uuid(), componentId, x: 30, y: -8, label: 'DI_1' },
+        { id: uuid(), componentId, x: 30, y: 0, label: 'DI_2' },
+        { id: uuid(), componentId, x: 30, y: 8, label: 'DO_1' },
+      ];
     case 'energy_management_controller':
+      return [
+        { id: uuid(), componentId, x: -18, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 0, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: 18, y: -24, label: 'ETH0_RJ45' },
+        { id: uuid(), componentId, x: -30, y: -14, label: 'RS485_A' },
+        { id: uuid(), componentId, x: -30, y: -6, label: 'RS485_B' },
+        { id: uuid(), componentId, x: -30, y: 2, label: 'RS485_GND' },
+        { id: uuid(), componentId, x: 30, y: -14, label: 'DI_1' },
+        { id: uuid(), componentId, x: 30, y: -6, label: 'DI_2' },
+        { id: uuid(), componentId, x: 30, y: 2, label: 'DO_1' },
+        { id: uuid(), componentId, x: 30, y: 10, label: 'DO_2' },
+      ];
     case 'ethernet_switch':
+      return [
+        { id: uuid(), componentId, x: -22, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 22, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: -30, y: -12, label: 'ETH1_RJ45' },
+        { id: uuid(), componentId, x: -30, y: -4, label: 'ETH2_RJ45' },
+        { id: uuid(), componentId, x: -30, y: 4, label: 'ETH3_RJ45' },
+        { id: uuid(), componentId, x: 30, y: -12, label: 'ETH4_RJ45' },
+        { id: uuid(), componentId, x: 30, y: -4, label: 'ETH5_RJ45' },
+        { id: uuid(), componentId, x: 0, y: 24, label: 'SHIELD_FG' },
+      ];
     case 'signal_isolator':
+      return [
+        { id: uuid(), componentId, x: -30, y: -10, label: 'ANALOG_IN_POS' },
+        { id: uuid(), componentId, x: -30, y: 2, label: 'ANALOG_IN_NEG' },
+        { id: uuid(), componentId, x: -12, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 12, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: 30, y: -10, label: 'ANALOG_OUT_POS' },
+        { id: uuid(), componentId, x: 30, y: 2, label: 'ANALOG_OUT_NEG' },
+      ];
     case 'optocoupler_module':
-    case 'ups_module':
-    case 'dc_battery_backup':
-    case 'motor_operator_kit':
-    case 'shunt_trip_coil':
-    case 'closing_coil':
-    case 'uvr_release':
-    case 'key_interlock':
-    case 'neutral_link':
-    case 'earth_link':
-    case 'current_transformer':
-    case 'voltage_transformer':
+      return [
+        { id: uuid(), componentId, x: -30, y: -10, label: 'IN_CH1_POS' },
+        { id: uuid(), componentId, x: -30, y: 2, label: 'IN_CH1_NEG' },
+        { id: uuid(), componentId, x: -12, y: -24, label: 'PWR_24V' },
+        { id: uuid(), componentId, x: 12, y: -24, label: 'PWR_0V' },
+        { id: uuid(), componentId, x: 30, y: -10, label: 'DRY_OUT_CH1_POS' },
+        { id: uuid(), componentId, x: 30, y: 2, label: 'DRY_OUT_CH1_NEG' },
+      ];
     case 'din_rail':
     case 'mounting_plate':
     case 'cable_duct':
     case 'busbar_support_insulator':
     case 'ferrule_cable_markers':
-    case 'control_wiring':
-    case 'power_cables':
     case 'ms_gi_sheet_enclosure':
     case 'ip_rated_enclosure':
+      return [
+        { id: uuid(), componentId, x: -12, y: -22, label: 'ANCHOR_A' },
+        { id: uuid(), componentId, x: 12, y: -22, label: 'ANCHOR_B' },
+      ];
+    case 'ups_module':
+      return [
+        { id: uuid(), componentId, x: -30, y: -12, label: 'AC_IN_L' },
+        { id: uuid(), componentId, x: -30, y: -2, label: 'AC_IN_N' },
+        { id: uuid(), componentId, x: 30, y: -12, label: 'AC_OUT_L' },
+        { id: uuid(), componentId, x: 30, y: -2, label: 'AC_OUT_N' },
+        { id: uuid(), componentId, x: -10, y: 24, label: 'BAT_POS' },
+        { id: uuid(), componentId, x: 10, y: 24, label: 'BAT_NEG' },
+      ];
+    case 'dc_battery_backup':
+      return [
+        { id: uuid(), componentId, x: -14, y: -22, label: 'BAT_POS' },
+        { id: uuid(), componentId, x: 14, y: -22, label: 'BAT_NEG' },
+      ];
+    case 'motor_operator_kit':
+      return [
+        { id: uuid(), componentId, x: -20, y: -22, label: 'CTRL_L' },
+        { id: uuid(), componentId, x: 0, y: -22, label: 'CTRL_N' },
+        { id: uuid(), componentId, x: 20, y: -22, label: 'MOTOR_OUT' },
+      ];
+    case 'key_interlock':
+      return [
+        { id: uuid(), componentId, x: -12, y: -22, label: 'IN' },
+        { id: uuid(), componentId, x: 12, y: -22, label: 'OUT' },
+      ];
+    case 'neutral_link':
+      return [
+        { id: uuid(), componentId, x: -12, y: -22, label: 'N_IN' },
+        { id: uuid(), componentId, x: 12, y: -22, label: 'N_OUT' },
+      ];
+    case 'earth_link':
+      return [
+        { id: uuid(), componentId, x: -12, y: -22, label: 'PE_IN' },
+        { id: uuid(), componentId, x: 12, y: -22, label: 'PE_OUT' },
+      ];
+    case 'control_wiring':
+      return [
+        { id: uuid(), componentId, x: -12, y: -22, label: 'CTRL_FROM' },
+        { id: uuid(), componentId, x: 12, y: -22, label: 'CTRL_TO' },
+      ];
+    case 'power_cables':
+      return [
+        { id: uuid(), componentId, x: -12, y: -22, label: 'PWR_FROM' },
+        { id: uuid(), componentId, x: 12, y: -22, label: 'PWR_TO' },
+      ];
+    case 'shunt_trip_coil':
+    case 'closing_coil':
+    case 'uvr_release':
+      return [
+        { id: uuid(), componentId, x: -14, y: -22, label: 'A1' },
+        { id: uuid(), componentId, x: 14, y: -22, label: 'A2' },
+      ];
+    case 'current_transformer':
+      return [
+        { id: uuid(), componentId, x: -30, y: -10, label: 'PRI_P1' },
+        { id: uuid(), componentId, x: -30, y: 2, label: 'PRI_P2' },
+        { id: uuid(), componentId, x: 30, y: -10, label: 'SEC_S1' },
+        { id: uuid(), componentId, x: 30, y: 2, label: 'SEC_S2' },
+      ];
+    case 'voltage_transformer':
+      return [
+        { id: uuid(), componentId, x: -30, y: -10, label: 'PRI_L' },
+        { id: uuid(), componentId, x: -30, y: 2, label: 'PRI_N' },
+        { id: uuid(), componentId, x: 30, y: -10, label: 'SEC_L' },
+        { id: uuid(), componentId, x: 30, y: 2, label: 'SEC_N' },
+      ];
     case 'power_quality_analyzer':
       return [
-        { id: uuid(), componentId, x: -12, y: -22, label: 'PWR_L' },
-        { id: uuid(), componentId, x: 12, y: -22, label: 'PWR_N' },
+        { id: uuid(), componentId, x: -30, y: -12, label: 'IN_L1' },
+        { id: uuid(), componentId, x: -30, y: -4, label: 'IN_L2' },
+        { id: uuid(), componentId, x: -30, y: 4, label: 'IN_L3' },
+        { id: uuid(), componentId, x: -30, y: 12, label: 'IN_N' },
+        { id: uuid(), componentId, x: 30, y: -12, label: 'OUT_L1' },
+        { id: uuid(), componentId, x: 30, y: -4, label: 'OUT_L2' },
+        { id: uuid(), componentId, x: 30, y: 4, label: 'OUT_L3' },
+        { id: uuid(), componentId, x: 30, y: 12, label: 'OUT_N' },
+        { id: uuid(), componentId, x: -10, y: -24, label: 'AUX_24V' },
+        { id: uuid(), componentId, x: 10, y: -24, label: 'AUX_0V' },
+        { id: uuid(), componentId, x: 0, y: 24, label: 'RS485_A' },
+        { id: uuid(), componentId, x: 16, y: 24, label: 'RS485_B' },
       ];
     case 'three_phase_source':
       return [
@@ -419,14 +640,7 @@ function createConnectionPoints(
       ];
     case 'air_circuit_breaker':
       return [
-        { id: uuid(), componentId, x: -30, y: -25, label: 'IN_L1' },
-        { id: uuid(), componentId, x: -30, y: 25, label: 'OUT_L1' },
-        { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L2' },
-        { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L2' },
-        { id: uuid(), componentId, x: 10, y: -25, label: 'IN_L3' },
-        { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_L3' },
-        { id: uuid(), componentId, x: 30, y: -25, label: 'IN_N' },
-        { id: uuid(), componentId, x: 30, y: 25, label: 'OUT_N' },
+        ...acbPowerConnectionPoints(componentId),
         ...acbControlConnectionPoints(componentId),
       ];
     case 'switch':
@@ -631,6 +845,23 @@ function createConnectionPoints(
 
 function labelNorm(s: string): string {
   return s.replace(/\s+/g, '').toUpperCase();
+}
+
+function inferWireMetadata(
+  fromLabel: string,
+  toLabel: string
+): Pick<Wire, 'color' | 'wireCategory' | 'wireProtocol'> {
+  const color = inferWireColor(fromLabel, toLabel);
+  if (color === 'ethernet') {
+    const joined = `${fromLabel} ${toLabel}`.toUpperCase();
+    const protocol = joined.includes('BACNET')
+      ? 'bacnet_ip'
+      : joined.includes('MODBUS')
+        ? 'modbus_tcp'
+        : 'ethernet';
+    return { color, wireCategory: 'comm', wireProtocol: protocol };
+  }
+  return { color, wireCategory: 'control', wireProtocol: 'none' };
 }
 
 /** Effective 1P vs 2P layout for an MCB (from properties or legacy connection labels). */
@@ -928,7 +1159,15 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
     case 'dc_power_source':
       return { voltage: 24, phaseSystem: 'single_phase' };
     case 'ac_dc_converter':
-      return { voltage: 24, phaseSystem: 'single_phase' };
+      return {
+        voltage: 24,
+        phaseSystem: 'single_phase',
+        acDcInputVoltageV: 230,
+        acDcMainsFrequencyHz: 50,
+        acDcHasTransformer: true,
+        acDcRectifierType: 'bridge',
+        acDcHasRegulator: true,
+      };
     case 'control_transformer':
       return { voltage: 24, phaseSystem: 'single_phase' };
     case 'modbus_tcp_gateway':
@@ -1023,9 +1262,9 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         phaseSystem: 'single_phase',
       };
     case 'signal_isolator':
-      return { ioChannels: 2, aiSignalType: '4_20ma', phaseSystem: 'single_phase' };
+      return { ioChannels: 1, aiSignalType: '4_20ma', phaseSystem: 'single_phase' };
     case 'optocoupler_module':
-      return { ioChannels: 4, phaseSystem: 'single_phase' };
+      return { ioChannels: 1, phaseSystem: 'single_phase' };
     case 'ups_module':
       return { ratingAmps: 10, phaseSystem: 'single_phase' };
     case 'dc_battery_backup':
@@ -1333,6 +1572,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         powerFactor: 1,
         indicatorColor: 'red',
         indicatorPhaseTag: 'L',
+        indicatorSupplyType: 'ac',
         phaseSystem: 'single_phase',
       };
     case 'phase_indicator_bank':
@@ -1505,7 +1745,6 @@ function getInitialState(type: ComponentType): CircuitComponent['state'] {
     'four_phase_contactor',
     'interposing_relay',
     'aux_contact_block',
-    'door_interlock',
     'mechanical_interlock',
     'key_interlock',
   ]);
@@ -2130,7 +2369,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       toComponentId: componentId,
       toPointId: pointId,
       points: allPoints,
-      color: inferWireColor(fromPoint?.label || '', point.label),
+      ...inferWireMetadata(fromPoint?.label || '', point.label),
       crossSection: wip.crossSection || 2.5,
       energized: false,
       currentAmps: 0,
@@ -2143,7 +2382,17 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     set({ wireInProgress: null, wirePoints: [], wireOrientation: 'h' });
   },
 
-  setSelected: (id) => set({ selectedId: id }),
+  setSelected: (id) =>
+    set((state) => ({
+      selectedId: id,
+      circuit: {
+        ...state.circuit,
+        components: state.circuit.components.map((c) => ({
+          ...c,
+          selected: id !== null && c.id === id,
+        })),
+      },
+    })),
   setTool: (tool) => {
     set({ tool });
     if (tool !== 'wire') {

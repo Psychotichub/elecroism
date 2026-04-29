@@ -72,6 +72,14 @@ export class CircuitEngine {
       if (!isOpen) {
         if (this.isLoadComponent(component)) {
           energized = this.hasPolarityCorrectSupply(component, potentials);
+          if (energized && component.type === 'indicator_lamp') {
+            energized = this.indicatorLampSupplyTypeMatches(
+              component,
+              circuit,
+              terminalGraph,
+              potentials
+            );
+          }
           if (this.loadUsesBalancedThreePhaseMath(component)) {
             const serviceFactor = component.type === 'motor' ? 1.25 : 1;
             const r = this.balancedThreePhaseLineCurrentA(
@@ -380,6 +388,7 @@ export class CircuitEngine {
     }
 
     this.updateWireStates(circuit, nodes, potentials);
+    faults.push(...this.validateEthernetWires(circuit, wallMs));
     this.updateMultimeterCurrentReadings(circuit, nodes);
 
     let totalPowerW = 0;
@@ -777,7 +786,13 @@ export class CircuitEngine {
   private getDcConductorStartKeys(circuit: Circuit): string[] {
     const keys: string[] = [];
     for (const source of circuit.components) {
-      if (source.type !== 'dc_power_source') continue;
+      if (
+        source.type !== 'dc_power_source' &&
+        source.type !== 'ac_dc_converter' &&
+        source.type !== 'smps'
+      ) {
+        continue;
+      }
       if (source.state === 'off' || source.state === 'tripped') continue;
       for (const cp of source.connectionPoints) {
         const key = this.terminalKey(source.id, cp.id);
@@ -975,7 +990,6 @@ export class CircuitEngine {
           break;
         case 'switch':
         case 'door_interlock':
-        case 'mechanical_interlock':
         case 'key_interlock':
         case 'hrc_fuse':
         case 'overload_relay':
@@ -997,6 +1011,16 @@ export class CircuitEngine {
               const outKey = this.findTerminalByLabel(component, 'OUT');
               if (inKey && outKey) this.addEdge(graph, inKey, outKey);
             }
+          }
+          break;
+        case 'mechanical_interlock':
+          // Mechanical interlock is treated as NC permissive contact:
+          // state==='off' => closed (conducting), state==='on' => open.
+          // This keeps behavior distinct from door interlock (NO style).
+          if (component.state !== 'on' && !skipInternalBridge) {
+            const inKey = this.findTerminalByLabel(component, 'IN');
+            const outKey = this.findTerminalByLabel(component, 'OUT');
+            if (inKey && outKey) this.addEdge(graph, inKey, outKey);
           }
           break;
         case 'rcd':
@@ -1131,9 +1155,7 @@ export class CircuitEngine {
           break;
         }
         case 'energy_meter':
-        case 'digital_multifunction_meter':
-          // Multifunction meter is a pass-through (CTs are clamp-on / shunt
-          // internally — current still flows uninterrupted).
+          // Energy meter path is always pass-through (metering-only element).
           if (!skipInternalBridge) {
             const pairs: [string, string][] = [
               ['IN_L1', 'OUT_L1'],
@@ -1146,6 +1168,150 @@ export class CircuitEngine {
               const bk = this.findTerminalByLabel(component, b);
               if (ak && bk) this.addEdge(graph, ak, bk);
             }
+          }
+          break;
+        case 'digital_multifunction_meter':
+          // DMFM pass-through is explicitly state-controlled so it can be used
+          // as a supervisory metering/isolated section marker in studies.
+          if (!skipInternalBridge && component.state === 'on') {
+            const pairs: [string, string][] = [
+              ['IN_L1', 'OUT_L1'],
+              ['IN_L2', 'OUT_L2'],
+              ['IN_L3', 'OUT_L3'],
+              ['IN_N', 'OUT_N'],
+            ];
+            for (const [a, b] of pairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
+          }
+          break;
+        case 'signal_isolator':
+          // Analog isolator keeps channel continuity while preserving logical
+          // galvanic split semantics (input pair to output pair).
+          if (!skipInternalBridge) {
+            const pairs: [string, string][] = [
+              ['ANALOG_IN_POS', 'ANALOG_OUT_POS'],
+              ['ANALOG_IN_NEG', 'ANALOG_OUT_NEG'],
+            ];
+            for (const [a, b] of pairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
+          }
+          break;
+        case 'optocoupler_module':
+          // Optocoupler path is explicitly enabled/disabled by component state:
+          // on = dry output follows isolated input channel, off = open circuit.
+          if (!skipInternalBridge && component.state === 'on') {
+            const pairs: [string, string][] = [
+              ['IN_CH1_POS', 'DRY_OUT_CH1_POS'],
+              ['IN_CH1_NEG', 'DRY_OUT_CH1_NEG'],
+            ];
+            for (const [a, b] of pairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
+          }
+          break;
+        case 'ups_module':
+          if (!skipInternalBridge && component.state === 'on') {
+            const pairs: [string, string][] = [
+              ['AC_IN_L', 'AC_OUT_L'],
+              ['AC_IN_N', 'AC_OUT_N'],
+            ];
+            for (const [a, b] of pairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
+          }
+          break;
+        case 'neutral_link':
+          if (!skipInternalBridge) {
+            const a = this.findTerminalByLabel(component, 'N_IN');
+            const b = this.findTerminalByLabel(component, 'N_OUT');
+            if (a && b) this.addEdge(graph, a, b);
+          }
+          break;
+        case 'earth_link':
+          if (!skipInternalBridge) {
+            const a = this.findTerminalByLabel(component, 'PE_IN');
+            const b = this.findTerminalByLabel(component, 'PE_OUT');
+            if (a && b) this.addEdge(graph, a, b);
+          }
+          break;
+        case 'control_wiring':
+          if (!skipInternalBridge) {
+            const a = this.findTerminalByLabel(component, 'CTRL_FROM');
+            const b = this.findTerminalByLabel(component, 'CTRL_TO');
+            if (a && b) this.addEdge(graph, a, b);
+          }
+          break;
+        case 'power_cables':
+          if (!skipInternalBridge) {
+            const a = this.findTerminalByLabel(component, 'PWR_FROM');
+            const b = this.findTerminalByLabel(component, 'PWR_TO');
+            if (a && b) this.addEdge(graph, a, b);
+          }
+          break;
+        case 'current_transformer':
+          // Simplified CT continuity: primary path and measured secondary loop
+          // are modeled as separate bridged pairs.
+          if (!skipInternalBridge) {
+            const pairs: [string, string][] = [
+              ['PRI_P1', 'PRI_P2'],
+              ['SEC_S1', 'SEC_S2'],
+            ];
+            for (const [a, b] of pairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
+          }
+          break;
+        case 'voltage_transformer':
+          // VT keeps primary/secondary pathways explicit for studies while
+          // preserving distinct labels from generic control transformers.
+          if (!skipInternalBridge) {
+            const pairs: [string, string][] = [
+              ['PRI_L', 'SEC_L'],
+              ['PRI_N', 'SEC_N'],
+            ];
+            for (const [a, b] of pairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
+          }
+          break;
+        case 'power_quality_analyzer':
+          // PQA is a metering element with pass-through measurement taps.
+          if (!skipInternalBridge) {
+            const pairs: [string, string][] = [
+              ['IN_L1', 'OUT_L1'],
+              ['IN_L2', 'OUT_L2'],
+              ['IN_L3', 'OUT_L3'],
+              ['IN_N', 'OUT_N'],
+            ];
+            for (const [a, b] of pairs) {
+              const ak = this.findTerminalByLabel(component, a);
+              const bk = this.findTerminalByLabel(component, b);
+              if (ak && bk) this.addEdge(graph, ak, bk);
+            }
+          }
+          break;
+        case 'shunt_trip_coil':
+        case 'closing_coil':
+        case 'uvr_release':
+          // Coil modules are closed control elements only when energized.
+          if (!skipInternalBridge && component.state === 'on') {
+            const a1 = this.findTerminalByLabel(component, 'A1');
+            const a2 = this.findTerminalByLabel(component, 'A2');
+            if (a1 && a2) this.addEdge(graph, a1, a2);
           }
           break;
         case 'control_transformer':
@@ -1465,6 +1631,38 @@ export class CircuitEngine {
     return vLN;
   }
 
+  private estimateDcVoltageBetweenProbeKeys(
+    circuit: Circuit,
+    probeAKey: string,
+    probeBKey: string
+  ): number {
+    const pickDcSourceVoltage = (key: string): number | null => {
+      const parsed = this.splitTerminalKey(key);
+      if (!parsed) return null;
+      const comp = circuit.components.find((c) => c.id === parsed.componentId);
+      if (!comp) return null;
+      const cp = comp.connectionPoints.find((p) => p.id === parsed.pointId);
+      if (!cp) return null;
+      const lbl = cp.label.toUpperCase();
+      const isDcTerminal = lbl.includes('PLUS') || lbl.includes('MINUS');
+      if (!isDcTerminal) return null;
+      if (
+        comp.type === 'dc_power_source' ||
+        comp.type === 'ac_dc_converter' ||
+        comp.type === 'smps'
+      ) {
+        return comp.properties.voltage ?? 24;
+      }
+      return null;
+    };
+
+    const fromA = pickDcSourceVoltage(probeAKey);
+    if (fromA !== null) return fromA;
+    const fromB = pickDcSourceVoltage(probeBKey);
+    if (fromB !== null) return fromB;
+    return this.defaultDcLoadVoltage(circuit);
+  }
+
   private measureMultimeter(
     component: CircuitComponent,
     circuit: Circuit,
@@ -1509,7 +1707,10 @@ export class CircuitEngine {
     const autoSignal: 'ac' | 'dc' =
       dcReach.has(kCom) && dcReach.has(kIn) ? 'dc' : 'ac';
     const signal = selectedSignal === 'auto' ? autoSignal : selectedSignal;
-    const voltageV = this.estimateVoltageBetweenTags(tCom, tIn, circuit, signal);
+    const voltageV =
+      signal === 'dc'
+        ? this.estimateDcVoltageBetweenProbeKeys(circuit, kCom, kIn)
+        : this.estimateVoltageBetweenTags(tCom, tIn, circuit, signal);
     return {
       connected,
       voltageV,
@@ -1688,6 +1889,29 @@ export class CircuitEngine {
       if (hasLive && hasNeutral) return true;
     }
     return false;
+  }
+
+  private indicatorLampSupplyTypeMatches(
+    component: CircuitComponent,
+    circuit: Circuit,
+    graph: Map<string, Set<string>>,
+    potentials: PotentialSets
+  ): boolean {
+    if (component.type !== 'indicator_lamp') return true;
+    const supplyType = component.properties.indicatorSupplyType ?? 'ac';
+    const l = component.connectionPoints.find((cp) => cp.label.toUpperCase() === 'L');
+    const n = component.connectionPoints.find((cp) => cp.label.toUpperCase() === 'N');
+    if (!l || !n) return false;
+    const lKey = this.terminalKey(component.id, l.id);
+    const nKey = this.terminalKey(component.id, n.id);
+
+    const dcReach = this.bfsFrom(graph, this.getDcConductorStartKeys(circuit));
+    const dcPair = dcReach.has(lKey) && dcReach.has(nKey);
+    if (supplyType === 'dc') return dcPair;
+
+    // AC mode: require classic line↔neutral relation and avoid DC pair nets.
+    const acPair = this.linePotentialAt(potentials, lKey) && potentials.neutral.has(nKey);
+    return acPair && !dcPair;
   }
 
   private isLoadComponent(component: CircuitComponent): boolean {
@@ -2120,6 +2344,62 @@ export class CircuitEngine {
         0
       );
     }
+  }
+
+  private validateEthernetWires(
+    circuit: Circuit,
+    wallMs: number
+  ): FaultEvent[] {
+    const cpLabel = (
+      componentId: string,
+      pointId: string
+    ): string | null => {
+      const c = circuit.components.find((x) => x.id === componentId);
+      const cp = c?.connectionPoints.find((p) => p.id === pointId);
+      return cp?.label ?? null;
+    };
+    const isEthernetTerminal = (label: string | null): boolean => {
+      const u = (label ?? '').toUpperCase();
+      return (
+        u.includes('ETH') ||
+        u.includes('RJ45') ||
+        u.includes('LAN') ||
+        u.includes('MODBUS_TCP') ||
+        u.includes('BACNET_IP')
+      );
+    };
+
+    const out: FaultEvent[] = [];
+    for (const wire of circuit.wires) {
+      const fromLabel = cpLabel(wire.fromComponentId, wire.fromPointId);
+      const toLabel = cpLabel(wire.toComponentId, wire.toPointId);
+      const fromIsEth = isEthernetTerminal(fromLabel);
+      const toIsEth = isEthernetTerminal(toLabel);
+      const endpointLooksEthernet = fromIsEth || toIsEth;
+      const isEthernetWire =
+        wire.color === 'ethernet' || wire.wireProtocol === 'ethernet';
+
+      if (endpointLooksEthernet && !isEthernetWire) {
+        out.push({
+          id: crypto.randomUUID(),
+          type: 'overload',
+          affectedComponentId: wire.fromComponentId,
+          message: `Ethernet terminal mismatch: wire "${wire.id}" should be ethernet type.`,
+          severity: 'warning',
+          timestamp: wallMs,
+        });
+      } else if (!endpointLooksEthernet && wire.color === 'ethernet') {
+        out.push({
+          id: crypto.randomUUID(),
+          type: 'overload',
+          affectedComponentId: wire.fromComponentId,
+          message: `Ethernet wire "${wire.id}" connects non-ethernet terminals.`,
+          severity: 'warning',
+          timestamp: wallMs,
+        });
+      }
+    }
+    return out;
   }
 
 }

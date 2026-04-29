@@ -1,5 +1,5 @@
 import React from 'react';
-import { Line, Circle } from 'react-konva';
+import { Line, Circle, Text } from 'react-konva';
 import type { Wire } from '../../types';
 import { getWireColor, getWireWidth } from '../../utils/geometry';
 
@@ -16,6 +16,18 @@ const WireSegment: React.FC<Props> = ({ wire, onSelect, selected }) => {
   const strokeWidth = selected ? width + 1 : width;
   const isEarthWire = wire.color === 'green_yellow';
   const isNeutralWire = wire.color === 'blue';
+  const isEthernetWire = wire.color === 'ethernet';
+  const mid = (() => {
+    const pairCount = Math.floor(wire.points.length / 2);
+    if (pairCount < 2) return null;
+    const i1 = Math.max(0, Math.floor((pairCount - 1) / 2));
+    const i2 = Math.min(pairCount - 1, i1 + 1);
+    const x1 = wire.points[i1 * 2];
+    const y1 = wire.points[i1 * 2 + 1];
+    const x2 = wire.points[i2 * 2];
+    const y2 = wire.points[i2 * 2 + 1];
+    return { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+  })();
 
   return (
     <>
@@ -54,6 +66,7 @@ const WireSegment: React.FC<Props> = ({ wire, onSelect, selected }) => {
             stroke={color}
             strokeWidth={strokeWidth}
             opacity={opacity}
+            dash={isEthernetWire ? [10, 6] : undefined}
             lineCap="round"
             lineJoin="round"
             hitStrokeWidth={8}
@@ -72,6 +85,19 @@ const WireSegment: React.FC<Props> = ({ wire, onSelect, selected }) => {
               opacity={Math.min(1, opacity + 0.04)}
               lineCap="round"
               lineJoin="round"
+              listening={false}
+            />
+          )}
+          {isEthernetWire && mid && (
+            <Text
+              x={mid.x - 11}
+              y={mid.y - 8}
+              width={22}
+              text="ETH"
+              align="center"
+              fontSize={7}
+              fill="#67E8F9"
+              fontStyle="bold"
               listening={false}
             />
           )}

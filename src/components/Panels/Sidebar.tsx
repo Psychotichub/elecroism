@@ -2,6 +2,14 @@ import React, { useEffect, useState } from 'react';
 import type { ComponentType } from '../../types';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import {
+  clearDragComponentType,
+  setDragComponentType,
+} from '../../utils/dragState';
+import {
+  COMPONENT_PANEL_DESCRIPTIONS,
+  formatComponentPanelHelpText,
+} from '../../utils/componentPanelInfo';
+import {
   FiZap,
   FiShield,
   FiToggleLeft,
@@ -49,9 +57,9 @@ const GROUPS: ComponentGroup[] = [
       },
       {
         type: 'ac_dc_converter',
-        label: 'AC/DC Converter',
+        label: 'AC/DC Converter (linear)',
         icon: <FiZap />,
-        detail: 'Mains → DC bus, output V adj.',
+        detail: 'XFMR → RECT → C → REG · vs SMPS symbol',
       },
       {
         type: 'three_phase_source',
@@ -625,6 +633,7 @@ const Sidebar: React.FC = () => {
   };
 
   const handleDragStart = (e: React.DragEvent, item: ComponentItem) => {
+    setDragComponentType(item.type);
     e.dataTransfer.setData('componentType', item.type);
     if (item.type === 'push_button') {
       e.dataTransfer.setData('pushButtonVariant', 'NO');
@@ -637,6 +646,10 @@ const Sidebar: React.FC = () => {
       e.dataTransfer.setData('mcbInitialPoles', '');
     }
     e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  const handleDragEnd = () => {
+    clearDragComponentType();
   };
 
   return (
@@ -675,6 +688,10 @@ const Sidebar: React.FC = () => {
                       key={`${item.type}-${idx}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, item)}
+                      onDragEnd={handleDragEnd}
+                      title={formatComponentPanelHelpText(
+                        COMPONENT_PANEL_DESCRIPTIONS[item.type]
+                      )}
                       className={`flex items-center gap-2 px-3 py-1.5 mx-1 rounded cursor-grab ${tc.itemHover} transition-colors active:cursor-grabbing`}
                     >
                       <span className={`text-base ${tc.groupLabel}`}>

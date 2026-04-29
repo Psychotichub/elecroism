@@ -1,6 +1,6 @@
 import React from 'react';
 import { Group, Rect, Text, Circle, Line } from 'react-konva';
-import type { CircuitComponent, NodeResult } from '../../types';
+import type { CircuitComponent, ConnectionPoint, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
@@ -23,6 +23,20 @@ const CommInfraSymbol: React.FC<Props> = ({
 }) => {
   const OUTLINE = 1.6;
   const energized = nodeResult?.energized || false;
+  const moduleType =
+    component.type === 'relay_interface_card'
+      ? 'relay'
+      : component.type === 'modbus_rtu_module'
+        ? 'rtu'
+      : component.type === 'communication_converter'
+        ? 'converter'
+      : component.type === 'iot_gateway'
+        ? 'iot'
+      : component.type === 'cloud_monitoring_module'
+        ? 'cloud'
+      : component.type === 'energy_management_controller'
+        ? 'emc'
+      : 'switch';
   const title =
     component.type === 'relay_interface_card'
       ? 'RELAY IF'
@@ -68,7 +82,7 @@ const CommInfraSymbol: React.FC<Props> = ({
 
   const body = { left: -30, right: 30, top: -22, bottom: 22 };
   const pinLen = 10;
-  const pinFromTerminal = (cp: { x: number; y: number }) => {
+  const pinFromTerminal = (cp: ConnectionPoint) => {
     if (component.type === 'modbus_rtu_module' && cp.label === 'DO_NC') {
       const y = Math.max(body.top + 2, Math.min(body.bottom - 2, cp.y));
       return { sx: body.right, sy: y, ex: body.right + pinLen, ey: y, side: 'right' as const };
@@ -92,6 +106,67 @@ const CommInfraSymbol: React.FC<Props> = ({
     }
     const x = Math.max(body.left + 2, Math.min(body.right - 2, cp.x));
     return { sx: x, sy: body.bottom, ex: x, ey: body.bottom + pinLen, side: 'bottom' as const };
+  };
+
+  const renderFrontDetails = () => {
+    if (moduleType === 'switch') {
+      return (
+        <>
+          {[-18, -9, 0, 9, 18].map((x, i) => (
+            <Rect
+              key={`sw-port-${i}`}
+              x={x - 3.2}
+              y={8}
+              width={6.4}
+              height={5}
+              fill="#0F172A"
+              stroke="#22D3EE"
+              strokeWidth={0.6}
+              listening={false}
+            />
+          ))}
+        </>
+      );
+    }
+    if (moduleType === 'relay') {
+      return (
+        <>
+          {[-16, -8, 0, 8, 16].map((x, i) => (
+            <Rect
+              key={`relay-ch-${i}`}
+              x={x - 3}
+              y={8}
+              width={6}
+              height={5}
+              fill="#111827"
+              stroke="#F59E0B"
+              strokeWidth={0.6}
+              listening={false}
+            />
+          ))}
+        </>
+      );
+    }
+    if (moduleType === 'rtu' || moduleType === 'converter') {
+      return (
+        <>
+          <Line points={[-18, 10, -2, 10]} stroke="#7C2D12" strokeWidth={1.1} listening={false} />
+          <Line points={[2, 10, 18, 10]} stroke="#1D4ED8" strokeWidth={1.1} listening={false} />
+          <Circle x={-20} y={10} radius={1.5} fill="#7C2D12" listening={false} />
+          <Circle x={20} y={10} radius={1.5} fill="#1D4ED8" listening={false} />
+        </>
+      );
+    }
+    if (moduleType === 'iot' || moduleType === 'cloud' || moduleType === 'emc') {
+      return (
+        <>
+          <Line points={[-10, 9, 0, 5, 10, 9]} stroke="#0EA5E9" strokeWidth={0.9} listening={false} />
+          <Line points={[-10, 12, 0, 8, 10, 12]} stroke="#0284C7" strokeWidth={0.9} listening={false} />
+          <Circle x={0} y={13.5} radius={1.6} fill="#22C55E" listening={false} />
+        </>
+      );
+    }
+    return null;
   };
 
   return (
@@ -139,6 +214,24 @@ const CommInfraSymbol: React.FC<Props> = ({
           shadowOpacity={0.2}
           shadowOffsetY={1}
         />
+        <Rect
+          x={-30}
+          y={-22}
+          width={60}
+          height={5}
+          fill={
+            moduleType === 'switch'
+              ? '#0F766E'
+              : moduleType === 'relay'
+                ? '#92400E'
+                : moduleType === 'rtu' || moduleType === 'converter'
+                  ? '#7C2D12'
+                  : '#0C4A6E'
+          }
+          opacity={0.9}
+          cornerRadius={[4, 4, 0, 0]}
+          listening={false}
+        />
         <Text
           text={title}
           x={-28}
@@ -160,6 +253,7 @@ const CommInfraSymbol: React.FC<Props> = ({
           fill="#475569"
           listening={false}
         />
+        {renderFrontDetails()}
         {energized && <Circle x={22} y={-14} radius={2.8} fill="#22C55E" />}
         <ComponentCanvasLabel
           componentId={component.id}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Group, Rect, Text, Circle } from 'react-konva';
+import { Group, Rect, Text, Circle, Line } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
@@ -23,6 +23,21 @@ const PowerAuxSymbol: React.FC<Props> = ({
 }) => {
   const OUTLINE = 1.6;
   const energized = nodeResult?.energized || false;
+  const isPriorityDevice =
+    component.type === 'uvr_release' ||
+    component.type === 'shunt_trip_coil' ||
+    component.type === 'closing_coil' ||
+    component.type === 'current_transformer' ||
+    component.type === 'voltage_transformer' ||
+    component.type === 'power_quality_analyzer';
+  const accentColor =
+    component.type === 'power_quality_analyzer'
+      ? '#0EA5E9'
+      : component.type === 'current_transformer' || component.type === 'voltage_transformer'
+        ? '#7C3AED'
+        : component.type === 'shunt_trip_coil' || component.type === 'closing_coil' || component.type === 'uvr_release'
+          ? '#DC2626'
+          : '#16A34A';
   const title =
     component.type === 'ups_module'
       ? 'UPS'
@@ -159,6 +174,7 @@ const PowerAuxSymbol: React.FC<Props> = ({
           shadowOpacity={0.2}
           shadowOffsetY={1}
         />
+        <Rect x={-28} y={-20} width={56} height={5} fill={accentColor} cornerRadius={4} />
         <Text
           text={title}
           x={-26}
@@ -180,6 +196,43 @@ const PowerAuxSymbol: React.FC<Props> = ({
           fill="#4B5563"
           listening={false}
         />
+        {isPriorityDevice && (
+          <>
+            {(component.type === 'shunt_trip_coil' ||
+              component.type === 'closing_coil' ||
+              component.type === 'uvr_release') && (
+              <Line
+                points={[-14, 8, -10, 4, -6, 12, -2, 4, 2, 12, 6, 4, 10, 12, 14, 8]}
+                stroke="#B91C1C"
+                strokeWidth={1.2}
+                listening={false}
+              />
+            )}
+            {(component.type === 'current_transformer' ||
+              component.type === 'voltage_transformer') && (
+              <>
+                <Circle x={-8} y={8} radius={4} stroke="#6D28D9" strokeWidth={1.2} fill="#F5F3FF" />
+                <Circle x={8} y={8} radius={4} stroke="#6D28D9" strokeWidth={1.2} fill="#F5F3FF" />
+                <Line points={[-4, 8, 4, 8]} stroke="#6D28D9" strokeWidth={1.2} listening={false} />
+              </>
+            )}
+            {component.type === 'power_quality_analyzer' && (
+              <>
+                <Line points={[-16, 12, -8, 7, -1, 11, 8, 5, 16, 9]} stroke="#0284C7" strokeWidth={1.4} />
+                <Text
+                  text="THD"
+                  x={-10}
+                  y={10}
+                  width={20}
+                  align="center"
+                  fontSize={5}
+                  fill="#0C4A6E"
+                  listening={false}
+                />
+              </>
+            )}
+          </>
+        )}
         {energized && <Circle x={20} y={-12} radius={2.8} fill="#22C55E" />}
         <ComponentCanvasLabel
           componentId={component.id}

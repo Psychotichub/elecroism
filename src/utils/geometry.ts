@@ -33,6 +33,7 @@ export function getWireColor(color: string): string {
     black: '#111827',
     grey: '#4B5563',
     red: '#B91C1C',
+    ethernet: '#0891B2',
   };
   return colors[color] || '#1F2937';
 }

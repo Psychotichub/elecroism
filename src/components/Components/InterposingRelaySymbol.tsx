@@ -27,13 +27,14 @@ interface Props {
  */
 const InterposingRelaySymbol: React.FC<Props> = ({
   component,
-  nodeResult: _nodeResult,
+  nodeResult,
   onSelect,
   onDragEnd,
   showConnectionPoints,
   selected,
 }) => {
   const isOn = component.state === 'on';
+  const simEnergized = nodeResult?.energized ?? false;
   const coilV = component.properties.relayCoilVoltage ?? 24;
 
   return (
@@ -98,9 +99,9 @@ const InterposingRelaySymbol: React.FC<Props> = ({
           x={10}
           y={-15}
           radius={3}
-          fill={isOn ? '#22C55E' : '#9CA3AF'}
-          stroke={isOn ? '#14532D' : undefined}
-          strokeWidth={isOn ? 0.6 : 0}
+          fill={simEnergized || isOn ? '#22C55E' : '#9CA3AF'}
+          stroke={simEnergized || isOn ? '#14532D' : undefined}
+          strokeWidth={simEnergized || isOn ? 0.6 : 0}
         />
 
         <Line points={[0, -22, 0, -26]} stroke="#374151" strokeWidth={2} />

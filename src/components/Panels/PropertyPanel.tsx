@@ -8,6 +8,11 @@ import type {
   PhaseSystem,
 } from '../../types';
 import { clampComponentScale, getWireColor } from '../../utils/geometry';
+import {
+  COMPONENT_PANEL_DESCRIPTIONS,
+  WIRE_PANEL_DESCRIPTION,
+  formatComponentPanelHelpText,
+} from '../../utils/componentPanelInfo';
 
 const WIRE_COLORS: { value: WireColor; label: string }[] = [
   { value: 'brown', label: 'Brown (L)' },
@@ -145,6 +150,10 @@ const PropertyPanel: React.FC = () => {
       </div>
     );
   }
+
+  const componentPanelInfo = selectedComp
+    ? COMPONENT_PANEL_DESCRIPTIONS[selectedComp.type]
+    : null;
 
   const updateProp = (
     updates: Partial<ComponentProperties> & {
@@ -1029,49 +1038,165 @@ const PropertyPanel: React.FC = () => {
     </>
   );
 
-  const renderAcDcConverterProps = () => (
-    <>
-      <Label text="DC output voltage (V)">
-        <input
-          type="number"
-          value={selectedComp!.properties.voltage ?? 24}
-          onChange={(e) =>
-            updateProp({
-              voltage: Math.max(0, Number(e.target.value) || 0),
-            })
-          }
-          className="input-field"
-          min={0}
-          step={0.1}
-        />
-      </Label>
-      <Label text="Presets">
-        <div className="flex gap-1 flex-wrap">
-          {[5, 12, 24, 48, 110].map((preset) => (
-            <button
-              key={preset}
-              type="button"
-              onClick={() => updateProp({ voltage: preset })}
-              className={`px-2 py-1 rounded text-xs ${
-                (selectedComp!.properties.voltage ?? 24) === preset
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-600 text-gray-300'
-              }`}
-            >
-              {preset} V
-            </button>
-          ))}
-        </div>
-      </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
-        Wire <strong>AC_L</strong> and <strong>AC_N</strong> to mains. The
-        converter only energizes its DC bus when both are present (polarity
-        respected). <strong>DC_PLUS</strong> behaves like L, <strong>DC_MINUS</strong>{' '}
-        like N for downstream devices. Output current isn’t back-propagated to
-        the AC side in the simulator.
-      </p>
-    </>
-  );
+  const renderAcDcConverterProps = () => {
+    const p = selectedComp!.properties;
+    return (
+      <>
+        <Label text="DC output voltage (V)">
+          <input
+            type="number"
+            value={p.voltage ?? 24}
+            onChange={(e) =>
+              updateProp({
+                voltage: Math.max(0, Number(e.target.value) || 0),
+              })
+            }
+            className="input-field"
+            min={0}
+            step={0.1}
+          />
+        </Label>
+        <Label text="Presets (DC out)">
+          <div className="flex gap-1 flex-wrap">
+            {[5, 12, 24, 48, 110].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => updateProp({ voltage: preset })}
+                className={`px-2 py-1 rounded text-xs ${
+                  (p.voltage ?? 24) === preset
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-600 text-gray-300'
+                }`}
+              >
+                {preset} V
+              </button>
+            ))}
+          </div>
+        </Label>
+        <Label text="Nominal AC input (Vrms)">
+          <input
+            type="number"
+            value={p.acDcInputVoltageV ?? 230}
+            onChange={(e) =>
+              updateProp({
+                acDcInputVoltageV: Math.max(1, Number(e.target.value) || 230),
+              })
+            }
+            className="input-field"
+            min={1}
+            step={1}
+          />
+        </Label>
+        <Label text="Mains frequency">
+          <select
+            value={String(p.acDcMainsFrequencyHz ?? 50)}
+            onChange={(e) =>
+              updateProp({
+                acDcMainsFrequencyHz: Number(e.target.value) as 50 | 60,
+              })
+            }
+            className="input-field"
+          >
+            <option value="50">50 Hz</option>
+            <option value="60">60 Hz</option>
+          </select>
+        </Label>
+        <Label text="Stage 1: mains transformer">
+          <select
+            value={(p.acDcHasTransformer ?? true) ? 'yes' : 'no'}
+            onChange={(e) =>
+              updateProp({ acDcHasTransformer: e.target.value === 'yes' })
+            }
+            className="input-field"
+          >
+            <option value="yes">Yes (isolation / step-down)</option>
+            <option value="no">No (direct-off-line after fuse — faceplate only)</option>
+          </select>
+        </Label>
+        <Label text="Stage 2: rectifier type">
+          <select
+            value={p.acDcRectifierType ?? 'bridge'}
+            onChange={(e) =>
+              updateProp({
+                acDcRectifierType: e.target.value as
+                  | 'half_wave'
+                  | 'full_wave'
+                  | 'bridge',
+              })
+            }
+            className="input-field"
+          >
+            <option value="half_wave">Half-wave (1 diode)</option>
+            <option value="full_wave">Full-wave (2 diodes + CT)</option>
+            <option value="bridge">Bridge (4 diodes)</option>
+          </select>
+        </Label>
+        <Label text="Stage 4: voltage regulator">
+          <select
+            value={(p.acDcHasRegulator ?? true) ? 'yes' : 'no'}
+            onChange={(e) =>
+              updateProp({ acDcHasRegulator: e.target.value === 'yes' })
+            }
+            className="input-field"
+          >
+            <option value="yes">Yes (smooth DC at setpoint)</option>
+            <option value="no">No (raw filtered bus — faceplate only)</option>
+          </select>
+        </Label>
+        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+          Wire <strong>AC_L</strong> and <strong>AC_N</strong> to mains. The
+          simulator energizes <strong>DC_PLUS</strong> / <strong>DC_MINUS</strong>{' '}
+          when AC is present (same as before). Stages above are educational: they
+          change the symbol only. Use the separate <strong>SMPS</strong> component
+          for high-frequency switch-mode supplies.
+        </p>
+        <details
+          className={`rounded border ${tc.border} ${theme === 'dark' ? 'bg-black/20' : 'bg-gray-50'} px-2 py-1.5`}
+        >
+          <summary
+            className={`text-[11px] cursor-pointer select-none ${tc.textBright}`}
+          >
+            Theory: rectification and linear AC→DC
+          </summary>
+          <div
+            className={`mt-2 space-y-2 text-[10px] leading-snug ${tc.textMuted}`}
+          >
+            <p>
+              An AC→DC converter changes grid AC (which reverses direction) into DC
+              (one direction). That process is called <strong>rectification</strong>.
+              Most loads still need a <strong>filter</strong> (capacitor) to smooth
+              ripple and often a <strong>regulator</strong> for a stable output
+              voltage.
+            </p>
+            <p>
+              <strong>Why it is needed:</strong> grids supply AC (e.g. 230 V / 50 Hz),
+              while electronics and batteries use DC — so wall-powered devices include
+              rectification and regulation.
+            </p>
+            <p>
+              <strong>Stages (typical linear path):</strong> (1) optional transformer
+              for isolation or voltage step-down; (2) rectifier — diodes conduct only
+              one way (half-wave uses one diode, full-wave two, bridge four); (3)
+              filter capacitor smooths pulsating DC; (4) linear regulator holds V
+              against load and ripple.
+            </p>
+            <p>
+              A full-wave rectified waveform follows an idealised{' '}
+              <strong>|sin(θ)|</strong> envelope (shown on the symbol). Real ripple
+              and losses are not modeled numerically here.
+            </p>
+            <p>
+              <strong>vs SMPS:</strong> a linear supply is simpler and can be very
+              clean electrically but is bulky and inefficient. Switch-mode supplies
+              (phone chargers, PC bricks) use high-frequency conversion for efficiency;
+              use the <strong>SMPS</strong> symbol for that topology.
+            </p>
+          </div>
+        </details>
+      </>
+    );
+  };
 
   const renderDcPowerSourceProps = () => (
     <>
@@ -2344,8 +2469,36 @@ const PropertyPanel: React.FC = () => {
 
   const renderWireProps = () => {
     if (!selectedWire) return null;
+    const wi = WIRE_PANEL_DESCRIPTION;
     return (
       <>
+        <div
+          className={`rounded-md border p-2.5 space-y-2 ${tc.border} ${theme === 'dark' ? 'bg-black/25' : 'bg-gray-50'}`}
+          aria-label={formatComponentPanelHelpText(wi)}
+        >
+          <h3 className={`text-xs font-semibold ${tc.textBright}`}>
+            {wi.displayName}
+          </h3>
+          <p className={`text-[11px] leading-snug ${tc.text}`}>{wi.description}</p>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wide ${tc.textMuted} mb-1`}>
+              Features
+            </p>
+            <ul
+              className={`text-[11px] leading-snug list-disc list-inside space-y-0.5 ${tc.text}`}
+            >
+              {wi.features.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className={`text-[10px] uppercase tracking-wide ${tc.textMuted} mb-0.5`}>
+              Purpose
+            </p>
+            <p className={`text-[11px] leading-snug ${tc.text}`}>{wi.purpose}</p>
+          </div>
+        </div>
         <Label text="Wire Color">
           <div className="space-y-1.5">
             {WIRE_COLORS.map((wc) => (
@@ -2572,10 +2725,31 @@ const PropertyPanel: React.FC = () => {
             ))}
           </div>
         </Label>
+        <Label text="Supply type">
+          <div className="flex gap-1">
+            {([
+              { v: 'ac', l: 'AC' },
+              { v: 'dc', l: 'DC' },
+            ] as const).map((s) => (
+              <button
+                key={s.v}
+                type="button"
+                onClick={() => updateProp({ indicatorSupplyType: s.v })}
+                className={`flex-1 px-2 py-1 rounded text-xs ${
+                  (selectedComp!.properties.indicatorSupplyType ?? 'ac') === s.v
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-600 text-gray-300'
+                }`}
+              >
+                {s.l}
+              </button>
+            ))}
+          </div>
+        </Label>
         <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
           Wire <strong>L</strong> to the phase you want indicated and{' '}
-          <strong>N</strong> to neutral. The lamp lights any time both terminals
-          see a valid live ↔ neutral pair.
+          <strong>N</strong> to neutral / return. The lamp lights only when the
+          selected supply type matches the connected network.
         </p>
       </>
     );
@@ -3839,6 +4013,44 @@ const PropertyPanel: React.FC = () => {
                 {selectedComp.type.replace(/_/g, ' ')}
               </span>
             </Label>
+
+            {componentPanelInfo && (
+              <div
+                className={`rounded-md border p-2.5 space-y-2 ${tc.border} ${theme === 'dark' ? 'bg-black/25' : 'bg-gray-50'}`}
+                aria-label={formatComponentPanelHelpText(componentPanelInfo)}
+              >
+                <h3 className={`text-xs font-semibold ${tc.textBright}`}>
+                  {componentPanelInfo.displayName}
+                </h3>
+                <p className={`text-[11px] leading-snug ${tc.text}`}>
+                  {componentPanelInfo.description}
+                </p>
+                <div>
+                  <p
+                    className={`text-[10px] uppercase tracking-wide ${tc.textMuted} mb-1`}
+                  >
+                    Features
+                  </p>
+                  <ul
+                    className={`text-[11px] leading-snug list-disc list-inside space-y-0.5 ${tc.text}`}
+                  >
+                    {componentPanelInfo.features.map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p
+                    className={`text-[10px] uppercase tracking-wide ${tc.textMuted} mb-0.5`}
+                  >
+                    Purpose
+                  </p>
+                  <p className={`text-[11px] leading-snug ${tc.text}`}>
+                    {componentPanelInfo.purpose}
+                  </p>
+                </div>
+              </div>
+            )}
 
             <Label text="Visual scale">
               <div className="flex items-center gap-2">

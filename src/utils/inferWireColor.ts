@@ -20,6 +20,13 @@ function tokenize(label: string): string[] {
     .filter(Boolean);
 }
 
+function labelImpliesEthernet(label: string): boolean {
+  const u = label.toUpperCase().trim();
+  if (!u) return false;
+  if (u.includes('RJ45') || u.includes('ETH') || u.includes('LAN')) return true;
+  return /\b(ETHERNET|MODBUS_TCP|BACNET_IP)\b/.test(u);
+}
+
 function inferFromTokens(tokens: string[]): WireColor | null {
   const has = (t: string) => tokens.includes(t);
 
@@ -46,6 +53,10 @@ export function inferWireColor(
   fromLabel: string,
   toLabel: string
 ): WireColor {
+  if (labelImpliesEthernet(fromLabel) || labelImpliesEthernet(toLabel)) {
+    return 'ethernet';
+  }
+
   if (labelImpliesEarth(fromLabel) || labelImpliesEarth(toLabel)) {
     return 'green_yellow';
   }

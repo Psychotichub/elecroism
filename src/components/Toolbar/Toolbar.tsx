@@ -146,6 +146,19 @@ const Toolbar: React.FC = () => {
       } else if (ctrl && e.key === 'n') {
         e.preventDefault();
         clearCircuit();
+      } else if (ctrl && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        const { circuit: liveCircuit } = useCircuitStore.getState();
+        useCircuitStore.setState({
+          selectedId: null,
+          circuit: {
+            ...liveCircuit,
+            components: liveCircuit.components.map((c) => ({
+              ...c,
+              selected: true,
+            })),
+          },
+        });
       } else {
         // AutoCAD-style single key shortcuts
         const keyMap: Record<string, ToolMode> = {
@@ -168,9 +181,14 @@ const Toolbar: React.FC = () => {
         } else if (e.key === 'f' || e.key === 'F') {
           handleFitToScreen();
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
-          const { selectedId, removeComponent, removeWire } =
+          const { selectedId, removeComponent, removeWire, circuit: liveCircuit } =
             useCircuitStore.getState();
-          if (selectedId) {
+          const selectedComponentIds = liveCircuit.components
+            .filter((c) => c.selected)
+            .map((c) => c.id);
+          if (selectedComponentIds.length > 0) {
+            selectedComponentIds.forEach((id) => removeComponent(id));
+          } else if (selectedId) {
             const isWire = circuit.wires.some(
               (w) => w.id === selectedId
             );
