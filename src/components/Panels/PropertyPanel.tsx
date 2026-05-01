@@ -2467,6 +2467,62 @@ const PropertyPanel: React.FC = () => {
     );
   };
 
+  const renderTimerProps = () => (
+    <>
+      <Label text="Timer mode">
+        <span className={`text-xs ${tc.textMuted}`}>
+          ON-delay (coil energizes first, contact closes after delay)
+        </span>
+      </Label>
+      <Label text="Delay (ms)">
+        <input
+          type="number"
+          value={selectedComp!.properties.timerDelayMs ?? 1000}
+          onChange={(e) =>
+            updateProp({ timerDelayMs: Math.max(0, Number(e.target.value) || 0) })
+          }
+          className="input-field"
+          min={0}
+          step={100}
+        />
+      </Label>
+      <Label text="Quick presets">
+        <div className="flex gap-1 flex-wrap">
+          {[200, 500, 1000, 3000, 5000, 10000].map((ms) => (
+            <button
+              key={ms}
+              type="button"
+              onClick={() => updateProp({ timerDelayMs: ms })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.timerDelayMs ?? 1000) === ms
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(ms % 1000 ? 1 : 0)}s`}
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="Contact state">
+        <span
+          className={`text-xs font-medium ${
+            selectedComp!.state === 'on' ? 'text-green-400' : tc.textMuted
+          }`}
+        >
+          {selectedComp!.state === 'on'
+            ? 'NO closed, NC open — delay elapsed'
+            : 'NC closed, NO open — waiting for coil + delay'}
+        </span>
+      </Label>
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Wire <strong>A1/A2</strong> as timer coil supply. Use{' '}
+        <strong>COM↔NO</strong> for delayed make and <strong>COM↔NC</strong> for
+        delayed break behavior. The timer resets instantly when coil drops.
+      </p>
+    </>
+  );
+
   const renderWireProps = () => {
     if (!selectedWire) return null;
     const wi = WIRE_PANEL_DESCRIPTION;
@@ -3920,6 +3976,8 @@ const PropertyPanel: React.FC = () => {
       case 'three_phase_contactor':
       case 'four_phase_contactor':
         return renderThreePhaseContactorProps();
+      case 'timer':
+        return renderTimerProps();
       case 'estop':
         return renderEStopProps();
       case 'door_interlock':

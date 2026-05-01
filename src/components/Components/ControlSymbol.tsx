@@ -32,6 +32,7 @@ const ControlSymbol: React.FC<Props> = ({
   const isOn = component.state === 'on';
   const energized = nodeResult?.energized || false;
   const isContactor = component.type === 'contactor';
+  const isTimer = component.type === 'timer';
 
   const getLabel = () => {
     switch (component.type) {
@@ -76,7 +77,7 @@ const ControlSymbol: React.FC<Props> = ({
           x={-22}
           y={-30}
           width={44}
-          height={isContactor ? 86 : 60}
+          height={isContactor || isTimer ? 86 : 60}
           stroke="#3B82F6"
           strokeWidth={2}
           dash={[4, 4]}
@@ -271,6 +272,109 @@ const ControlSymbol: React.FC<Props> = ({
         </>
       )}
 
+      {isTimer && (
+        <>
+          <Rect
+            x={-18}
+            y={32}
+            width={36}
+            height={24}
+            fill={isOn ? '#F0FDF4' : '#F9FAFB'}
+            stroke="#9CA3AF"
+            strokeWidth={1}
+            cornerRadius={2}
+            dash={[3, 2]}
+          />
+          <Text
+            text="T"
+            x={-15}
+            y={34}
+            width={8}
+            fontSize={7}
+            fontStyle="bold"
+            fill="#374151"
+            listening={false}
+          />
+
+          <Line points={[-12, 44, -12, 35]} stroke="#374151" strokeWidth={1.5} />
+          <Line points={[12, 38, 12, 35]} stroke="#374151" strokeWidth={1.5} />
+          <Line points={[12, 50, 12, 53]} stroke="#374151" strokeWidth={1.5} />
+
+          {isOn ? (
+            <>
+              <Line points={[-12, 44, 8, 38]} stroke="#22C55E" strokeWidth={1.5} />
+              <Line points={[-12, 44, 6, 49]} stroke="#9CA3AF" strokeWidth={1.1} />
+            </>
+          ) : (
+            <>
+              <Line points={[-12, 44, 8, 50]} stroke="#22C55E" strokeWidth={1.5} />
+              <Line points={[-12, 44, 6, 39]} stroke="#9CA3AF" strokeWidth={1.1} />
+            </>
+          )}
+
+          <Text
+            text="15"
+            x={-24}
+            y={38}
+            width={12}
+            fontSize={6}
+            fill="#111827"
+            align="right"
+            listening={false}
+          />
+          <Text
+            text="18"
+            x={2}
+            y={31}
+            width={16}
+            fontSize={6}
+            fill="#111827"
+            align="left"
+            listening={false}
+          />
+          <Text
+            text="16"
+            x={2}
+            y={49}
+            width={16}
+            fontSize={6}
+            fill="#111827"
+            align="left"
+            listening={false}
+          />
+          <Text
+            text="COM"
+            x={-27}
+            y={46}
+            width={16}
+            fontSize={4.5}
+            fill="#6B7280"
+            align="right"
+            listening={false}
+          />
+          <Text
+            text="NO"
+            x={10}
+            y={31}
+            width={12}
+            fontSize={4.5}
+            fill="#6B7280"
+            align="left"
+            listening={false}
+          />
+          <Text
+            text="NC"
+            x={10}
+            y={49}
+            width={12}
+            fontSize={4.5}
+            fill="#6B7280"
+            align="left"
+            listening={false}
+          />
+        </>
+      )}
+
       {showConnectionPoints &&
         component.connectionPoints.map((cp) => (
           <Circle
@@ -304,19 +408,26 @@ const ControlSymbol: React.FC<Props> = ({
         );
       })}
 
-      {component.connectionPoints.map((cp) => (
-        <Text
-          key={`${cp.id}-term-label`}
-          text={cp.label}
-          x={cp.x - 14}
-          y={cp.y + 7}
-          width={28}
-          fontSize={6}
-          fill="#374151"
-          align="center"
-          listening={false}
-        />
-      ))}
+      {component.connectionPoints.map((cp) => {
+        const upper = cp.label.toUpperCase();
+        // Timer face already renders dedicated IEC+functional labels for these.
+        if (isTimer && (upper === 'COM' || upper === 'NO' || upper === 'NC')) {
+          return null;
+        }
+        return (
+          <Text
+            key={`${cp.id}-term-label`}
+            text={cp.label}
+            x={cp.x - 14}
+            y={cp.y + 7}
+            width={28}
+            fontSize={6}
+            fill="#374151"
+            align="center"
+            listening={false}
+          />
+        );
+      })}
 
       </ScaledSymbolInner>
     </Group>

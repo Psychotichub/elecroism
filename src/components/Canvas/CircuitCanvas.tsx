@@ -197,6 +197,7 @@ const CircuitCanvas: React.FC = () => {
     addComponent,
     setPushButtonPressed,
     updateComponent,
+    runSimulation,
   } = useCircuitStore();
 
   /**
@@ -1189,6 +1190,17 @@ const CircuitCanvas: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [cancelWire, setSelected]);
+
+  // Keep time-dependent devices (e.g. timer ON-delay) progressing even when
+  // the user is not interacting with the canvas.
+  useEffect(() => {
+    const hasTimer = circuit.components.some((c) => c.type === 'timer');
+    if (!hasTimer) return;
+    const id = window.setInterval(() => {
+      runSimulation();
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [circuit.components, runSimulation]);
 
   return (
     <div

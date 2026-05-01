@@ -720,13 +720,20 @@ function createConnectionPoints(
     case 'contactor':
     case 'relay':
     case 'smart_relay':
-    case 'timer':
       return [
         { id: uuid(), componentId, x: 0, y: -25, label: 'IN' },
         { id: uuid(), componentId, x: 0, y: 25, label: 'OUT' },
         { id: uuid(), componentId, x: -20, y: 0, label: 'A1' },
         { id: uuid(), componentId, x: 20, y: 0, label: 'A2' },
         ...(type === 'contactor' ? contactorAuxConnectionPoints(componentId) : []),
+      ];
+    case 'timer':
+      return [
+        { id: uuid(), componentId, x: 0, y: -25, label: 'COM' },
+        { id: uuid(), componentId, x: -14, y: 25, label: 'NC' },
+        { id: uuid(), componentId, x: 14, y: 25, label: 'NO' },
+        { id: uuid(), componentId, x: -20, y: 0, label: 'A1' },
+        { id: uuid(), componentId, x: 20, y: 0, label: 'A2' },
       ];
     case 'three_phase_contactor':
       return [
@@ -1553,8 +1560,9 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
     case 'contactor':
     case 'relay':
     case 'smart_relay':
-    case 'timer':
       return { ratingAmps: 25, phaseSystem: 'single_phase' };
+    case 'timer':
+      return { ratingAmps: 25, timerDelayMs: 1000, phaseSystem: 'single_phase' };
     case 'estop':
       return { phaseSystem: 'single_phase' };
     case 'door_interlock':
@@ -2330,7 +2338,9 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   finishWire: (componentId, pointId) => {
     const wip = get().wireInProgress;
     if (!wip || !wip.fromComponentId || !wip.fromPointId) return;
-    if (wip.fromComponentId === componentId) return;
+    if (wip.fromComponentId === componentId && wip.fromPointId === pointId) {
+      return;
+    }
 
     const comp = get().circuit.components.find(
       (c) => c.id === componentId
@@ -2362,6 +2372,20 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     } else {
       allPoints = [...pts, absX, absY];
     }
+
+    const existing = get().circuit.wires;
+    const duplicate = existing.some(
+      (w) =>
+        (w.fromComponentId === wip.fromComponentId &&
+          w.fromPointId === wip.fromPointId &&
+          w.toComponentId === componentId &&
+          w.toPointId === pointId) ||
+        (w.fromComponentId === componentId &&
+          w.fromPointId === pointId &&
+          w.toComponentId === wip.fromComponentId &&
+          w.toPointId === wip.fromPointId)
+    );
+    if (duplicate) return;
 
     get().addWire({
       fromComponentId: wip.fromComponentId,

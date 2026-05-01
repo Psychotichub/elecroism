@@ -19,6 +19,8 @@ interface PotentialSets {
 }
 
 export class CircuitEngine {
+  /** Runtime ON-delay latch start time for timer relays. */
+  private timerCoilEnergizedSinceMs = new Map<string, number>();
   /** Single-phase load voltage: AC supply if present, else first DC supply, else 230 V nominal. */
   private defaultSinglePhaseLoadVoltage(circuit: Circuit): number {
     const ac = circuit.components.find((c) => c.type === 'power_source');
@@ -39,7 +41,7 @@ export class CircuitEngine {
       return this.buildDegradedResult(circuit);
     }
 
-    const contactorPickup = this.computeContactorPickupFixpoint(circuit);
+    const contactorPickup = this.computeContactorPickupFixpoint(circuit, wallMs);
     const terminalGraph = this.buildTerminalGraph(
       circuit,
       null,
@@ -905,7 +907,19 @@ export class CircuitEngine {
    * Main poles close only when the coil sees live↔neutral. Iterates so a
    * downstream contactor can pick up after an upstream one closes.
    */
-  private computeContactorPickupFixpoint(circuit: Circuit): Set<string> {
+  private computeContactorPickupFixpoint(
+    circuit: Circuit,
+    wallMs: number
+  ): Set<string> {
+    const timerIdsInCircuit = new Set(
+      circuit.components.filter((c) => c.type === 'timer').map((c) => c.id)
+    );
+    for (const id of this.timerCoilEnergizedSinceMs.keys()) {
+      if (!timerIdsInCircuit.has(id)) {
+        this.timerCoilEnergizedSinceMs.delete(id);
+      }
+    }
+
     let pickup = new Set<string>();
     for (let iter = 0; iter < 16; iter++) {
       const graph = this.buildTerminalGraph(circuit, null, pickup);
@@ -913,7 +927,23 @@ export class CircuitEngine {
       const next = new Set<string>();
       for (const c of circuit.components) {
         if (!this.isCoilActuatedContactorType(c.type)) continue;
-        if (this.coilHasOperatingVoltage(c, potentials)) {
+        const coilHot = this.coilHasOperatingVoltage(c, potentials);
+        if (c.type === 'timer') {
+          const delayMs = Math.max(0, c.properties.timerDelayMs ?? 1000);
+          if (!coilHot) {
+            this.timerCoilEnergizedSinceMs.delete(c.id);
+            continue;
+          }
+          const since = this.timerCoilEnergizedSinceMs.get(c.id) ?? wallMs;
+          if (!this.timerCoilEnergizedSinceMs.has(c.id)) {
+            this.timerCoilEnergizedSinceMs.set(c.id, since);
+          }
+          if (wallMs - since >= delayMs) {
+            next.add(c.id);
+          }
+          continue;
+        }
+        if (coilHot) {
           next.add(c.id);
         }
       }
@@ -1089,7 +1119,6 @@ export class CircuitEngine {
         case 'contactor':
         case 'relay':
         case 'smart_relay':
-        case 'timer':
           if (!skipInternalBridge && contactorPickupSet) {
             const pickedUp = contactorPickupSet.has(component.id);
             if (pickedUp) {
@@ -1098,6 +1127,25 @@ export class CircuitEngine {
               if (inKey && outKey) this.addEdge(graph, inKey, outKey);
             }
             this.bridgeAuxContacts(graph, component, pickedUp);
+          }
+          break;
+        case 'timer':
+          if (!skipInternalBridge && contactorPickupSet) {
+            const pickedUp = contactorPickupSet.has(component.id);
+            const com = this.findTerminalByLabel(component, 'COM');
+            const no = this.findTerminalByLabel(component, 'NO');
+            const nc = this.findTerminalByLabel(component, 'NC');
+
+            // Preferred timer terminals: COM/NO/NC.
+            if (com && no && pickedUp) this.addEdge(graph, com, no);
+            if (com && nc && !pickedUp) this.addEdge(graph, com, nc);
+
+            // Backward compatibility for older projects using IN/OUT as timed NO.
+            if (pickedUp) {
+              const inKey = this.findTerminalByLabel(component, 'IN');
+              const outKey = this.findTerminalByLabel(component, 'OUT');
+              if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+            }
           }
           break;
         case 'interposing_relay':

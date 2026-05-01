@@ -256,7 +256,11 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
   timer: {
     displayName: 'Timer',
     description: 'Time-delay relay for on-delay, off-delay, or star-delta sequences.',
-    features: ['Delay parameters', 'Picked-up contact behaviour after timing'],
+    features: [
+      'Configurable ON-delay in property panel (ms)',
+      'Coil must energize first (A1/A2), then IN↔OUT closes after delay',
+      'Timer resets when coil drops',
+    ],
     purpose: 'Motor star-delta, exhaust fan overrun, or sequential start logic.',
   },
   overload_relay: {

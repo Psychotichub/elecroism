@@ -282,6 +282,8 @@ export interface ComponentProperties {
   indicatorPhaseTag?: 'L' | 'L1' | 'L2' | 'L3' | 'N' | 'PE' | 'AUX';
   /** Indicator lamp wiring family to accept for energization. */
   indicatorSupplyType?: 'ac' | 'dc';
+  /** Timer relay ON-delay before IN↔OUT closes after coil energizes. */
+  timerDelayMs?: number;
 
   /** Interposing-relay coil voltage label (V) — 24 V DC typical for BMS DOs. */
   relayCoilVoltage?: number;
@@ -341,6 +343,8 @@ export interface ComponentProperties {
 
 /** Merged into `ComponentProperties` (declaration merge) for AC→DC converter faceplate fields. */
 export interface ComponentProperties {
+  /** Timer relay ON-delay before IN↔OUT closes after coil energizes. */
+  timerDelayMs?: number;
   /** AC–DC converter: nominal AC input (Vrms) — faceplate / documentation. */
   acDcInputVoltageV?: number;
   /** AC–DC converter: mains frequency (display). */
