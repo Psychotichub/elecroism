@@ -319,6 +319,14 @@ export class CircuitEngine {
       }
     }
 
+    faults.push(
+      ...this.validateContactorOverloadFaults(
+        seriesPathCurrents,
+        contactorPickup,
+        wallMs
+      )
+    );
+
     let anySeriesDeviceTripped = false;
     for (const component of circuit.components) {
       if (!this.isSeriesProtectionDevice(component)) continue;
@@ -2392,6 +2400,59 @@ export class CircuitEngine {
         0
       );
     }
+  }
+
+  /**
+   * Contactor poles are not protective devices — overload is normally cleared
+   * by upstream MCB/fuse. Here we still flag unsafe current vs nameplate
+   * `ratingAmps` when the contactor is picked up (main poles closed).
+   */
+  private validateContactorOverloadFaults(
+    seriesPathCurrents: Map<string, number>,
+    contactorPickup: Set<string>,
+    wallMs: number
+  ): FaultEvent[] {
+    const out: FaultEvent[] = [];
+    for (const c of circuit.components) {
+      if (
+        c.type !== 'contactor' &&
+        c.type !== 'three_phase_contactor' &&
+        c.type !== 'four_phase_contactor'
+      ) {
+        continue;
+      }
+      if (!contactorPickup.has(c.id)) continue;
+
+      const branch = seriesPathCurrents.get(c.id) ?? 0;
+      const rating = Math.max(0.5, c.properties.ratingAmps ?? 25);
+      const tag =
+        c.type === 'three_phase_contactor'
+          ? '3P contactor'
+          : c.type === 'four_phase_contactor'
+            ? '4P contactor'
+            : 'Contactor';
+
+      if (branch > rating * 10) {
+        out.push({
+          id: crypto.randomUUID(),
+          type: 'short_circuit',
+          affectedComponentId: c.id,
+          message: `${tag} "${c.label}": ${branch.toFixed(0)}A through closed poles >> ${rating}A rating — prospective bolted fault or severe coordination error.`,
+          severity: 'critical',
+          timestamp: wallMs,
+        });
+      } else if (branch > rating * 1.1) {
+        out.push({
+          id: crypto.randomUUID(),
+          type: 'overload',
+          affectedComponentId: c.id,
+          message: `${tag} "${c.label}": main-path current ${branch.toFixed(1)}A exceeds nameplate ${rating}A (~>110%) while poles are closed — undersized device or missing upstream protection.`,
+          severity: 'critical',
+          timestamp: wallMs,
+        });
+      }
+    }
+    return out;
   }
 
   private validateEthernetWires(

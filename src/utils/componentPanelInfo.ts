@@ -238,7 +238,11 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
     displayName: 'Contactor',
     description:
       'Power-switching device with coil; main contacts close when coil is energized.',
-    features: ['A1/A2 coil energization model', 'Auxiliary NO/NC feedback where configured'],
+    features: [
+      'A1/A2 coil energization model',
+      'Auxiliary NO/NC feedback where configured',
+      'Simulation fault if main-path current exceeds nameplate rating while closed',
+    ],
     purpose: 'Motor starters, lighting banks, or any remotely switched load.',
   },
   relay: {
@@ -329,13 +333,21 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
   three_phase_contactor: {
     displayName: 'Three-pole contactor',
     description: 'Three-pole power contactor for motor or heater switching.',
-    features: ['Coil pickup', 'Three line poles'],
+    features: [
+      'Coil pickup',
+      'Three line poles',
+      'Simulation fault if summed load current exceeds nameplate rating while closed',
+    ],
     purpose: 'Motor starters, capacitor steps, or 3φ load switching.',
   },
   four_phase_contactor: {
     displayName: 'Four-pole contactor',
     description: 'Contactor switching L1–L3 and neutral.',
-    features: ['Four switched poles', 'Coil-controlled'],
+    features: [
+      'Four switched poles',
+      'Coil-controlled',
+      'Simulation fault if main-path current exceeds nameplate rating while closed',
+    ],
     purpose: 'Loads needing switched neutral or certain IT/TT configurations.',
   },
   estop: {
