@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import Toolbar from './components/Toolbar/Toolbar';
-import Sidebar from './components/Panels/Sidebar';
-import CircuitCanvas from './components/Canvas/CircuitCanvas';
-import InspectorColumn from './components/Panels/InspectorColumn';
+const Sidebar = lazy(() => import('./components/Panels/Sidebar'));
+const CircuitCanvas = lazy(() => import('./components/Canvas/CircuitCanvas'));
+const InspectorColumn = lazy(() => import('./components/Panels/InspectorColumn'));
 import StatusBar from './components/Panels/StatusBar';
 import FaultDialog from './components/Dialogs/FaultDialog';
 import ContinuityBuzzer from './components/Audio/ContinuityBuzzer';
@@ -75,7 +75,16 @@ function App() {
             areaName="Sidebar"
             fallbackClassName={`h-full min-h-0 w-56 shrink-0 ${errPanel}`}
           >
-            <Sidebar />
+            <Suspense
+              fallback={
+                <div
+                  className={`h-full min-h-0 w-56 shrink-0 animate-pulse ${tc.panel} border-r ${tc.border}`}
+                  aria-hidden
+                />
+              }
+            >
+              <Sidebar />
+            </Suspense>
           </AppErrorBoundary>
         )}
         <button
@@ -105,7 +114,16 @@ function App() {
             areaName="Inspector"
             fallbackClassName={`h-full min-h-0 w-80 shrink-0 ${errPanel}`}
           >
-            <InspectorColumn />
+            <Suspense
+              fallback={
+                <div
+                  className={`h-full min-h-0 w-80 shrink-0 animate-pulse ${tc.panel} border-l ${tc.border}`}
+                  aria-hidden
+                />
+              }
+            >
+              <InspectorColumn />
+            </Suspense>
           </AppErrorBoundary>
         )}
       </div>
