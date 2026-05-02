@@ -1,4 +1,28 @@
-import type { Circuit, ComponentType, ToolMode } from '../types';
+import type {
+  Circuit,
+  ComponentType,
+  ToolMode,
+  WireColor,
+} from '../types';
+import { DEFAULT_WIRE_OBJECT_SNAP_MODES } from '../types';
+import { useCircuitStore } from '../store/circuitStore';
+import { parseWireStyleLayerArg } from './wireStyleLayers';
+
+const WIRE_COLOR_CMD: Record<string, WireColor> = {
+  brown: 'brown',
+  blue: 'blue',
+  black: 'black',
+  grey: 'grey',
+  gray: 'grey',
+  red: 'red',
+  gy: 'green_yellow',
+  g_y: 'green_yellow',
+  green_yellow: 'green_yellow',
+  'green/yellow': 'green_yellow',
+  earth: 'green_yellow',
+  pe: 'green_yellow',
+  ethernet: 'ethernet',
+};
 
 const BASE_COMMAND_HINTS: string[] = [
   'add',
@@ -9,6 +33,38 @@ const BASE_COMMAND_HINTS: string[] = [
   'pan',
   'select',
   'wire',
+  'osnap',
+  'osnap all',
+  'osnap none',
+  'snap',
+  'grid',
+  'ortho',
+  'autoroute',
+  'autowire',
+  'trim',
+  'extend',
+  'join',
+  'break',
+  'fillet',
+  'wirecolor',
+  'wiretype',
+  'wirelayer',
+  'wirestyle',
+  'power_ac',
+  'power_dc',
+  'control_ac',
+  'control_dc',
+  'earth_pe',
+  'communication',
+  'instrumentation_analog',
+  'labels',
+  'labels on',
+  'labels off',
+  'normalize',
+  'cleanup',
+  'wiresch',
+  'wireschedule',
+  'exportwires',
   'z',
   'ze',
   'zi',
@@ -194,7 +250,15 @@ export function runCadCommand(ctx: CadCommandContext): string {
   const cmd = parts[0];
   if (!cmd) return '';
 
-  if (cmd === 'help' || cmd === '?') return 'Cmds: s,w,pan,add,clear,z,zi,zo,ze,c';
+  if (cmd === 'help' || cmd === '?') {
+    return [
+      'wire|w line|l · select|s · pan|p · ortho · snap|grid · osnap [all|none]',
+      'autoroute|autowire · wirecolor <color|auto> · wiretype power|control|comm|auto',
+      'break (click segment) · trim (two interior grips) · extend [from|to] (then click crossing wire)',
+      'join · fillet 0 · labels [on|off] · wirelayer power_ac|…|instrumentation_analog',
+      'z ze zi zo · add <type> [x y] · copy · clear',
+    ].join(' — ');
+  }
   if (cmd === 'select' || cmd === 's') {
     setTool('select');
     return 'Tool set to Select';
@@ -202,6 +266,157 @@ export function runCadCommand(ctx: CadCommandContext): string {
   if (cmd === 'wire' || cmd === 'l' || cmd === 'line' || cmd === 'w') {
     setTool('wire');
     return 'Tool set to Wire';
+  }
+  if (cmd === 'osnap') {
+    const arg = parts[1];
+    if (arg === 'all' || arg === 'default') {
+      useCircuitStore.setState({
+        wireObjectSnapEnabled: true,
+        wireSnapModes: { ...DEFAULT_WIRE_OBJECT_SNAP_MODES },
+      });
+      return 'Object snap on — connection, endpoint, midpoint, intersection';
+    }
+    if (arg === 'none') {
+      useCircuitStore.setState({
+        wireObjectSnapEnabled: false,
+        wireSnapModes: {
+          connection: false,
+          endpoint: false,
+          midpoint: false,
+          intersection: false,
+        },
+      });
+      return 'Object snap off (all modes)';
+    }
+    useCircuitStore.getState().toggleWireObjectSnap();
+    const on = useCircuitStore.getState().wireObjectSnapEnabled;
+    return `Wire object snap master: ${on ? 'on' : 'off'}`;
+  }
+  if (cmd === 'snap') {
+    useCircuitStore.getState().toggleWireGridSnap();
+    const on = useCircuitStore.getState().wireGridSnapEnabled;
+    return `Wire grid snap: ${on ? 'on' : 'off'}`;
+  }
+  if (cmd === 'grid') {
+    useCircuitStore.getState().toggleWireGridSnap();
+    const on = useCircuitStore.getState().wireGridSnapEnabled;
+    return `Wire grid snap: ${on ? 'on' : 'off'}`;
+  }
+  if (cmd === 'ortho') {
+    useCircuitStore.getState().toggleWireOrtho();
+    const on = useCircuitStore.getState().wireOrthoEnabled;
+    return `Wire ortho: ${on ? 'on' : 'off'}`;
+  }
+  if (cmd === 'autoroute' || cmd === 'autowire') {
+    useCircuitStore.getState().toggleWireAutoRoute();
+    const on = useCircuitStore.getState().wireAutoRouteEnabled;
+    return `Wire auto-route (terminal-to-terminal): ${on ? 'on' : 'off'}`;
+  }
+  if (cmd === 'wirecolor') {
+    const arg = parts[1];
+    if (!arg || arg === 'auto' || arg === 'default') {
+      useCircuitStore.getState().patchWireDraftStyle({ color: null });
+      return 'Next wire color: auto (from terminals)';
+    }
+    const color = WIRE_COLOR_CMD[arg];
+    if (!color) {
+      return `Unknown color "${arg}". Try: brown blue black grey red gy ethernet`;
+    }
+    useCircuitStore.getState().patchWireDraftStyle({ color });
+    return `Next wire color: ${color}`;
+  }
+  if (cmd === 'wiretype') {
+    const arg = parts[1];
+    if (!arg || arg === 'auto' || arg === 'default') {
+      useCircuitStore.getState().patchWireDraftStyle({ wireCategory: null });
+      return 'Next wire category: auto (from terminals)';
+    }
+    if (arg === 'power' || arg === 'control' || arg === 'comm') {
+      useCircuitStore.getState().patchWireDraftStyle({ wireCategory: arg });
+      return `Next wire category: ${arg}`;
+    }
+    return 'Usage: wiretype power|control|comm|auto';
+  }
+  if (cmd === 'wirelayer' || cmd === 'wirestyle') {
+    const raw = parts.slice(1).join(' ').replace(/\s+/g, '_').toLowerCase();
+    if (!raw || raw === 'auto' || raw === 'none' || raw === 'clear' || raw === 'off') {
+      useCircuitStore.getState().patchWireDraftStyle({ styleLayer: null });
+      return 'Next wire style layer: off (use terminals / wirecolor)';
+    }
+    const layer = parseWireStyleLayerArg(raw);
+    if (!layer) {
+      return 'Unknown layer. Try: power_ac power_dc control_ac control_dc earth_pe neutral communication instrumentation_analog';
+    }
+    useCircuitStore.getState().patchWireDraftStyle({ styleLayer: layer });
+    return `Next wire style layer: ${layer}`;
+  }
+  if (cmd === 'fillet') {
+    const arg = parts[1];
+    if (arg === '0' || arg === 'zero') {
+      useCircuitStore.getState().setWireOrthoEnabled(true);
+      return 'Fillet radius 0: ortho on (square corners)';
+    }
+    return 'Usage: fillet 0  (turns ortho on for square corners)';
+  }
+  if (cmd === 'break') {
+    setTool('select');
+    useCircuitStore.getState().setWireCadEditMode('break');
+    return 'Break: click a wire segment (splits at junction). Esc cancels.';
+  }
+  if (cmd === 'trim') {
+    setTool('select');
+    useCircuitStore.getState().setWireCadEditMode('trim');
+    return 'Trim: select wire, tap two interior vertex grips to reroute between them. Esc cancels.';
+  }
+  if (cmd === 'extend') {
+    setTool('select');
+    const endArg = parts[1];
+    const end: 'from' | 'to' =
+      endArg === 'to' || endArg === 'end' ? 'to' : 'from';
+    const st = useCircuitStore.getState();
+    st.setWireCadExtendEnd(end);
+    st.setWireCadEditMode('extend');
+    return `Extend (${end} end): select wire, then click a crossing wire. Usage: extend | extend to | extend from. Esc cancels.`;
+  }
+  if (cmd === 'join') {
+    const st = useCircuitStore.getState();
+    const sid = st.selectedId;
+    if (!sid) return 'Join: select a wire (simplify collinear) or a junction (merge two wires)';
+    const comp = st.circuit.components.find((c) => c.id === sid);
+    if (comp?.type === 'junction') {
+      return st.mergeWiresAtJunction(sid) || 'Merged wires through junction';
+    }
+    if (st.circuit.wires.some((w) => w.id === sid)) {
+      return st.simplifyWireCollinear(sid) || 'Removed collinear bends';
+    }
+    return 'Join: select a wire or junction first';
+  }
+  if (cmd === 'normalize' || cmd === 'cleanup') {
+    const st = useCircuitStore.getState();
+    const sid = st.selectedId;
+    if (!sid || !st.circuit.wires.some((w) => w.id === sid)) {
+      return 'Normalize: select a wire first';
+    }
+    return st.normalizeWireRoute(sid) || 'Normalized wire polyline';
+  }
+  if (cmd === 'wiresch' || cmd === 'wireschedule' || cmd === 'exportwires') {
+    useCircuitStore.getState().exportWireScheduleCsv();
+    return 'Wire schedule CSV downloaded';
+  }
+  if (cmd === 'labels') {
+    const v = parts[1];
+    const st = useCircuitStore.getState();
+    if (v === 'off' || v === '0' || v === 'hide') {
+      st.setCircuitWireLabelsVisible(false);
+      return 'Wire labels: hidden';
+    }
+    if (v === 'on' || v === '1' || v === 'show') {
+      st.setCircuitWireLabelsVisible(true);
+      return 'Wire labels: visible';
+    }
+    const cur = st.circuit.wireLabelsVisible !== false;
+    st.setCircuitWireLabelsVisible(!cur);
+    return `Wire labels: ${!cur ? 'visible' : 'hidden'}`;
   }
   if (cmd === 'pan' || cmd === 'p') {
     setTool('pan');

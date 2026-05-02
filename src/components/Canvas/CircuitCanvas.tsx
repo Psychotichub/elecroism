@@ -11,6 +11,7 @@ import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import GridLayer from './GridLayer';
 import WireLayer from './WireLayer';
+import WireGripLayer from './WireGripLayer';
 import WireToolOverlay from './WireToolOverlay';
 import SwitchSymbol from '../Components/SwitchSymbol';
 import MCBSymbol from '../Components/MCBSymbol';
@@ -55,7 +56,17 @@ import {
   connectionPointWorld,
   terminalOutwardOrientation,
 } from '../../utils/geometry';
+import {
+  resolveWireDrawSnap,
+  type WireSnapKind,
+} from '../../utils/wireSnap';
 import { inferWireColor } from '../../utils/inferWireColor';
+import {
+  buildWireFinishPolyline,
+  wireFinishDuplicateExists,
+  wirePreviewTypeTag,
+} from '../../utils/wirePreview';
+import { checkWireConnection } from '../../utils/wireConnectionRules';
 import {
   getCadCommandSuggestions,
   runCadCommand,
@@ -64,6 +75,21 @@ import {
   clearDragComponentType,
   getDragComponentType,
 } from '../../utils/dragState';
+import { findClosestSegmentIndexOnWire } from '../../utils/wireEditOps';
+
+/**
+ * Read component type from a palette drag. Custom MIME is not always readable
+ * during dragover; text/plain mirrors the type for broader browser support.
+ * Do not clear {@link getDragComponentType} on canvas dragleave — that fires
+ * spuriously while the drag is still active (e.g. between nested targets).
+ */
+function readPaletteComponentType(dt: DataTransfer): ComponentType | undefined {
+  const mime = dt.getData('componentType');
+  if (mime) return mime as ComponentType;
+  const plain = dt.getData('text/plain').trim();
+  if (plain) return plain as ComponentType;
+  return getDragComponentType() as ComponentType | undefined;
+}
 
 const CircuitCanvas: React.FC = () => {
   const resolveComponentCommand = useCallback((raw: string): ComponentType | null => {
@@ -79,6 +105,38 @@ const CircuitCanvas: React.FC = () => {
       'pan',
       'select',
       'wire',
+      'osnap',
+      'osnap all',
+      'osnap none',
+      'snap',
+      'grid',
+      'ortho',
+      'autoroute',
+      'autowire',
+      'trim',
+      'extend',
+      'join',
+      'break',
+      'fillet',
+      'wirecolor',
+      'wiretype',
+      'wirelayer',
+      'wirestyle',
+      'power_ac',
+      'power_dc',
+      'control_ac',
+      'control_dc',
+      'earth_pe',
+      'communication',
+      'instrumentation_analog',
+      'labels',
+      'labels on',
+      'labels off',
+      'normalize',
+      'cleanup',
+      'wiresch',
+      'wireschedule',
+      'exportwires',
       'z',
       'ze',
       'zi',
@@ -101,6 +159,7 @@ const CircuitCanvas: React.FC = () => {
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const ctrlOrMetaPressedRef = useRef(false);
+  const shiftPressedRef = useRef(false);
   const suppressStageClickRef = useRef(false);
   /** Middle-button drag pan (any tool); null when not dragging. */
   const middlePanRef = useRef<{ lastX: number; lastY: number } | null>(null);
@@ -172,6 +231,21 @@ const CircuitCanvas: React.FC = () => {
     x: number;
     y: number;
   } | null>(null);
+  const [wireSnapHud, setWireSnapHud] = useState<{
+    label: string;
+    kind: WireSnapKind;
+  } | null>(null);
+
+  const hoveredConnectionPointRef = useRef(hoveredConnectionPoint);
+  const paletteOpenRef = useRef(paletteOpen);
+
+  useEffect(() => {
+    hoveredConnectionPointRef.current = hoveredConnectionPoint;
+  }, [hoveredConnectionPoint]);
+
+  useEffect(() => {
+    paletteOpenRef.current = paletteOpen;
+  }, [paletteOpen]);
 
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
@@ -193,13 +267,51 @@ const CircuitCanvas: React.FC = () => {
     startWire,
     addWirePoint,
     finishWire,
+    finishWireOnWireSpan,
     cancelWire,
+    wireOrthoEnabled,
+    wireAutoRouteEnabled,
+    wireDraftDefaults,
     setPan,
     addComponent,
     setPushButtonPressed,
     updateComponent,
     runSimulation,
   } = useCircuitStore();
+
+  const handleSelectWire = useCallback(
+    (id: string, world?: { x: number; y: number }) => {
+      const st = useCircuitStore.getState();
+      if (st.tool === 'delete') {
+        removeWire(id);
+        return;
+      }
+      if (st.tool === 'select' && world && st.wireCadEditMode === 'break') {
+        const w = st.circuit.wires.find((x) => x.id === id);
+        if (!w) return;
+        const si = findClosestSegmentIndexOnWire(
+          w,
+          world.x,
+          world.y,
+          st.circuit.zoom
+        );
+        if (si < 0) return;
+        st.breakWireAtSpan(id, si, world.x, world.y);
+        return;
+      }
+      if (
+        st.tool === 'select' &&
+        world &&
+        st.wireCadEditMode === 'extend' &&
+        st.selectedId
+      ) {
+        st.extendWireToCutterHit(id, world.x, world.y);
+        return;
+      }
+      setSelected(id, { clearWireGrip: true });
+    },
+    [removeWire, setSelected]
+  );
 
   /**
    * AutoCAD-style perpendicular hint while drawing a wire. When the cursor is
@@ -281,6 +393,126 @@ const CircuitCanvas: React.FC = () => {
     );
   }, [wireInProgress, circuit.components, hoveredConnectionPoint]);
 
+  const wireSmartPreview = useMemo(() => {
+    const empty = {
+      fullPolyline: null as number[] | null,
+      terminalHud: null as {
+        x: number;
+        y: number;
+        kind: 'valid' | 'invalid' | 'bend' | 'warning';
+      } | null,
+      typeTag: '',
+      ruleMessage: '',
+    };
+    if (tool !== 'wire' || !wireInProgress || !hoveredConnectionPoint) {
+      return empty;
+    }
+    const wip = wireInProgress;
+    if (!wip.fromComponentId || !wip.fromPointId) return empty;
+
+    const hComp = circuit.components.find(
+      (c) => c.id === hoveredConnectionPoint.componentId
+    );
+    const hPt = hComp?.connectionPoints.find(
+      (p) => p.id === hoveredConnectionPoint.pointId
+    );
+    const fromComp = circuit.components.find(
+      (c) => c.id === wip.fromComponentId
+    );
+    const fromPt = fromComp?.connectionPoints.find(
+      (p) => p.id === wip.fromPointId
+    );
+    if (!hComp || !hPt || !fromComp || !fromPt) return empty;
+
+    const hx = hoveredConnectionPoint.x;
+    const hy = hoveredConnectionPoint.y;
+
+    if (
+      wip.fromComponentId === hoveredConnectionPoint.componentId &&
+      wip.fromPointId === hoveredConnectionPoint.pointId
+    ) {
+      return {
+        fullPolyline: null,
+        terminalHud: { x: hx, y: hy, kind: 'invalid' as const },
+        typeTag: '',
+        ruleMessage: '',
+      };
+    }
+
+    const fromLabel = fromPt.label ?? '';
+    const toLabel = hPt.label ?? '';
+
+    if (
+      wireFinishDuplicateExists(
+        circuit.wires,
+        wip.fromComponentId,
+        wip.fromPointId,
+        hoveredConnectionPoint.componentId,
+        hoveredConnectionPoint.pointId
+      )
+    ) {
+      return {
+        fullPolyline: null,
+        terminalHud: { x: hx, y: hy, kind: 'invalid' as const },
+        typeTag: wirePreviewTypeTag(fromLabel, toLabel),
+        ruleMessage: '',
+      };
+    }
+
+    const rule = checkWireConnection(
+      circuit,
+      wip.fromComponentId,
+      wip.fromPointId,
+      hoveredConnectionPoint.componentId,
+      hoveredConnectionPoint.pointId,
+      { styleLayer: wireDraftDefaults.styleLayer ?? undefined }
+    );
+
+    if (!rule.allowed || rule.severity === 'blocked') {
+      return {
+        fullPolyline: null,
+        terminalHud: { x: hx, y: hy, kind: 'invalid' as const },
+        typeTag: wirePreviewTypeTag(fromLabel, toLabel),
+        ruleMessage: rule.message ?? '',
+      };
+    }
+
+    const fullPolyline = buildWireFinishPolyline({
+      circuit,
+      fromComponentId: wip.fromComponentId,
+      fromPointId: wip.fromPointId,
+      toComponentId: hoveredConnectionPoint.componentId,
+      toPointId: hoveredConnectionPoint.pointId,
+      wirePoints,
+      wireAutoRouteEnabled,
+    });
+
+    const bend = wireDockHint && !wireDockHint.aligned;
+    let kind: 'valid' | 'bend' | 'warning' = 'valid';
+    if (rule.severity === 'warning') kind = 'warning';
+    else if (bend) kind = 'bend';
+
+    return {
+      fullPolyline,
+      terminalHud: {
+        x: hx,
+        y: hy,
+        kind,
+      },
+      typeTag: wirePreviewTypeTag(fromLabel, toLabel),
+      ruleMessage: rule.severity === 'warning' ? rule.message ?? '' : '',
+    };
+  }, [
+    tool,
+    wireInProgress,
+    hoveredConnectionPoint,
+    circuit,
+    wirePoints,
+    wireDockHint,
+    wireAutoRouteEnabled,
+    wireDraftDefaults.styleLayer,
+  ]);
+
   const pendingPreviewComponent = useMemo<CircuitComponent | null>(() => {
     const previewType = pendingInsertType ?? dragPreviewType;
     const previewCursor = pendingInsertType ? insertCursor : dragPreviewCursor;
@@ -303,6 +535,7 @@ const CircuitCanvas: React.FC = () => {
   useEffect(() => {
     const syncModifier = (e: KeyboardEvent) => {
       ctrlOrMetaPressedRef.current = e.ctrlKey || e.metaKey;
+      shiftPressedRef.current = e.shiftKey;
     };
     const clearModifier = () => {
       ctrlOrMetaPressedRef.current = false;
@@ -476,10 +709,25 @@ const CircuitCanvas: React.FC = () => {
         if (tool === 'wire' && wireInProgress) {
           const pos = getStagePointerPosition();
           if (!pos) return;
-          // Wire vertices intentionally bypass the grid so they can stay
-          // aligned with off-grid terminals — clicking commits the corner at
-          // the exact cursor position along the current orientation axis.
-          addWirePoint(pos.x, pos.y);
+          const st = useCircuitStore.getState();
+          const hover = hoveredConnectionPoint;
+          const r = resolveWireDrawSnap({
+            pointerWorld: pos,
+            wirePoints: st.wirePoints,
+            wireOrientation: st.wireOrientation,
+            circuit: st.circuit,
+            zoom: st.circuit.zoom,
+            objectSnapEnabled: st.wireObjectSnapEnabled,
+            snapModes: st.wireSnapModes,
+            gridSnapEnabled: st.wireGridSnapEnabled,
+            ctrlHeld: ctrlOrMetaPressedRef.current,
+            useOrthoLeg:
+              st.wireOrthoEnabled || shiftPressedRef.current,
+            hoveredTerminalWorld: hover
+              ? { x: hover.x, y: hover.y }
+              : null,
+          });
+          addWirePoint(r.x, r.y);
         } else if (tool === 'select') {
           setSelected(null);
         }
@@ -494,6 +742,7 @@ const CircuitCanvas: React.FC = () => {
       getStagePointerPosition,
       addWirePoint,
       setSelected,
+      hoveredConnectionPoint,
     ]
   );
 
@@ -520,12 +769,33 @@ const CircuitCanvas: React.FC = () => {
       if (tool === 'wire' && wireInProgress) {
         const pos = getStagePointerPosition();
         if (pos) {
-          if (hoveredConnectionPoint) {
-            setCursorPos({ x: hoveredConnectionPoint.x, y: hoveredConnectionPoint.y });
-          } else {
-            setCursorPos(pos);
-          }
+          const st = useCircuitStore.getState();
+          const r = resolveWireDrawSnap({
+            pointerWorld: pos,
+            wirePoints: st.wirePoints,
+            wireOrientation: st.wireOrientation,
+            circuit: st.circuit,
+            zoom: st.circuit.zoom,
+            objectSnapEnabled: st.wireObjectSnapEnabled,
+            snapModes: st.wireSnapModes,
+            gridSnapEnabled: st.wireGridSnapEnabled,
+            ctrlHeld: ctrlOrMetaPressedRef.current,
+            useOrthoLeg:
+              st.wireOrthoEnabled || shiftPressedRef.current,
+            hoveredTerminalWorld: hoveredConnectionPoint
+              ? {
+                  x: hoveredConnectionPoint.x,
+                  y: hoveredConnectionPoint.y,
+                }
+              : null,
+          });
+          setCursorPos({ x: r.x, y: r.y });
+          setWireSnapHud(
+            r.snap ? { label: r.snap.label, kind: r.snap.kind } : null
+          );
         }
+      } else {
+        setWireSnapHud(null);
       }
     },
     [
@@ -597,6 +867,7 @@ const CircuitCanvas: React.FC = () => {
 
     useCircuitStore.setState({
       selectedId: null,
+      wireGripVertexIndex: null,
       circuit: {
         ...circuit,
         components: circuit.components.map((c) => ({
@@ -636,9 +907,7 @@ const CircuitCanvas: React.FC = () => {
       e.preventDefault();
       setDragPreviewType(null);
       setDragPreviewCursor(null);
-      const type =
-        (e.dataTransfer.getData('componentType') as ComponentType) ||
-        (getDragComponentType() as ComponentType | undefined);
+      const type = readPaletteComponentType(e.dataTransfer);
       if (!type) return;
 
       const stage = stageRef.current;
@@ -678,9 +947,7 @@ const CircuitCanvas: React.FC = () => {
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      const type =
-        (e.dataTransfer.getData('componentType') as ComponentType) ||
-        (getDragComponentType() as ComponentType | undefined);
+      const type = readPaletteComponentType(e.dataTransfer);
       if (!type) return;
       const rect = (
         e.target as HTMLElement
@@ -697,7 +964,6 @@ const CircuitCanvas: React.FC = () => {
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     const next = e.relatedTarget as Node | null;
     if (next && containerRef.current?.contains(next)) return;
-    clearDragComponentType();
     setDragPreviewType(null);
     setDragPreviewCursor(null);
   }, []);
@@ -1178,11 +1444,58 @@ const CircuitCanvas: React.FC = () => {
     );
   };
 
-  // Handle keyboard for escape
+  // Backspace: undo last wire vertex (capture phase so it wins over toolbar delete).
+  useEffect(() => {
+    const onBackspace = (e: KeyboardEvent) => {
+      if (e.key !== 'Backspace') return;
+      if (paletteOpenRef.current) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      const st = useCircuitStore.getState();
+      if (!st.wireInProgress) return;
+      e.preventDefault();
+      e.stopPropagation();
+      st.undoLastWirePoint();
+      setWireSnapHud(null);
+    };
+    window.addEventListener('keydown', onBackspace, true);
+    return () => window.removeEventListener('keydown', onBackspace, true);
+  }, []);
+
+  // Escape cancels wire; Enter finishes wire on hovered terminal.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        if (paletteOpenRef.current) return;
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement ||
+          e.target instanceof HTMLSelectElement
+        ) {
+          return;
+        }
+        const st = useCircuitStore.getState();
+        if (st.tool !== 'wire' || !st.wireInProgress) return;
+        const h = hoveredConnectionPointRef.current;
+        if (!h) return;
+        e.preventDefault();
+        st.finishWire(h.componentId, h.pointId);
+        return;
+      }
       if (e.key === 'Escape') {
+        const st = useCircuitStore.getState();
+        if (st.wireCadEditMode) {
+          st.clearWireCadEditMode();
+          e.preventDefault();
+          return;
+        }
         cancelWire();
+        setWireSnapHud(null);
         setPendingInsertType(null);
         setInsertCursor(null);
         setSelected(null);
@@ -1287,19 +1600,25 @@ const CircuitCanvas: React.FC = () => {
         <WireLayer
           wires={circuit.wires}
           selectedId={selectedId}
-          onSelectWire={(id) => {
-            if (tool === 'delete') {
-              removeWire(id);
-            } else {
-              setSelected(id);
-            }
-          }}
+          panX={circuit.panX}
+          panY={circuit.panY}
+          zoom={circuit.zoom}
+          onSelectWire={handleSelectWire}
           wireInProgress={!!wireInProgress}
           wirePoints={wirePoints}
           cursorPos={cursorPos}
           wireOrientation={wireOrientation}
+          wireOrthoEnabled={wireOrthoEnabled}
           draftWireColor={wireDraftColor}
+          wireSnapHud={wireSnapHud}
+          wireFullPreviewPolyline={wireSmartPreview.fullPolyline}
+          wireTerminalPreview={wireSmartPreview.terminalHud}
+          wireTypeTag={wireSmartPreview.typeTag}
+          wireRuleMessage={wireSmartPreview.ruleMessage}
+          wireLabelsMasterVisible={circuit.wireLabelsVisible !== false}
         />
+
+        <WireGripLayer phases={['segments']} />
 
         <Layer>
           {circuit.components.map(renderComponent)}
@@ -1307,6 +1626,9 @@ const CircuitCanvas: React.FC = () => {
         <Layer>
           {circuit.components.map(renderMultimeterLeads)}
         </Layer>
+
+        {/* Vertex grips above components so endpoints can be dragged to other terminals */}
+        <WireGripLayer phases={['vertices']} />
         {pendingPreviewComponent && (
           <Layer opacity={0.7} listening={false}>
             {renderComponent(pendingPreviewComponent)}
@@ -1338,6 +1660,9 @@ const CircuitCanvas: React.FC = () => {
             setHoveredConnectionPoint={setHoveredConnectionPoint}
             wireDockHint={wireDockHint}
             onConnectionPointClick={handleConnectionPointClick}
+            onFinishWireSpan={finishWireOnWireSpan}
+            wireInProgress={!!wireInProgress}
+            wirePoints={wirePoints}
           />
         )}
       </Stage>

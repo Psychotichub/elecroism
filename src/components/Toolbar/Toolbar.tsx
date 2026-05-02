@@ -17,6 +17,8 @@ import {
   FiRotateCw,
   FiSun,
   FiMoon,
+  FiTag,
+  FiList,
 } from 'react-icons/fi';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
@@ -74,6 +76,20 @@ const Toolbar: React.FC = () => {
     setPan,
     circuit,
     runSimulation,
+    wireObjectSnapEnabled,
+    wireGridSnapEnabled,
+    wireOrthoEnabled,
+    wireSnapModes,
+    setWireObjectSnapEnabled,
+    setWireSnapModes,
+    toggleWireObjectSnap,
+    toggleWireGridSnap,
+    toggleWireOrtho,
+    toggleWireSnapMode,
+    wireAutoRouteEnabled,
+    toggleWireAutoRoute,
+    setCircuitWireLabelsVisible,
+    exportWireScheduleCsv,
   } = useCircuitStore();
 
   const handleOpen = useCallback(() => {
@@ -114,6 +130,10 @@ const Toolbar: React.FC = () => {
     link.href = stage.toDataURL('image/png');
     link.click();
   }, [circuit.name]);
+
+  const handleExportWireSchedule = useCallback(() => {
+    exportWireScheduleCsv();
+  }, [exportWireScheduleCsv]);
 
   const handleFitToScreen = useCallback(() => {
     setZoom(1);
@@ -182,19 +202,50 @@ const Toolbar: React.FC = () => {
           setZoom(circuit.zoom / 1.2);
         } else if (e.key === 'f' || e.key === 'F') {
           handleFitToScreen();
+        } else if (e.key === 'F3') {
+          e.preventDefault();
+          useCircuitStore.getState().toggleWireObjectSnap();
+        } else if (e.key === 'F8') {
+          e.preventDefault();
+          useCircuitStore.getState().toggleWireOrtho();
+        } else if (e.key === 'F9') {
+          e.preventDefault();
+          useCircuitStore.getState().toggleWireGridSnap();
+        } else if (e.key === 'Tab') {
+          const { tool, wireInProgress } = useCircuitStore.getState();
+          if (tool === 'wire' && wireInProgress) {
+            e.preventDefault();
+            useCircuitStore.getState().toggleWireOrientation();
+          }
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
-          const { selectedId, removeComponent, removeWire, circuit: liveCircuit } =
-            useCircuitStore.getState();
+          const {
+            selectedId,
+            removeComponent,
+            removeWire,
+            removeWireVertex,
+            wireGripVertexIndex,
+            circuit: liveCircuit,
+            wireInProgress: wipWire,
+          } = useCircuitStore.getState();
+          if (e.key === 'Backspace' && wipWire) {
+            return;
+          }
           const selectedComponentIds = liveCircuit.components
             .filter((c) => c.selected)
             .map((c) => c.id);
           if (selectedComponentIds.length > 0) {
             selectedComponentIds.forEach((id) => removeComponent(id));
           } else if (selectedId) {
-            const isWire = circuit.wires.some(
-              (w) => w.id === selectedId
-            );
-            if (isWire) {
+            const selWire = liveCircuit.wires.find((w) => w.id === selectedId);
+            const nVerts = selWire ? selWire.points.length / 2 : 0;
+            const canRemoveInteriorGrip =
+              selWire &&
+              wireGripVertexIndex != null &&
+              wireGripVertexIndex > 0 &&
+              wireGripVertexIndex < nVerts - 1;
+            if (selWire && canRemoveInteriorGrip) {
+              removeWireVertex(selectedId, wireGripVertexIndex);
+            } else if (selWire) {
               removeWire(selectedId);
             } else {
               removeComponent(selectedId);
@@ -259,6 +310,12 @@ const Toolbar: React.FC = () => {
         onClick={handleExportPNG}
         inactiveClassName={toolBtnInactive}
       />
+      <ToolbarToolBtn
+        icon={<FiList />}
+        label="Wires CSV"
+        onClick={handleExportWireSchedule}
+        inactiveClassName={toolBtnInactive}
+      />
 
       <ToolbarDivider className={dividerClass} />
 
@@ -278,6 +335,90 @@ const Toolbar: React.FC = () => {
         shortcut="W"
         inactiveClassName={toolBtnInactive}
       />
+      <button
+        type="button"
+        onClick={() => toggleWireObjectSnap()}
+        title="Object snap master (F3). Cmd: osnap | osnap all | osnap none. Enter finishes on hover; Tab flips leg; Backspace removes last wire point."
+        className={`rounded px-1.5 py-1 text-[10px] font-semibold ${
+          wireObjectSnapEnabled
+            ? 'bg-amber-600/90 text-white'
+            : `${toolBtnInactive} opacity-70`
+        }`}
+      >
+        Osnap
+      </button>
+      <div
+        className={`flex items-center gap-px rounded border px-0.5 py-0.5 ${
+          theme === 'dark' ? 'border-zinc-600' : 'border-zinc-300'
+        }`}
+        title="Snap targets: C connection, E endpoint, M midpoint, X intersection"
+      >
+        {(
+          [
+            ['connection', 'C', 'Connection / terminals'] as const,
+            ['endpoint', 'E', 'Wire endpoints'] as const,
+            ['midpoint', 'M', 'Wire segment midpoints'] as const,
+            ['intersection', 'X', 'Wire crossings'] as const,
+          ] as const
+        ).map(([key, letter, t]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => {
+              if (!wireObjectSnapEnabled) {
+                setWireObjectSnapEnabled(true);
+                setWireSnapModes({ [key]: true });
+                return;
+              }
+              toggleWireSnapMode(key);
+            }}
+            title={t}
+            className={`min-w-[1.1rem] rounded px-0.5 py-0.5 text-[9px] font-bold ${
+              wireObjectSnapEnabled && wireSnapModes[key]
+                ? 'bg-amber-500/85 text-white'
+                : `${toolBtnInactive} opacity-50`
+            }`}
+          >
+            {letter}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => toggleWireOrtho()}
+        title="Ortho — horizontal/vertical segments only (F8). Hold Shift for temporary ortho when off."
+        className={`rounded px-1.5 py-1 text-[10px] font-semibold ${
+          wireOrthoEnabled
+            ? 'bg-emerald-600/90 text-white'
+            : `${toolBtnInactive} opacity-70`
+        }`}
+      >
+        Ortho
+      </button>
+      <button
+        type="button"
+        onClick={() => toggleWireGridSnap()}
+        title="Snap wire to grid (F9)"
+        className={`rounded px-1.5 py-1 text-[10px] font-semibold ${
+          wireGridSnapEnabled
+            ? 'bg-sky-600/90 text-white'
+            : `${toolBtnInactive} opacity-70`
+        }`}
+      >
+        Grid
+      </button>
+      <button
+        type="button"
+        onClick={() => toggleWireAutoRoute()}
+        title="Auto-route: terminal-to-terminal with no clicks uses a Manhattan path (avoids symbols when possible). Cmd: autoroute"
+        className={`rounded px-1.5 py-1 text-[10px] font-semibold ${
+          wireAutoRouteEnabled
+            ? 'bg-violet-600/90 text-white'
+            : `${toolBtnInactive} opacity-70`
+        }`}
+      >
+        Auto
+      </button>
       <ToolbarToolBtn
         icon={<FiTrash2 />}
         label="Delete"
@@ -346,6 +487,23 @@ const Toolbar: React.FC = () => {
         shortcut="F"
         inactiveClassName={toolBtnInactive}
       />
+      <button
+        type="button"
+        onClick={() =>
+          setCircuitWireLabelsVisible(circuit.wireLabelsVisible === false)
+        }
+        title="Toggle wire labels (W1, custom text). Cmd: labels | labels on | labels off"
+        className={`rounded px-1.5 py-1 text-[10px] font-semibold ${
+          circuit.wireLabelsVisible !== false
+            ? 'bg-sky-600/90 text-white'
+            : `${toolBtnInactive} opacity-70`
+        }`}
+      >
+        <span className="inline-flex items-center gap-0.5">
+          <FiTag className="inline" size={12} />
+          Labels
+        </span>
+      </button>
 
       <ToolbarDivider className={dividerClass} />
 

@@ -628,6 +628,7 @@ function createEmptyCircuit(): Circuit {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     phaseImbalanceWarningPercent: 15,
+    wireLabelsVisible: true,
   };
 }
 

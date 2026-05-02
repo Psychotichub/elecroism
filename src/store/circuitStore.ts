@@ -9,7 +9,12 @@ import type {
   ComponentType,
   FaultEvent,
   PhaseSystem,
+  BmsSimLogEntry,
+  WireObjectSnapModes,
+  WireColor,
+  WireStyleLayer,
 } from '../types';
+import { DEFAULT_WIRE_OBJECT_SNAP_MODES } from '../types';
 import { engine } from '../simulation/engine';
 import { v4 as uuid } from 'uuid';
 import {
@@ -18,7 +23,26 @@ import {
   orthogonalLeg,
   terminalOutwardOrientation,
 } from '../utils/geometry';
-import { inferWireColorFromSingleTerminal } from '../utils/inferWireColor';
+import {
+  buildWireObstacleRects,
+  dedupeWirePoints,
+  routeWireBetweenTerminals,
+} from '../utils/wireAutoRoute';
+import {
+  finalizeWirePolylineForCommit,
+  insertVertexOnWireSegment,
+  removeInteriorWireVertex,
+  translateWireSegment,
+} from '../utils/wireGripUtils';
+import {
+  resolveSplitPointOnSegment,
+  splitPolylineAtPoint,
+  connectionPointIdByLabel,
+  buildBranchPolylineToPoint,
+  teeHitToleranceWorld,
+  distanceSqToWireSegment,
+} from '../utils/wireJunctionSplit';
+import { checkWireConnection } from '../utils/wireConnectionRules';
 import {
   syncWireEndpoints,
   createConnectionPoints,
@@ -40,11 +64,96 @@ import {
   getInitialState,
   createEmptyCircuit,
 } from './circuitDefaults';
+import { appendRecentPaletteUse } from '../utils/sidebarPaletteStorage';
+import {
+  removeCollinearInteriorVertices,
+  trimWireBetweenVertexIndices,
+  extendWireFromStartTowardHit,
+  extendWireFromEndTowardHit,
+  tryMergeWirePairAtJunction,
+  hitTestClosestWireSegment,
+} from '../utils/wireEditOps';
+import { nextWireNumber } from '../utils/wireLabelLayout';
+import {
+  deriveEndpointWireNumber,
+  refreshAutoWireNumbers,
+} from '../utils/wireEndpointNumbering';
+import { normalizeWirePoints } from '../utils/wireNormalize';
+import { downloadWireScheduleCsv } from '../utils/wireScheduleExport';
+import {
+  applyWireStyleLayerDefaults,
+  suggestedCrossSectionForLayer,
+} from '../utils/wireStyleLayers';
+
+const BMS_SIM_LOG_CAP = 80;
+
+function appendBmsSimLog(
+  set: (
+    partial:
+      | Partial<CircuitStore>
+      | ((state: CircuitStore) => Partial<CircuitStore>)
+  ) => void,
+  entry: Omit<BmsSimLogEntry, 'id' | 'ts'>
+) {
+  set((state) => ({
+    bmsSimLog: [
+      { ...entry, id: uuid(), ts: Date.now() },
+      ...state.bmsSimLog,
+    ].slice(0, BMS_SIM_LOG_CAP),
+  }));
+}
+
+/** Merge label-inferred stroke metadata with sticky wire-tool defaults. */
+function resolvedWireStrokeForNewConnection(
+  draft: {
+    color: WireColor | null;
+    wireCategory: 'power' | 'control' | 'comm' | null;
+    styleLayer: WireStyleLayer | null;
+  },
+  fromLabel: string,
+  toLabel: string
+): Pick<Wire, 'color' | 'wireCategory' | 'wireProtocol'> & {
+  styleLayer?: WireStyleLayer;
+} {
+  const inf = inferWireMetadata(fromLabel, toLabel);
+  let color = draft.color ?? inf.color;
+  let wireCategory = draft.wireCategory ?? inf.wireCategory;
+  let wireProtocol: Wire['wireProtocol'] = inf.wireProtocol;
+
+  if (draft.styleLayer) {
+    const layerDefaults = applyWireStyleLayerDefaults(draft.styleLayer);
+    if (draft.color === null) {
+      color = layerDefaults.color;
+    }
+    if (draft.wireCategory === null) {
+      wireCategory = layerDefaults.wireCategory;
+    }
+    wireProtocol = layerDefaults.wireProtocol;
+  }
+
+  if (draft.wireCategory !== null) {
+    if (draft.wireCategory !== 'comm') {
+      wireProtocol = 'none';
+    } else if (inf.wireCategory !== 'comm') {
+      wireProtocol = 'other';
+    }
+  }
+
+  const out: Pick<Wire, 'color' | 'wireCategory' | 'wireProtocol'> & {
+    styleLayer?: WireStyleLayer;
+  } = { color, wireCategory, wireProtocol };
+  if (draft.styleLayer) {
+    out.styleLayer = draft.styleLayer;
+  }
+  return out;
+}
 
 interface CircuitStore {
   circuit: Circuit;
   simulationResult: SimulationResult | null;
   selectedId: string | null;
+  /** Selected vertex on the selected wire (for Delete = remove bend). */
+  wireGripVertexIndex: number | null;
   tool: ToolMode;
   wireInProgress: Partial<Wire> | null;
   wirePoints: number[];
@@ -56,6 +165,10 @@ interface CircuitStore {
   history: HistoryEntry[];
   historyIndex: number;
   faultDialogEvent: FaultEvent | null;
+  /** Last BMS command attempts (simulator / audit). */
+  bmsSimLog: BmsSimLogEntry[];
+  clearBmsSimLog: () => void;
+  clearBmsSimLogForDevice: (deviceId: string) => void;
 
   addComponent: (
     type: ComponentType,
@@ -90,12 +203,119 @@ interface CircuitStore {
   addWire: (wire: Omit<Wire, 'id'>) => void;
   updateWire: (id: string, updates: Partial<Wire>) => void;
   removeWire: (id: string) => void;
+  /** Live polyline while dragging grips — no history/simulation. */
+  setWirePointsLive: (wireId: string, points: number[]) => void;
+  /** Finalize grip edit: endpoint reconnect/revert, grid snap, sync, history, sim. */
+  commitWireGripEdit: (
+    wireId: string,
+    draggedVertexIndex: number | null
+  ) => void;
+  setWireGripVertexIndex: (index: number | null) => void;
+  insertWireVertex: (
+    wireId: string,
+    segmentIndex: number,
+    worldX: number,
+    worldY: number
+  ) => void;
+  removeWireVertex: (wireId: string, vertexIndex: number) => void;
+  moveWireSegment: (
+    wireId: string,
+    segmentIndex: number,
+    deltaX: number,
+    deltaY: number
+  ) => void;
+  /** Move one vertex to world (x,y) and commit (history + sync + sim). */
+  moveWireVertex: (
+    wireId: string,
+    vertexIndex: number,
+    x: number,
+    y: number
+  ) => void;
   startWire: (componentId: string, pointId: string) => void;
   addWirePoint: (x: number, y: number) => void;
   finishWire: (componentId: string, pointId: string) => void;
+  /**
+   * Complete the in-progress wire by tapping an existing wire segment (T junction):
+   * split the span, insert a junction dot, and attach the branch.
+   */
+  finishWireOnWireSpan: (
+    targetWireId: string,
+    segmentIndex: number,
+    worldX: number,
+    worldY: number
+  ) => void;
   cancelWire: () => void;
+  /**
+   * Remove last committed wire vertex while drawing (Backspace).
+   * Keeps wire active if only the start point remains; flips `wireOrientation` back.
+   */
+  undoLastWirePoint: () => void;
 
-  setSelected: (id: string | null) => void;
+  /** Object snap for wire tool (terminals, wire geometry). F3 / osnap. */
+  wireObjectSnapEnabled: boolean;
+  /** Grid snap while wiring (F9 / grid). */
+  wireGridSnapEnabled: boolean;
+  /** Orthogonal segments from last vertex (F8 / ortho). Off = free-angle segments. */
+  wireOrthoEnabled: boolean;
+  /** When on, terminal-to-terminal finish with no polyline uses auto Manhattan routing. */
+  wireAutoRouteEnabled: boolean;
+  toggleWireAutoRoute: () => void;
+  setWireObjectSnapEnabled: (v: boolean) => void;
+  setWireGridSnapEnabled: (v: boolean) => void;
+  setWireOrthoEnabled: (v: boolean) => void;
+  toggleWireObjectSnap: () => void;
+  toggleWireGridSnap: () => void;
+  toggleWireOrtho: () => void;
+  /** Flip next wire leg axis without adding a vertex (Tab). */
+  toggleWireOrientation: () => void;
+  /** Per-mode object snap (connection / endpoint / midpoint / intersection). */
+  wireSnapModes: WireObjectSnapModes;
+  setWireSnapModes: (partial: Partial<WireObjectSnapModes>) => void;
+  toggleWireSnapMode: (key: keyof WireObjectSnapModes) => void;
+  resetWireSnapModes: () => void;
+
+  /** Sticky stroke / category for the next wire (and live patch while drafting). */
+  wireDraftDefaults: {
+    color: WireColor | null;
+    wireCategory: 'power' | 'control' | 'comm' | null;
+    styleLayer: WireStyleLayer | null;
+  };
+  patchWireDraftStyle: (partial: {
+    color?: WireColor | null;
+    wireCategory?: 'power' | 'control' | 'comm' | null;
+    styleLayer?: WireStyleLayer | null;
+  }) => void;
+
+  /** CAD-style wire edit: break = split at click; trim = two vertex grips; extend = click cutter segment. */
+  wireCadEditMode: null | 'break' | 'trim' | 'extend';
+  /** Which end to lengthen for `extend` (first or last bend toward a crossing). */
+  wireCadExtendEnd: 'from' | 'to';
+  wireTrimFirstVertexIndex: number | null;
+  setWireCadEditMode: (mode: null | 'break' | 'trim' | 'extend') => void;
+  setWireCadExtendEnd: (end: 'from' | 'to') => void;
+  clearWireCadEditMode: () => void;
+  setWireTrimFirstVertexIndex: (index: number | null) => void;
+
+  breakWireAtSpan: (
+    wireId: string,
+    segmentIndex: number,
+    worldX: number,
+    worldY: number
+  ) => string;
+  simplifyWireCollinear: (wireId: string) => string;
+  normalizeWireRoute: (wireId: string) => string;
+  mergeWiresAtJunction: (junctionComponentId: string) => string;
+  trimWireBetweenGrips: (
+    wireId: string,
+    vertexIndexA: number,
+    vertexIndexB: number
+  ) => string;
+  extendWireToCutterHit: (cutterWireId: string, worldX: number, worldY: number) => string;
+
+  setSelected: (
+    id: string | null,
+    options?: { clearWireGrip?: boolean }
+  ) => void;
   setTool: (tool: ToolMode) => void;
   setZoom: (zoom: number) => void;
   /** Zoom to `zoom` while keeping the world point under (stageX, stageY) fixed; coords match Konva `getPointerPosition()`. */
@@ -110,6 +330,8 @@ interface CircuitStore {
   clearCircuit: () => void;
   loadCircuit: (circuit: Circuit) => void;
   saveCircuit: () => void;
+  /** Download a CSV wire schedule (numbers, endpoints, tags, style). */
+  exportWireScheduleCsv: () => void;
 
   undo: () => void;
   redo: () => void;
@@ -118,19 +340,39 @@ interface CircuitStore {
   dismissFault: () => void;
 
   setPhaseImbalanceWarningPercent: (percent: number) => void;
+
+  setCircuitWireLabelsVisible: (visible: boolean) => void;
 }
 
 export const useCircuitStore = create<CircuitStore>((set, get) => ({
   circuit: createEmptyCircuit(),
   simulationResult: null,
   selectedId: null,
+  wireGripVertexIndex: null,
   tool: 'select',
   wireInProgress: null,
   wirePoints: [],
   wireOrientation: 'h',
+  wireObjectSnapEnabled: true,
+  wireGridSnapEnabled: false,
+  wireOrthoEnabled: true,
+  wireAutoRouteEnabled: true,
+  wireSnapModes: { ...DEFAULT_WIRE_OBJECT_SNAP_MODES },
+  wireDraftDefaults: { color: null, wireCategory: null, styleLayer: null },
+  wireCadEditMode: null,
+  wireCadExtendEnd: 'from',
+  wireTrimFirstVertexIndex: null,
   history: [],
   historyIndex: -1,
   faultDialogEvent: null,
+  bmsSimLog: [],
+
+  clearBmsSimLog: () => set({ bmsSimLog: [] }),
+
+  clearBmsSimLogForDevice: (deviceId) =>
+    set((s) => ({
+      bmsSimLog: s.bmsSimLog.filter((e) => e.deviceId !== deviceId),
+    })),
 
   addComponent: (type, x, y, options) => {
     const id = uuid();
@@ -167,6 +409,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         updatedAt: new Date().toISOString(),
       },
     }));
+    appendRecentPaletteUse(type);
     get().pushHistory(`Added ${type}`);
     get().runSimulation();
   },
@@ -243,18 +486,19 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       updates.scale !== undefined
         ? { ...updates, scale: clampComponentScale(updates.scale) }
         : updates;
-    set((state) => ({
-      // Re-snap wire endpoints to terminal world positions in case the update
-      // changed something that moves them (e.g. visual scale). syncWireEndpoints
-      // is idempotent, so it's safe to call on every property change.
-      circuit: syncWireEndpoints({
+    set((state) => {
+      let circuit = syncWireEndpoints({
         ...state.circuit,
         components: state.circuit.components.map((c) =>
           c.id === id ? { ...c, ...next } : c
         ),
         updatedAt: new Date().toISOString(),
-      }),
-    }));
+      });
+      if (next.label !== undefined || next.connectionPoints !== undefined) {
+        circuit = refreshAutoWireNumbers(circuit);
+      }
+      return { circuit };
+    });
     get().runSimulation();
   },
 
@@ -306,14 +550,16 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       comp.id,
       remap
     );
-    const updatedCircuit = syncWireEndpoints({
-      ...circuit,
-      components: circuit.components.map((c) =>
-        c.id === id ? newComp : c
-      ),
-      wires: newWires,
-      updatedAt: new Date().toISOString(),
-    });
+    const updatedCircuit = refreshAutoWireNumbers(
+      syncWireEndpoints({
+        ...circuit,
+        components: circuit.components.map((c) =>
+          c.id === id ? newComp : c
+        ),
+        wires: newWires,
+        updatedAt: new Date().toISOString(),
+      })
+    );
     set({ circuit: updatedCircuit });
     get().pushHistory(`Phase ${phase}: ${comp.type} → ${nextType}`);
     get().runSimulation();
@@ -377,20 +623,98 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const comp = get().circuit.components.find((c) => c.id === id);
     if (!comp || comp.type !== 'air_circuit_breaker') return;
     const p = comp.properties;
-    if (!p.acbBmsEnabled) return;
-    if (p.acbBmsUvrEnergized === false) return;
-    if (p.acbBmsSpringCharged === false) return;
-    if (comp.state === 'tripped' || comp.state === 'fault') return;
+    const base = {
+      deviceId: id,
+      label: comp.label,
+      deviceKind: 'ACB' as const,
+      command: 'ACB close (CC)',
+    };
+    if (!p.acbBmsEnabled) {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail: 'BMS is disabled on this breaker — enable BMS in properties.',
+      });
+      return;
+    }
+    if (p.acbBmsUvrEnergized === false) {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail: 'UVR not energized — closing coil interlock blocks close.',
+      });
+      return;
+    }
+    if (p.acbBmsSpringCharged === false) {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail: 'Spring not charged — motor-charge or spring feedback required before close.',
+      });
+      return;
+    }
+    if (comp.state === 'tripped' || comp.state === 'fault') {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail:
+          comp.state === 'tripped'
+            ? 'Breaker is tripped — reset protection before remote close.'
+            : 'Breaker fault state — clear fault before remote close.',
+      });
+      return;
+    }
+    if (comp.state === 'on') {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: true,
+        detail: 'Command accepted — main contacts already closed (no change).',
+      });
+      return;
+    }
     get().updateComponent(id, { state: 'on' });
+    appendBmsSimLog(set, {
+      ...base,
+      ok: true,
+      detail: 'Close coil pulse accepted — mains closed.',
+    });
     get().pushHistory('BMS ACB closing coil (CC pulse)');
   },
 
   acbBmsShuntOpen: (id) => {
     const comp = get().circuit.components.find((c) => c.id === id);
     if (!comp || comp.type !== 'air_circuit_breaker') return;
-    if (!comp.properties.acbBmsEnabled) return;
-    if (comp.state !== 'on') return;
+    const base = {
+      deviceId: id,
+      label: comp.label,
+      deviceKind: 'ACB' as const,
+      command: 'ACB shunt trip',
+    };
+    if (!comp.properties.acbBmsEnabled) {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail: 'BMS is disabled on this breaker.',
+      });
+      return;
+    }
+    if (comp.state !== 'on') {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail:
+          comp.state === 'tripped'
+            ? 'Already tripped — shunt open not applied (use reset).'
+            : 'Main contacts already open — shunt trip not applicable.',
+      });
+      return;
+    }
     get().updateComponent(id, { state: 'off' });
+    appendBmsSimLog(set, {
+      ...base,
+      ok: true,
+      detail: 'Shunt trip accepted — mains opened.',
+    });
     get().pushHistory('BMS ACB shunt trip (remote open)');
   },
 
@@ -404,11 +728,61 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       return;
     }
     const p = comp.properties;
-    if (!p.mccbBmsEnabled) return;
-    if (p.mccbBmsCtrlVoltageOk === false) return;
-    if (p.mccbBmsMotorReady === false) return;
-    if (comp.state === 'tripped' || comp.state === 'fault') return;
+    const base = {
+      deviceId: id,
+      label: comp.label,
+      deviceKind: 'mMCCB' as const,
+      command: 'mMCCB motor close',
+    };
+    if (!p.mccbBmsEnabled) {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail: 'BMS is disabled on this breaker.',
+      });
+      return;
+    }
+    if (p.mccbBmsCtrlVoltageOk === false) {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail: 'Control voltage not OK — motor close blocked.',
+      });
+      return;
+    }
+    if (p.mccbBmsMotorReady === false) {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail: 'Motor / mechanism not ready — close blocked.',
+      });
+      return;
+    }
+    if (comp.state === 'tripped' || comp.state === 'fault') {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail:
+          comp.state === 'tripped'
+            ? 'Breaker is tripped — reset before remote close.'
+            : 'Fault state — clear before remote close.',
+      });
+      return;
+    }
+    if (comp.state === 'on') {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: true,
+        detail: 'Command accepted — contacts already closed (no change).',
+      });
+      return;
+    }
     get().updateComponent(id, { state: 'on' });
+    appendBmsSimLog(set, {
+      ...base,
+      ok: true,
+      detail: 'Motor close accepted — mains closed.',
+    });
     get().pushHistory('BMS mMCCB motor close (remote ON)');
   },
 
@@ -421,9 +795,37 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     ) {
       return;
     }
-    if (!comp.properties.mccbBmsEnabled) return;
-    if (comp.state !== 'on') return;
+    const base = {
+      deviceId: id,
+      label: comp.label,
+      deviceKind: 'mMCCB' as const,
+      command: 'mMCCB shunt open',
+    };
+    if (!comp.properties.mccbBmsEnabled) {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail: 'BMS is disabled on this breaker.',
+      });
+      return;
+    }
+    if (comp.state !== 'on') {
+      appendBmsSimLog(set, {
+        ...base,
+        ok: false,
+        detail:
+          comp.state === 'tripped'
+            ? 'Already tripped — shunt open not applied (use reset).'
+            : 'Contacts already open — shunt open not applicable.',
+      });
+      return;
+    }
     get().updateComponent(id, { state: 'off' });
+    appendBmsSimLog(set, {
+      ...base,
+      ok: true,
+      detail: 'Shunt open accepted — mains opened.',
+    });
     get().pushHistory('BMS mMCCB shunt trip (remote OFF)');
   },
 
@@ -521,27 +923,63 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   },
 
   addWire: (wire) => {
-    set((state) => ({
-      circuit: {
-        ...state.circuit,
-        wires: [...state.circuit.wires, { ...wire, id: uuid() }],
-        updatedAt: new Date().toISOString(),
-      },
-    }));
+    set((state) => {
+      const id = uuid();
+      const auto = wire.wireNumberAuto === true;
+      const draft: Wire = { ...(wire as Wire), id };
+      let wireNumber = wire.wireNumber;
+      if (auto) {
+        wireNumber = deriveEndpointWireNumber(state.circuit, draft);
+      } else {
+        if (wireNumber === undefined || wireNumber === '') {
+          wireNumber = nextWireNumber(state.circuit);
+        }
+      }
+      const newWire: Wire = {
+        ...(wire as Wire),
+        id,
+        wireNumber,
+        wireNumberAuto: auto ? true : false,
+      };
+      return {
+        circuit: {
+          ...state.circuit,
+          wires: [...state.circuit.wires, newWire],
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    });
     get().pushHistory('Added wire');
     get().runSimulation();
   },
 
   updateWire: (id, updates) => {
-    set((state) => ({
-      circuit: {
-        ...state.circuit,
-        wires: state.circuit.wires.map((w) =>
-          w.id === id ? { ...w, ...updates } : w
-        ),
-        updatedAt: new Date().toISOString(),
-      },
-    }));
+    set((state) => {
+      const prev = state.circuit.wires.find((w) => w.id === id);
+      if (!prev) return state;
+      let merged: Wire = { ...prev, ...updates };
+      if (merged.wireNumberAuto === true) {
+        merged = {
+          ...merged,
+          wireNumberAuto: true,
+          wireNumber: deriveEndpointWireNumber(state.circuit, merged),
+        };
+      } else if (updates.wireNumber !== undefined) {
+        merged.wireNumberAuto = false;
+      } else if (updates.wireNumberAuto === false) {
+        merged.wireNumberAuto = false;
+      }
+      const wires = state.circuit.wires.map((w) =>
+        w.id === id ? merged : w
+      );
+      return {
+        circuit: {
+          ...state.circuit,
+          wires,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    });
     get().pushHistory('Updated wire');
     get().runSimulation();
   },
@@ -553,9 +991,146 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         wires: state.circuit.wires.filter((w) => w.id !== id),
         updatedAt: new Date().toISOString(),
       },
+      selectedId: state.selectedId === id ? null : state.selectedId,
+      wireGripVertexIndex:
+        state.selectedId === id ? null : state.wireGripVertexIndex,
     }));
     get().pushHistory('Removed wire');
     get().runSimulation();
+  },
+
+  setWirePointsLive: (wireId, points) =>
+    set((state) => ({
+      circuit: {
+        ...state.circuit,
+        wires: state.circuit.wires.map((w) =>
+          w.id === wireId ? { ...w, points: points.slice() } : w
+        ),
+        updatedAt: new Date().toISOString(),
+      },
+    })),
+
+  commitWireGripEdit: (wireId, draggedVertexIndex) => {
+    const state = get();
+    const wire = state.circuit.wires.find((w) => w.id === wireId);
+    if (!wire) return;
+    const finalized = finalizeWirePolylineForCommit(state.circuit, wire, {
+      draggedVertexIndex,
+      gridSnapEnabled: state.wireGridSnapEnabled,
+      gridSize: state.circuit.gridSize,
+      zoom: state.circuit.zoom,
+    });
+    const nextCircuit = refreshAutoWireNumbers(
+      syncWireEndpoints({
+        ...state.circuit,
+        wires: state.circuit.wires.map((w) =>
+          w.id === wireId ? finalized : w
+        ),
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    set({ circuit: nextCircuit });
+    get().pushHistory('Adjusted wire route');
+    get().runSimulation();
+  },
+
+  setWireGripVertexIndex: (index) => set({ wireGripVertexIndex: index }),
+
+  insertWireVertex: (wireId, segmentIndex, worldX, worldY) => {
+    const state = get();
+    const wire = state.circuit.wires.find((w) => w.id === wireId);
+    if (!wire) return;
+    const next = insertVertexOnWireSegment(
+      wire.points,
+      segmentIndex,
+      worldX,
+      worldY
+    );
+    if (!next) return;
+    const draft = { ...wire, points: next };
+    const finalized = finalizeWirePolylineForCommit(state.circuit, draft, {
+      draggedVertexIndex: null,
+      gridSnapEnabled: state.wireGridSnapEnabled,
+      gridSize: state.circuit.gridSize,
+      zoom: state.circuit.zoom,
+    });
+    const nextCircuit = syncWireEndpoints({
+      ...state.circuit,
+      wires: state.circuit.wires.map((w) =>
+        w.id === wireId ? finalized : w
+      ),
+      updatedAt: new Date().toISOString(),
+    });
+    set({ circuit: nextCircuit, wireGripVertexIndex: null });
+    get().pushHistory('Inserted wire vertex');
+    get().runSimulation();
+  },
+
+  removeWireVertex: (wireId, vertexIndex) => {
+    const state = get();
+    const wire = state.circuit.wires.find((w) => w.id === wireId);
+    if (!wire) return;
+    const next = removeInteriorWireVertex(wire.points, vertexIndex);
+    if (!next) return;
+    const draft = { ...wire, points: next };
+    const finalized = finalizeWirePolylineForCommit(state.circuit, draft, {
+      draggedVertexIndex: null,
+      gridSnapEnabled: state.wireGridSnapEnabled,
+      gridSize: state.circuit.gridSize,
+      zoom: state.circuit.zoom,
+    });
+    const nextCircuit = syncWireEndpoints({
+      ...state.circuit,
+      wires: state.circuit.wires.map((w) =>
+        w.id === wireId ? finalized : w
+      ),
+      updatedAt: new Date().toISOString(),
+    });
+    set({ circuit: nextCircuit, wireGripVertexIndex: null });
+    get().pushHistory('Removed wire vertex');
+    get().runSimulation();
+  },
+
+  moveWireSegment: (wireId, segmentIndex, deltaX, deltaY) => {
+    const state = get();
+    const wire = state.circuit.wires.find((w) => w.id === wireId);
+    if (!wire) return;
+    const next = translateWireSegment(
+      wire.points,
+      segmentIndex,
+      deltaX,
+      deltaY
+    );
+    if (!next) return;
+    const draft = { ...wire, points: next };
+    const finalized = finalizeWirePolylineForCommit(state.circuit, draft, {
+      draggedVertexIndex: null,
+      gridSnapEnabled: state.wireGridSnapEnabled,
+      gridSize: state.circuit.gridSize,
+      zoom: state.circuit.zoom,
+    });
+    const nextCircuit = syncWireEndpoints({
+      ...state.circuit,
+      wires: state.circuit.wires.map((w) =>
+        w.id === wireId ? finalized : w
+      ),
+      updatedAt: new Date().toISOString(),
+    });
+    set({ circuit: nextCircuit });
+    get().pushHistory('Moved wire segment');
+    get().runSimulation();
+  },
+
+  moveWireVertex: (wireId, vertexIndex, x, y) => {
+    const state = get();
+    const wire = state.circuit.wires.find((w) => w.id === wireId);
+    if (!wire) return;
+    const pts = [...wire.points];
+    if (vertexIndex < 0 || vertexIndex * 2 + 1 >= pts.length) return;
+    pts[vertexIndex * 2] = x;
+    pts[vertexIndex * 2 + 1] = y;
+    get().setWirePointsLive(wireId, pts);
+    get().commitWireGripEdit(wireId, vertexIndex);
   },
 
   startWire: (componentId, pointId) => {
@@ -566,12 +1141,26 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const point = comp.connectionPoints.find((p) => p.id === pointId);
     if (!point) return;
     const { x: absX, y: absY } = connectionPointWorld(comp, point);
+    const draft = get().wireDraftDefaults;
+    const fromLab = point.label ?? '';
+    const stroke = resolvedWireStrokeForNewConnection(
+      { ...draft, styleLayer: draft.styleLayer ?? null },
+      fromLab,
+      fromLab
+    );
+    let crossSection = 2.5;
+    if (draft.styleLayer) {
+      const sug = suggestedCrossSectionForLayer(draft.styleLayer);
+      if (sug != null) crossSection = sug;
+    }
     set({
       wireInProgress: {
         fromComponentId: componentId,
         fromPointId: pointId,
-        color: inferWireColorFromSingleTerminal(point.label),
-        crossSection: 2.5,
+        color: stroke.color,
+        ...(stroke.wireCategory ? { wireCategory: stroke.wireCategory } : {}),
+        ...(stroke.styleLayer ? { styleLayer: stroke.styleLayer } : {}),
+        crossSection,
         energized: false,
         currentAmps: 0,
       },
@@ -588,6 +1177,13 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       }
       const lastX = pts[pts.length - 2];
       const lastY = pts[pts.length - 1];
+      if (!state.wireOrthoEnabled) {
+        if (x === lastX && y === lastY) return state;
+        return {
+          wirePoints: [...pts, x, y],
+          wireOrientation: state.wireOrientation === 'h' ? 'v' : 'h',
+        };
+      }
       const orientation = state.wireOrientation;
       // Each click commits a single turning point at the cursor along the
       // current orientation axis. The free coordinate follows the cursor
@@ -629,7 +1225,33 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const { x: absX, y: absY } = connectionPointWorld(comp, point);
     const pts = get().wirePoints;
     let allPoints: number[];
-    if (pts.length >= 2) {
+    const useAutoRoute =
+      get().wireAutoRouteEnabled &&
+      pts.length === 2 &&
+      fromComp &&
+      fromPoint;
+
+    if (useAutoRoute) {
+      const { x: sx, y: sy } = connectionPointWorld(fromComp, fromPoint);
+      const startAxis = terminalOutwardOrientation(fromComp, fromPoint);
+      const endAxis = terminalOutwardOrientation(comp, point);
+      const rects = buildWireObstacleRects(
+        get().circuit,
+        new Set([wip.fromComponentId, componentId])
+      );
+      allPoints = dedupeWirePoints(
+        routeWireBetweenTerminals(
+          sx,
+          sy,
+          absX,
+          absY,
+          startAxis,
+          endAxis,
+          rects,
+          get().circuit.gridSize
+        )
+      );
+    } else if (pts.length >= 2) {
       const lastX = pts[pts.length - 2];
       const lastY = pts[pts.length - 1];
       // The destination terminal's outward axis dictates the *last* leg, so
@@ -658,38 +1280,741 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     );
     if (duplicate) return;
 
+    const wireRule = checkWireConnection(
+      get().circuit,
+      wip.fromComponentId,
+      wip.fromPointId,
+      componentId,
+      pointId,
+      { styleLayer: get().wireDraftDefaults.styleLayer ?? undefined }
+    );
+    if (!wireRule.allowed) return;
+
+    const stroke = resolvedWireStrokeForNewConnection(
+      {
+        ...get().wireDraftDefaults,
+        styleLayer: get().wireDraftDefaults.styleLayer ?? null,
+      },
+      fromPoint?.label || '',
+      point.label
+    );
     get().addWire({
       fromComponentId: wip.fromComponentId,
       fromPointId: wip.fromPointId,
       toComponentId: componentId,
       toPointId: pointId,
       points: allPoints,
-      ...inferWireMetadata(fromPoint?.label || '', point.label),
+      ...stroke,
       crossSection: wip.crossSection || 2.5,
       energized: false,
       currentAmps: 0,
+      wireNumberAuto: true,
     });
 
     set({ wireInProgress: null, wirePoints: [], wireOrientation: 'h' });
   },
 
+  finishWireOnWireSpan: (targetWireId, segmentIndex, worldX, worldY) => {
+    const wip = get().wireInProgress;
+    if (!wip || !wip.fromComponentId || !wip.fromPointId) return;
+
+    const circuit = get().circuit;
+    const maxD = teeHitToleranceWorld(circuit.zoom);
+    const maxD2 = maxD * maxD;
+
+    const targetWire = circuit.wires.find((w) => w.id === targetWireId);
+    if (!targetWire) return;
+
+    const d2 = distanceSqToWireSegment(
+      targetWire.points,
+      segmentIndex,
+      worldX,
+      worldY
+    );
+    if (d2 === null || d2 > maxD2) return;
+
+    const sp = resolveSplitPointOnSegment(
+      targetWire.points,
+      segmentIndex,
+      worldX,
+      worldY
+    );
+    if (!sp) return;
+    const { sx, sy } = sp;
+
+    const split = splitPolylineAtPoint(
+      targetWire.points,
+      segmentIndex,
+      sx,
+      sy
+    );
+    if (!split) return;
+    const { left, right } = split;
+
+    const fromComp = circuit.components.find(
+      (c) => c.id === wip.fromComponentId
+    );
+    const fromPoint = fromComp?.connectionPoints.find(
+      (p) => p.id === wip.fromPointId
+    );
+    const fromLabel = fromPoint?.label ?? '';
+
+    const jId = uuid();
+    const jScale = clampComponentScale(0.42);
+    const junc: CircuitComponent = {
+      id: jId,
+      type: 'junction',
+      label: getDefaultLabel('junction'),
+      x: sx,
+      y: sy,
+      scale: jScale,
+      rotation: 0,
+      state: getInitialState('junction'),
+      selected: false,
+      connectionPoints: createConnectionPoints(jId, 'junction', {}),
+      properties: getDefaultProperties('junction'),
+    };
+
+    const idT1 = connectionPointIdByLabel(junc, 'T1');
+    const idT2 = connectionPointIdByLabel(junc, 'T2');
+    const idT3 = connectionPointIdByLabel(junc, 'T3');
+    if (!idT1 || !idT2 || !idT3) return;
+
+    const cpT3 = junc.connectionPoints.find((p) => p.id === idT3);
+    if (!cpT3) return;
+    const t3World = connectionPointWorld(junc, cpT3);
+
+    const draftPts = get().wirePoints;
+    let allPointsC: number[];
+    const useAutoRoute =
+      get().wireAutoRouteEnabled &&
+      draftPts.length === 2 &&
+      fromComp &&
+      fromPoint;
+
+    if (useAutoRoute) {
+      const { x: sx0, y: sy0 } = connectionPointWorld(fromComp, fromPoint);
+      const startAxis = terminalOutwardOrientation(fromComp, fromPoint);
+      const endAxis = terminalOutwardOrientation(junc, cpT3);
+      const rects = buildWireObstacleRects(
+        circuit,
+        new Set([wip.fromComponentId, jId])
+      );
+      allPointsC = dedupeWirePoints(
+        routeWireBetweenTerminals(
+          sx0,
+          sy0,
+          t3World.x,
+          t3World.y,
+          startAxis,
+          endAxis,
+          rects,
+          circuit.gridSize
+        )
+      );
+    } else if (draftPts.length >= 2) {
+      allPointsC = buildBranchPolylineToPoint(draftPts, t3World.x, t3World.y);
+    } else {
+      allPointsC = [...draftPts, t3World.x, t3World.y];
+    }
+
+    const metaFromW: Pick<
+      Wire,
+      'color' | 'wireCategory' | 'wireProtocol' | 'crossSection'
+    > = {
+      color: targetWire.color,
+      wireCategory: targetWire.wireCategory,
+      wireProtocol: targetWire.wireProtocol ?? 'none',
+      crossSection: targetWire.crossSection,
+    };
+
+    const branchStroke = resolvedWireStrokeForNewConnection(
+      {
+        ...get().wireDraftDefaults,
+        styleLayer: get().wireDraftDefaults.styleLayer ?? null,
+      },
+      fromLabel,
+      'T3'
+    );
+    const branchMeta: Pick<
+      Wire,
+      'color' | 'wireCategory' | 'wireProtocol' | 'crossSection' | 'styleLayer'
+    > = {
+      ...branchStroke,
+      crossSection: wip.crossSection ?? 2.5,
+    };
+
+    const circuitSansTarget: Circuit = {
+      ...circuit,
+      wires: circuit.wires.filter((w) => w.id !== targetWireId),
+    };
+    const wnA = nextWireNumber(circuitSansTarget);
+    const wnB = nextWireNumber(circuitSansTarget, [wnA]);
+    const targetAuto = targetWire.wireNumberAuto === true;
+
+    const wireA: Omit<Wire, 'id'> = {
+      fromComponentId: targetWire.fromComponentId,
+      fromPointId: targetWire.fromPointId,
+      toComponentId: jId,
+      toPointId: idT1,
+      points: left,
+      ...metaFromW,
+      ...(targetAuto
+        ? { wireNumberAuto: true as const }
+        : { wireNumber: wnA, wireNumberAuto: false as const }),
+      energized: false,
+      currentAmps: 0,
+    };
+    const wireB: Omit<Wire, 'id'> = {
+      fromComponentId: jId,
+      fromPointId: idT2,
+      toComponentId: targetWire.toComponentId,
+      toPointId: targetWire.toPointId,
+      points: right,
+      ...metaFromW,
+      ...(targetAuto
+        ? { wireNumberAuto: true as const }
+        : { wireNumber: wnB, wireNumberAuto: false as const }),
+      energized: false,
+      currentAmps: 0,
+    };
+    const wireC: Omit<Wire, 'id'> = {
+      fromComponentId: wip.fromComponentId,
+      fromPointId: wip.fromPointId,
+      toComponentId: jId,
+      toPointId: idT3,
+      points: allPointsC,
+      ...branchMeta,
+      wireNumberAuto: true,
+      energized: false,
+      currentAmps: 0,
+    };
+
+    const dupC = circuit.wires.some(
+      (w) =>
+        (w.fromComponentId === wireC.fromComponentId &&
+          w.fromPointId === wireC.fromPointId &&
+          w.toComponentId === wireC.toComponentId &&
+          w.toPointId === wireC.toPointId) ||
+        (w.fromComponentId === wireC.toComponentId &&
+          w.fromPointId === wireC.toPointId &&
+          w.toComponentId === wireC.fromComponentId &&
+          w.toPointId === wireC.fromPointId)
+    );
+    if (dupC) return;
+
+    const wireAId = uuid();
+    const wireBId = uuid();
+    const wireCId = uuid();
+
+    const newWires: Wire[] = [
+      ...circuit.wires.filter((w) => w.id !== targetWireId),
+      { ...wireA, id: wireAId },
+      { ...wireB, id: wireBId },
+      { ...wireC, id: wireCId },
+    ];
+
+    const nextCircuit = refreshAutoWireNumbers(
+      syncWireEndpoints({
+        ...circuit,
+        components: [...circuit.components, junc],
+        wires: newWires,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+
+    set({
+      circuit: nextCircuit,
+      wireInProgress: null,
+      wirePoints: [],
+      wireOrientation: 'h',
+    });
+    get().pushHistory('Wire T-junction');
+    get().runSimulation();
+  },
+
+  breakWireAtSpan: (wireId, segmentIndex, worldX, worldY) => {
+    const circuit = get().circuit;
+    const targetWire = circuit.wires.find((w) => w.id === wireId);
+    if (!targetWire) return 'Wire not found';
+
+    const maxD = teeHitToleranceWorld(circuit.zoom);
+    const maxD2 = maxD * maxD;
+    const d2 = distanceSqToWireSegment(
+      targetWire.points,
+      segmentIndex,
+      worldX,
+      worldY
+    );
+    if (d2 === null || d2 > maxD2) {
+      return 'Click closer to the wire segment';
+    }
+
+    const sp = resolveSplitPointOnSegment(
+      targetWire.points,
+      segmentIndex,
+      worldX,
+      worldY
+    );
+    if (!sp) return 'Cannot split here';
+    const { sx, sy } = sp;
+
+    const split = splitPolylineAtPoint(
+      targetWire.points,
+      segmentIndex,
+      sx,
+      sy
+    );
+    if (!split) return 'Segment too short to break';
+
+    const { left, right } = split;
+
+    const jId = uuid();
+    const jScale = clampComponentScale(0.42);
+    const junc: CircuitComponent = {
+      id: jId,
+      type: 'junction',
+      label: getDefaultLabel('junction'),
+      x: sx,
+      y: sy,
+      scale: jScale,
+      rotation: 0,
+      state: getInitialState('junction'),
+      selected: false,
+      connectionPoints: createConnectionPoints(jId, 'junction', {}),
+      properties: getDefaultProperties('junction'),
+    };
+
+    const idT1 = connectionPointIdByLabel(junc, 'T1');
+    const idT2 = connectionPointIdByLabel(junc, 'T2');
+    if (!idT1 || !idT2) return 'Junction layout error';
+
+    const metaFromW: Pick<
+      Wire,
+      'color' | 'wireCategory' | 'wireProtocol' | 'crossSection'
+    > = {
+      color: targetWire.color,
+      wireCategory: targetWire.wireCategory,
+      wireProtocol: targetWire.wireProtocol ?? 'none',
+      crossSection: targetWire.crossSection,
+    };
+
+    const circuitSansTarget: Circuit = {
+      ...circuit,
+      wires: circuit.wires.filter((w) => w.id !== wireId),
+    };
+    const wnA = nextWireNumber(circuitSansTarget);
+    const wnB = nextWireNumber(circuitSansTarget, [wnA]);
+    const targetAuto = targetWire.wireNumberAuto === true;
+
+    const wireAId = uuid();
+    const wireBId = uuid();
+    const wireA: Wire = {
+      id: wireAId,
+      fromComponentId: targetWire.fromComponentId,
+      fromPointId: targetWire.fromPointId,
+      toComponentId: jId,
+      toPointId: idT1,
+      points: left,
+      ...metaFromW,
+      ...(targetAuto
+        ? { wireNumberAuto: true as const }
+        : { wireNumber: wnA, wireNumberAuto: false as const }),
+      energized: false,
+      currentAmps: 0,
+    };
+    const wireB: Wire = {
+      id: wireBId,
+      fromComponentId: jId,
+      fromPointId: idT2,
+      toComponentId: targetWire.toComponentId,
+      toPointId: targetWire.toPointId,
+      points: right,
+      ...metaFromW,
+      ...(targetAuto
+        ? { wireNumberAuto: true as const }
+        : { wireNumber: wnB, wireNumberAuto: false as const }),
+      energized: false,
+      currentAmps: 0,
+    };
+
+    const newWires: Wire[] = [
+      ...circuit.wires.filter((w) => w.id !== wireId),
+      wireA,
+      wireB,
+    ];
+
+    const nextCircuit = refreshAutoWireNumbers(
+      syncWireEndpoints({
+        ...circuit,
+        components: [...circuit.components, junc],
+        wires: newWires,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+
+    set({
+      circuit: nextCircuit,
+      selectedId: jId,
+      wireGripVertexIndex: null,
+      wireCadEditMode: null,
+      wireTrimFirstVertexIndex: null,
+    });
+    get().pushHistory('Broke wire');
+    get().runSimulation();
+    return '';
+  },
+
+  simplifyWireCollinear: (wireId) => {
+    const state = get();
+    const wire = state.circuit.wires.find((w) => w.id === wireId);
+    if (!wire) return 'Wire not found';
+    const next = removeCollinearInteriorVertices(wire.points);
+    if (next.length === wire.points.length) {
+      return 'No collinear bends to remove';
+    }
+    const draft = { ...wire, points: next };
+    const finalized = finalizeWirePolylineForCommit(state.circuit, draft, {
+      draggedVertexIndex: null,
+      gridSnapEnabled: state.wireGridSnapEnabled,
+      gridSize: state.circuit.gridSize,
+      zoom: state.circuit.zoom,
+    });
+    const nextCircuit = syncWireEndpoints({
+      ...state.circuit,
+      wires: state.circuit.wires.map((w) =>
+        w.id === wireId ? finalized : w
+      ),
+      updatedAt: new Date().toISOString(),
+    });
+    set({ circuit: nextCircuit, wireGripVertexIndex: null });
+    get().pushHistory('Joined collinear segments');
+    get().runSimulation();
+    return '';
+  },
+
+  normalizeWireRoute: (wireId) => {
+    const state = get();
+    const wire = state.circuit.wires.find((w) => w.id === wireId);
+    if (!wire) return 'Wire not found';
+    const grid =
+      state.wireGridSnapEnabled && state.circuit.gridSize > 0
+        ? state.circuit.gridSize
+        : undefined;
+    const nextPts = normalizeWirePoints(wire.points, {
+      alignToGrid: grid,
+      nearAxisEps: grid != null ? Math.max(1, grid * 0.2) : 2,
+    });
+    const unchanged =
+      nextPts.length === wire.points.length &&
+      nextPts.every((v: number, i: number) => v === wire.points[i]);
+    if (unchanged) {
+      return 'Route already normalized';
+    }
+    const draft = { ...wire, points: nextPts };
+    const finalized = finalizeWirePolylineForCommit(state.circuit, draft, {
+      draggedVertexIndex: null,
+      gridSnapEnabled: state.wireGridSnapEnabled,
+      gridSize: state.circuit.gridSize,
+      zoom: state.circuit.zoom,
+    });
+    const nextCircuit = syncWireEndpoints({
+      ...state.circuit,
+      wires: state.circuit.wires.map((w) =>
+        w.id === wireId ? finalized : w
+      ),
+      updatedAt: new Date().toISOString(),
+    });
+    set({ circuit: nextCircuit, wireGripVertexIndex: null });
+    get().pushHistory('Normalized wire route');
+    get().runSimulation();
+    return '';
+  },
+
+  mergeWiresAtJunction: (junctionComponentId) => {
+    const state = get();
+    const circuit = state.circuit;
+    const j = circuit.components.find(
+      (c) => c.id === junctionComponentId && c.type === 'junction'
+    );
+    if (!j) return 'Select a junction';
+    const incident = circuit.wires.filter(
+      (w) =>
+        w.fromComponentId === junctionComponentId ||
+        w.toComponentId === junctionComponentId
+    );
+    if (incident.length !== 2) {
+      return 'Junction must have exactly two wires (e.g. inline tee stub removed)';
+    }
+    const [w1, w2] = incident;
+    const merged = tryMergeWirePairAtJunction(w1, w2, junctionComponentId, uuid());
+    if (!merged) {
+      return 'Could not chain wires through this junction (try reversing route)';
+    }
+    const mergedWithAuto: Wire = {
+      ...merged,
+      wireNumberAuto:
+        w1.wireNumberAuto === true || w2.wireNumberAuto === true,
+    };
+    const newWires = circuit.wires
+      .filter((w) => w.id !== w1.id && w.id !== w2.id)
+      .concat(mergedWithAuto);
+    const newComps = circuit.components.filter((c) => c.id !== junctionComponentId);
+    const nextCircuit = refreshAutoWireNumbers(
+      syncWireEndpoints({
+        ...circuit,
+        components: newComps,
+        wires: newWires,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    set({
+      circuit: nextCircuit,
+      selectedId: merged.id,
+      wireGripVertexIndex: null,
+      wireCadEditMode: null,
+      wireTrimFirstVertexIndex: null,
+    });
+    get().pushHistory('Merged wires at junction');
+    get().runSimulation();
+    return '';
+  },
+
+  trimWireBetweenGrips: (wireId, vertexIndexA, vertexIndexB) => {
+    const state = get();
+    const wire = state.circuit.wires.find((w) => w.id === wireId);
+    if (!wire) return 'Wire not found';
+    const n = wire.points.length / 2;
+    if (
+      vertexIndexA <= 0 ||
+      vertexIndexB <= 0 ||
+      vertexIndexA >= n - 1 ||
+      vertexIndexB >= n - 1
+    ) {
+      return 'Pick two interior vertex grips (not endpoints)';
+    }
+    const nextPts = trimWireBetweenVertexIndices(
+      wire.points,
+      vertexIndexA,
+      vertexIndexB
+    );
+    if (!nextPts) return 'Could not rebuild route between those vertices';
+    const draft = { ...wire, points: nextPts };
+    const finalized = finalizeWirePolylineForCommit(state.circuit, draft, {
+      draggedVertexIndex: null,
+      gridSnapEnabled: state.wireGridSnapEnabled,
+      gridSize: state.circuit.gridSize,
+      zoom: state.circuit.zoom,
+    });
+    const nextCircuit = refreshAutoWireNumbers(
+      syncWireEndpoints({
+        ...state.circuit,
+        wires: state.circuit.wires.map((w) =>
+          w.id === wireId ? finalized : w
+        ),
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    set({
+      circuit: nextCircuit,
+      wireGripVertexIndex: null,
+      wireTrimFirstVertexIndex: null,
+    });
+    get().pushHistory('Trimmed wire');
+    get().runSimulation();
+    return '';
+  },
+
+  extendWireToCutterHit: (cutterWireId, worldX, worldY) => {
+    const state = get();
+    const sel = state.selectedId;
+    if (!sel) return 'Select the wire to extend first';
+    const base = state.circuit.wires.find((w) => w.id === sel);
+    const cutter = state.circuit.wires.find((w) => w.id === cutterWireId);
+    if (!base || !cutter) return 'Wire not found';
+    const hit = hitTestClosestWireSegment(
+      state.circuit,
+      worldX,
+      worldY,
+      { zoom: state.circuit.zoom }
+    );
+    if (!hit || hit.wireId !== cutterWireId) {
+      return 'Click directly on the crossing wire';
+    }
+    const nextPts =
+      state.wireCadExtendEnd === 'from'
+        ? extendWireFromStartTowardHit(base, cutter)
+        : extendWireFromEndTowardHit(base, cutter);
+    if (!nextPts) {
+      return 'No axis-aligned crossing ahead (needs ≥3 vertices for that end)';
+    }
+    const draft = { ...base, points: nextPts.points };
+    const finalized = finalizeWirePolylineForCommit(state.circuit, draft, {
+      draggedVertexIndex: null,
+      gridSnapEnabled: state.wireGridSnapEnabled,
+      gridSize: state.circuit.gridSize,
+      zoom: state.circuit.zoom,
+    });
+    const nextCircuit = refreshAutoWireNumbers(
+      syncWireEndpoints({
+        ...state.circuit,
+        wires: state.circuit.wires.map((w) =>
+          w.id === base.id ? finalized : w
+        ),
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    set({ circuit: nextCircuit, wireCadEditMode: null, wireTrimFirstVertexIndex: null });
+    get().pushHistory('Extended wire');
+    get().runSimulation();
+    return '';
+  },
+
+  setWireCadEditMode: (mode) =>
+    set({ wireCadEditMode: mode, wireTrimFirstVertexIndex: null }),
+  setWireCadExtendEnd: (end) => set({ wireCadExtendEnd: end }),
+  clearWireCadEditMode: () =>
+    set({ wireCadEditMode: null, wireTrimFirstVertexIndex: null }),
+  setWireTrimFirstVertexIndex: (index) =>
+    set({ wireTrimFirstVertexIndex: index }),
+
   cancelWire: () => {
     set({ wireInProgress: null, wirePoints: [], wireOrientation: 'h' });
   },
 
-  setSelected: (id) =>
-    set((state) => ({
-      selectedId: id,
-      circuit: {
-        ...state.circuit,
-        components: state.circuit.components.map((c) => ({
-          ...c,
-          selected: id !== null && c.id === id,
-        })),
+  undoLastWirePoint: () => {
+    set((state) => {
+      if (!state.wireInProgress) return state;
+      const pts = state.wirePoints;
+      if (pts.length <= 2) return state;
+      return {
+        wirePoints: pts.slice(0, -2),
+        wireOrientation: state.wireOrientation === 'h' ? 'v' : 'h',
+      };
+    });
+  },
+
+  setWireObjectSnapEnabled: (v) => set({ wireObjectSnapEnabled: v }),
+  setWireGridSnapEnabled: (v) => set({ wireGridSnapEnabled: v }),
+  setWireOrthoEnabled: (v) => set({ wireOrthoEnabled: v }),
+  toggleWireObjectSnap: () =>
+    set((s) => ({ wireObjectSnapEnabled: !s.wireObjectSnapEnabled })),
+  toggleWireGridSnap: () =>
+    set((s) => ({ wireGridSnapEnabled: !s.wireGridSnapEnabled })),
+  toggleWireOrtho: () =>
+    set((s) => ({ wireOrthoEnabled: !s.wireOrthoEnabled })),
+  toggleWireAutoRoute: () =>
+    set((s) => ({ wireAutoRouteEnabled: !s.wireAutoRouteEnabled })),
+  toggleWireOrientation: () =>
+    set((s) => {
+      if (!s.wireInProgress) return s;
+      return {
+        wireOrientation: s.wireOrientation === 'h' ? 'v' : 'h',
+      };
+    }),
+
+  setWireSnapModes: (partial) =>
+    set((s) => ({
+      wireSnapModes: { ...s.wireSnapModes, ...partial },
+    })),
+  toggleWireSnapMode: (key) =>
+    set((s) => ({
+      wireSnapModes: {
+        ...s.wireSnapModes,
+        [key]: !s.wireSnapModes[key],
       },
     })),
+  resetWireSnapModes: () =>
+    set({ wireSnapModes: { ...DEFAULT_WIRE_OBJECT_SNAP_MODES } }),
+
+  patchWireDraftStyle: (partial) =>
+    set((state) => {
+      const prev = state.wireDraftDefaults;
+      const defaults: {
+        color: WireColor | null;
+        wireCategory: 'power' | 'control' | 'comm' | null;
+        styleLayer: WireStyleLayer | null;
+      } = { ...prev, ...partial };
+      if (partial.styleLayer) {
+        const L = applyWireStyleLayerDefaults(partial.styleLayer);
+        defaults.styleLayer = partial.styleLayer;
+        if (partial.color === undefined && prev.color === null) {
+          defaults.color = L.color;
+        }
+        if (partial.wireCategory === undefined && prev.wireCategory === null) {
+          defaults.wireCategory = L.wireCategory ?? 'control';
+        }
+      }
+      if (partial.styleLayer === null) {
+        defaults.styleLayer = null;
+      }
+
+      const wip = state.wireInProgress;
+      if (!wip?.fromComponentId || !wip.fromPointId) {
+        return { wireDraftDefaults: defaults };
+      }
+      const fromComp = state.circuit.components.find(
+        (c) => c.id === wip.fromComponentId
+      );
+      const fromPt = fromComp?.connectionPoints.find(
+        (p) => p.id === wip.fromPointId
+      );
+      const fromLab = fromPt?.label ?? '';
+      const stroke = resolvedWireStrokeForNewConnection(
+        {
+          color: defaults.color,
+          wireCategory: defaults.wireCategory,
+          styleLayer: defaults.styleLayer ?? null,
+        },
+        fromLab,
+        fromLab
+      );
+      const nextWip: Partial<Wire> = { ...wip };
+      nextWip.color = stroke.color;
+      if (stroke.wireCategory) {
+        nextWip.wireCategory = stroke.wireCategory;
+      } else {
+        delete nextWip.wireCategory;
+      }
+      if (stroke.styleLayer) {
+        nextWip.styleLayer = stroke.styleLayer;
+      } else {
+        delete nextWip.styleLayer;
+      }
+      let cs = wip.crossSection ?? 2.5;
+      if (defaults.styleLayer) {
+        const sug = suggestedCrossSectionForLayer(defaults.styleLayer);
+        if (sug != null) cs = sug;
+      }
+      nextWip.crossSection = cs;
+      return { wireDraftDefaults: defaults, wireInProgress: nextWip };
+    }),
+
+  setSelected: (id, options) =>
+    set((state) => {
+      const clearGrip =
+        Boolean(options?.clearWireGrip) ||
+        id === null ||
+        (id !== null && id !== state.selectedId);
+      return {
+        selectedId: id,
+        wireGripVertexIndex: clearGrip ? null : state.wireGripVertexIndex,
+        circuit: {
+          ...state.circuit,
+          components: state.circuit.components.map((c) => ({
+            ...c,
+            selected: id !== null && c.id === id,
+          })),
+        },
+      };
+    }),
   setTool: (tool) => {
-    set({ tool });
+    set({
+      tool,
+      wireGripVertexIndex: null,
+      wireCadEditMode: null,
+      wireTrimFirstVertexIndex: null,
+    });
     if (tool !== 'wire') {
       get().cancelWire();
     }
@@ -746,8 +2071,16 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       circuit: createEmptyCircuit(),
       simulationResult: null,
       selectedId: null,
+      wireGripVertexIndex: null,
       history: [],
       historyIndex: -1,
+      bmsSimLog: [],
+      wireDraftDefaults: { color: null, wireCategory: null, styleLayer: null },
+      wireInProgress: null,
+      wirePoints: [],
+      wireOrientation: 'h',
+      wireCadEditMode: null,
+      wireTrimFirstVertexIndex: null,
     });
   },
 
@@ -780,7 +2113,18 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       components: withAcbCps,
       wires,
     };
-    set({ circuit: normalized, selectedId: null });
+    set({
+      circuit: refreshAutoWireNumbers(normalized),
+      selectedId: null,
+      wireGripVertexIndex: null,
+      bmsSimLog: [],
+      wireDraftDefaults: { color: null, wireCategory: null, styleLayer: null },
+      wireInProgress: null,
+      wirePoints: [],
+      wireOrientation: 'h',
+      wireCadEditMode: null,
+      wireTrimFirstVertexIndex: null,
+    });
     get().runSimulation();
   },
 
@@ -794,6 +2138,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         components: c.components,
         wires: c.wires,
         phaseImbalanceWarningPercent: c.phaseImbalanceWarningPercent ?? 15,
+        wireLabelsVisible: c.wireLabelsVisible !== false,
       },
     };
     const json = JSON.stringify(data, null, 2);
@@ -806,15 +2151,23 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     URL.revokeObjectURL(url);
   },
 
+  exportWireScheduleCsv: () => {
+    const c = get().circuit;
+    downloadWireScheduleCsv(c, c.name || 'circuit');
+  },
+
   undo: () => {
     const { history, historyIndex } = get();
     if (historyIndex <= 0) return;
     const newIndex = historyIndex - 1;
+    const entry = history[newIndex];
     set({
-      circuit: JSON.parse(
-        JSON.stringify(history[newIndex].circuit)
+      circuit: JSON.parse(JSON.stringify(entry.circuit)),
+      bmsSimLog: JSON.parse(
+        JSON.stringify(entry.bmsSimLog ?? [])
       ),
       historyIndex: newIndex,
+      wireGripVertexIndex: null,
     });
     get().runSimulation();
   },
@@ -823,17 +2176,21 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const { history, historyIndex } = get();
     if (historyIndex >= history.length - 1) return;
     const newIndex = historyIndex + 1;
+    const entry = history[newIndex];
     set({
-      circuit: JSON.parse(
-        JSON.stringify(history[newIndex].circuit)
+      circuit: JSON.parse(JSON.stringify(entry.circuit)),
+      bmsSimLog: JSON.parse(
+        JSON.stringify(entry.bmsSimLog ?? [])
       ),
       historyIndex: newIndex,
+      wireGripVertexIndex: null,
     });
     get().runSimulation();
   },
 
   pushHistory: (description) => {
     const circuit = JSON.parse(JSON.stringify(get().circuit));
+    const bmsSimLog = JSON.parse(JSON.stringify(get().bmsSimLog));
     set((state) => {
       const trimmed = state.history.slice(
         0,
@@ -841,7 +2198,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       );
       const newHistory = [
         ...trimmed,
-        { circuit, description },
+        { circuit, description, bmsSimLog },
       ].slice(-50);
       return {
         history: newHistory,
@@ -862,4 +2219,13 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       },
     }));
   },
+
+  setCircuitWireLabelsVisible: (visible) =>
+    set((state) => ({
+      circuit: {
+        ...state.circuit,
+        wireLabelsVisible: visible,
+        updatedAt: new Date().toISOString(),
+      },
+    })),
 }));

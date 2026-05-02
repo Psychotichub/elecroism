@@ -23,10 +23,26 @@ import {
   FiChevronDown,
   FiSliders,
   FiBox,
+  FiStar,
+  FiSearch,
+  FiChevronsDown,
+  FiChevronsUp,
 } from 'react-icons/fi';
+import {
+  loadFavoriteTypes,
+  loadRecentTypes,
+  toggleFavoriteType,
+  PALETTE_RECENT_CHANGED,
+} from '../../utils/sidebarPaletteStorage';
 
 /** Persisted across reloads so users keep their preferred groups expanded. */
 const COLLAPSE_STORAGE_KEY = 'electrosim.sidebarCollapsedGroups.v1';
+/** Search field + category chips visibility. */
+const PALETTE_SEARCH_PANEL_KEY = 'electrosim.sidebarPaletteSearchExpanded.v1';
+/** Scrollable component group list visibility. */
+const PALETTE_COMPONENT_LIST_KEY = 'electrosim.sidebarPaletteListExpanded.v1';
+/** Legacy single toggle; used once to seed both panels if new keys are absent. */
+const LEGACY_PALETTE_BODY_KEY = 'electrosim.sidebarPaletteBodyExpanded.v1';
 
 interface ComponentItem {
   type: ComponentType;
@@ -521,7 +537,7 @@ const GROUPS: ComponentGroup[] = [
         type: 'control_wiring',
         label: 'Control wiring',
         icon: <FiLink />,
-        detail: '1.5/2.5 sqmm control cabling',
+        detail: 'Flexible Cu (e.g. H07V-K), often 0.5–1.5 mm² in panels',
       },
       {
         type: 'power_cables',
@@ -587,6 +603,24 @@ const GROUPS: ComponentGroup[] = [
   },
 ];
 
+const ALL_PALETTE_TYPES: ReadonlySet<string> = new Set(
+  GROUPS.flatMap((g) => g.items.map((i) => i.type))
+);
+
+const TYPE_TO_GROUP = new Map<string, string>();
+for (const g of GROUPS) {
+  for (const it of g.items) {
+    if (!TYPE_TO_GROUP.has(it.type)) TYPE_TO_GROUP.set(it.type, g.name);
+  }
+}
+
+const ITEM_BY_TYPE = new Map<ComponentType, ComponentItem>();
+for (const g of GROUPS) {
+  for (const it of g.items) {
+    if (!ITEM_BY_TYPE.has(it.type)) ITEM_BY_TYPE.set(it.type, it);
+  }
+}
+
 function loadCollapsed(): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
@@ -614,14 +648,153 @@ function saveCollapsed(set: Set<string>): void {
   }
 }
 
+function readBoolLocalStorage(key: string): boolean | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return null;
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+  } catch {
+    // ignore corrupt storage
+  }
+  return null;
+}
+
+function writeBoolLocalStorage(key: string, open: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, open ? 'true' : 'false');
+  } catch {
+    // storage may be disabled; failure is non-fatal
+  }
+}
+
+function loadSearchPanelOpen(): boolean {
+  const own = readBoolLocalStorage(PALETTE_SEARCH_PANEL_KEY);
+  if (own !== null) return own;
+  const legacy = readBoolLocalStorage(LEGACY_PALETTE_BODY_KEY);
+  if (legacy !== null) return legacy;
+  return true;
+}
+
+function saveSearchPanelOpen(open: boolean): void {
+  writeBoolLocalStorage(PALETTE_SEARCH_PANEL_KEY, open);
+}
+
+function loadComponentListOpen(): boolean {
+  const own = readBoolLocalStorage(PALETTE_COMPONENT_LIST_KEY);
+  if (own !== null) return own;
+  const legacy = readBoolLocalStorage(LEGACY_PALETTE_BODY_KEY);
+  if (legacy !== null) return legacy;
+  return true;
+}
+
+function saveComponentListOpen(open: boolean): void {
+  writeBoolLocalStorage(PALETTE_COMPONENT_LIST_KEY, open);
+}
+
+type SidebarSection = {
+  collapseKey: string;
+  name: string;
+  emoji: string;
+  items: ComponentItem[];
+};
+
 const Sidebar: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed());
+  const [searchPanelOpen, setSearchPanelOpen] = useState(() =>
+    loadSearchPanelOpen()
+  );
+  const [componentListOpen, setComponentListOpen] = useState(() =>
+    loadComponentListOpen()
+  );
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [favorites, setFavorites] = useState<string[]>(() =>
+    loadFavoriteTypes(ALL_PALETTE_TYPES)
+  );
+  const [recent, setRecent] = useState<string[]>(() =>
+    loadRecentTypes(ALL_PALETTE_TYPES)
+  );
 
   useEffect(() => {
     saveCollapsed(collapsed);
   }, [collapsed]);
+
+  useEffect(() => {
+    saveSearchPanelOpen(searchPanelOpen);
+  }, [searchPanelOpen]);
+
+  useEffect(() => {
+    saveComponentListOpen(componentListOpen);
+  }, [componentListOpen]);
+
+  useEffect(() => {
+    const syncRecent = () =>
+      setRecent(loadRecentTypes(ALL_PALETTE_TYPES));
+    window.addEventListener(PALETTE_RECENT_CHANGED, syncRecent);
+    return () => window.removeEventListener(PALETTE_RECENT_CHANGED, syncRecent);
+  }, []);
+
+  const filteredSections: SidebarSection[] = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const matches = (item: ComponentItem) => {
+      if (!q) return true;
+      const blob = `${item.label} ${item.detail ?? ''} ${item.type}`.toLowerCase();
+      return blob.includes(q);
+    };
+    const catOk = (item: ComponentItem) =>
+      categoryFilter === 'all' || TYPE_TO_GROUP.get(item.type) === categoryFilter;
+
+    const out: SidebarSection[] = [];
+
+    const favItems = favorites
+      .map((t) => ITEM_BY_TYPE.get(t as ComponentType))
+      .filter((x): x is ComponentItem => !!x)
+      .filter(matches)
+      .filter(catOk);
+    if (favItems.length > 0) {
+      out.push({
+        collapseKey: 'Favorites',
+        name: 'Favorites',
+        emoji: '⭐',
+        items: favItems,
+      });
+    }
+
+    const recItems = recent
+      .map((t) => ITEM_BY_TYPE.get(t as ComponentType))
+      .filter((x): x is ComponentItem => !!x)
+      .filter(matches)
+      .filter(catOk);
+    if (recItems.length > 0) {
+      out.push({
+        collapseKey: 'Recent',
+        name: 'Recent',
+        emoji: '🕐',
+        items: recItems,
+      });
+    }
+
+    for (const g of GROUPS) {
+      if (categoryFilter !== 'all' && g.name !== categoryFilter) continue;
+      // Always list every type in its home group so you can place the same
+      // part many times; Favorites / Recent are extra shortcuts (may duplicate).
+      const items = g.items.filter(matches).filter(catOk);
+      if (items.length === 0) continue;
+      out.push({
+        collapseKey: g.name,
+        name: g.name,
+        emoji: g.emoji,
+        items,
+      });
+    }
+
+    return out;
+  }, [searchQuery, categoryFilter, favorites, recent]);
 
   const toggleGroup = (name: string) => {
     setCollapsed((prev) => {
@@ -632,9 +805,18 @@ const Sidebar: React.FC = () => {
     });
   };
 
+  const expandAllGroups = React.useCallback(() => {
+    setCollapsed(new Set());
+  }, []);
+
+  const collapseAllGroups = React.useCallback(() => {
+    setCollapsed(new Set(filteredSections.map((s) => s.collapseKey)));
+  }, [filteredSections]);
+
   const handleDragStart = (e: React.DragEvent, item: ComponentItem) => {
     setDragComponentType(item.type);
     e.dataTransfer.setData('componentType', item.type);
+    e.dataTransfer.setData('text/plain', item.type);
     if (item.type === 'push_button') {
       e.dataTransfer.setData('pushButtonVariant', 'NO');
     } else {
@@ -652,69 +834,275 @@ const Sidebar: React.FC = () => {
     clearDragComponentType();
   };
 
+  const renderPaletteRow = (item: ComponentItem, idx: number, sectionKey: string) => {
+    const isFav = favorites.includes(item.type);
+    return (
+      <div
+        key={`${sectionKey}-${item.type}-${idx}`}
+        draggable
+        onDragStart={(e) => handleDragStart(e, item)}
+        onDragEnd={handleDragEnd}
+        title={formatComponentPanelHelpText(
+          COMPONENT_PANEL_DESCRIPTIONS[item.type]
+        )}
+        className={`flex items-center gap-2 px-3 py-1.5 mx-1 rounded cursor-grab ${tc.itemHover} transition-colors active:cursor-grabbing`}
+      >
+        <span className={`text-base shrink-0 ${tc.groupLabel}`}>{item.icon}</span>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className={`text-xs ${tc.text}`}>{item.label}</span>
+          {item.detail && (
+            <span className={`text-[10px] ${tc.textMuted}`}>{item.detail}</span>
+          )}
+        </div>
+        <button
+          type="button"
+          aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+          title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+          className={`shrink-0 rounded p-1 ${tc.itemHover}`}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setFavorites((cur) =>
+              toggleFavoriteType(item.type, cur, ALL_PALETTE_TYPES)
+            );
+          }}
+        >
+          <FiStar
+            className={`h-3.5 w-3.5 ${
+              isFav ? 'fill-amber-400 text-amber-400' : `opacity-35 ${tc.textMuted}`
+            }`}
+            strokeWidth={isFav ? 0 : 1.75}
+          />
+        </button>
+      </div>
+    );
+  };
+
   return (
-    <div className={`w-56 ${tc.sidebar} ${tc.text} flex flex-col overflow-y-auto select-none border-r ${tc.border}`}>
-      <div className={`px-3 py-3 border-b ${tc.border}`}>
-        <h2 className={`text-sm font-bold ${tc.textBright} tracking-wide`}>
-          Components
-        </h2>
-      </div>
-      <div className="flex-1 overflow-y-auto py-1">
-        {GROUPS.map((group) => {
-          const isCollapsed = collapsed.has(group.name);
-          return (
-            <div key={group.name} className="mb-1">
-              <button
-                type="button"
-                onClick={() => toggleGroup(group.name)}
-                aria-expanded={!isCollapsed}
-                aria-controls={`sidebar-group-${group.name}`}
-                className={`w-full flex items-center gap-1 px-3 py-1.5 text-xs font-semibold ${tc.groupLabel} uppercase tracking-wider ${tc.itemHover} transition-colors text-left rounded`}
-              >
-                <span className="text-[10px] opacity-80">
-                  {isCollapsed ? <FiChevronRight /> : <FiChevronDown />}
-                </span>
-                <span>
-                  {group.emoji} {group.name}
-                </span>
-                <span className={`ml-auto text-[10px] ${tc.textMuted} normal-case font-normal`}>
-                  {group.items.length}
-                </span>
-              </button>
-              {!isCollapsed && (
-                <div id={`sidebar-group-${group.name}`}>
-                  {group.items.map((item, idx) => (
-                    <div
-                      key={`${item.type}-${idx}`}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, item)}
-                      onDragEnd={handleDragEnd}
-                      title={formatComponentPanelHelpText(
-                        COMPONENT_PANEL_DESCRIPTIONS[item.type]
-                      )}
-                      className={`flex items-center gap-2 px-3 py-1.5 mx-1 rounded cursor-grab ${tc.itemHover} transition-colors active:cursor-grabbing`}
-                    >
-                      <span className={`text-base ${tc.groupLabel}`}>
-                        {item.icon}
-                      </span>
-                      <div className="flex flex-col">
-                        <span className={`text-xs ${tc.text}`}>
-                          {item.label}
-                        </span>
-                        {item.detail && (
-                          <span className={`text-[10px] ${tc.textMuted}`}>
-                            {item.detail}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+    <div
+      className={`w-56 ${tc.sidebar} ${tc.text} flex min-h-0 flex-col select-none border-r ${tc.border}`}
+    >
+      <div className={`shrink-0 border-b ${tc.border} ${tc.sidebar}`}>
+        <div className={`px-3 py-2 flex items-center justify-between gap-2`}>
+          <h2
+            id="sidebar-palette-heading"
+            className={`text-sm font-bold ${tc.textBright} tracking-wide min-w-0 truncate`}
+          >
+            Components
+          </h2>
+          <div
+            className="flex shrink-0 gap-0.5 rounded-md border border-black/10 dark:border-white/10 p-0.5"
+            role="group"
+            aria-label="Expand or collapse all component groups"
+          >
+            <button
+              type="button"
+              title="Expand all groups"
+              disabled={!componentListOpen || filteredSections.length === 0}
+              onClick={expandAllGroups}
+              className={`rounded p-1.5 transition-colors disabled:opacity-30 disabled:pointer-events-none ${tc.itemHover} ${tc.textMuted} hover:${tc.text}`}
+            >
+              <FiChevronsDown className="h-4 w-4" aria-hidden />
+            </button>
+            <button
+              type="button"
+              title="Collapse all groups"
+              disabled={!componentListOpen || filteredSections.length === 0}
+              onClick={collapseAllGroups}
+              className={`rounded p-1.5 transition-colors disabled:opacity-30 disabled:pointer-events-none ${tc.itemHover} ${tc.textMuted} hover:${tc.text}`}
+            >
+              <FiChevronsUp className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        </div>
+        <div className={`border-t border-black/10 dark:border-white/10`}>
+          <button
+            type="button"
+            onClick={() => setSearchPanelOpen((o) => !o)}
+            aria-expanded={searchPanelOpen}
+            aria-controls={
+              searchPanelOpen ? 'sidebar-search-panel' : undefined
+            }
+            title={
+              searchPanelOpen
+                ? 'Hide search and category filters'
+                : 'Show search and category filters'
+            }
+            className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide ${tc.groupLabel} ${tc.itemHover} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-inset`}
+          >
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'} text-[11px] ${tc.textMuted}`}
+              aria-hidden
+            >
+              {searchPanelOpen ? (
+                <FiChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <FiChevronRight className="h-3.5 w-3.5" />
               )}
+            </span>
+            <span id="sidebar-search-panel-heading" className="min-w-0 truncate">
+              Search & filters
+            </span>
+          </button>
+          {searchPanelOpen && (
+            <div
+              id="sidebar-search-panel"
+              role="region"
+              aria-labelledby="sidebar-search-panel-heading"
+              className={`space-y-2 px-3 pb-2 pt-0.5`}
+            >
+              <label className="sr-only" htmlFor="sidebar-component-search">
+                Search components
+              </label>
+              <div className="relative">
+                <FiSearch
+                  className={`pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${tc.textMuted}`}
+                  aria-hidden
+                />
+                <input
+                  id="sidebar-component-search"
+                  type="search"
+                  autoComplete="off"
+                  placeholder="Search…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`input-field w-full py-1.5 pl-7 text-xs ${theme === 'dark' ? 'bg-black/25' : ''}`}
+                />
+              </div>
+              <div className="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter('all')}
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                    categoryFilter === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : `${tc.textMuted} ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'}`
+                  }`}
+                >
+                  All
+                </button>
+                {GROUPS.map((g) => (
+                  <button
+                    key={g.name}
+                    type="button"
+                    onClick={() => setCategoryFilter(g.name)}
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                      categoryFilter === g.name
+                        ? 'bg-blue-600 text-white'
+                        : `${tc.textMuted} ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'}`
+                    }`}
+                  >
+                    {g.emoji} {g.name}
+                  </button>
+                ))}
+              </div>
             </div>
-          );
-        })}
+          )}
+        </div>
+        <div className="border-t border-black/10 dark:border-white/10">
+          <button
+            type="button"
+            onClick={() => setComponentListOpen((o) => !o)}
+            aria-expanded={componentListOpen}
+            aria-controls={
+              componentListOpen ? 'sidebar-palette-body' : undefined
+            }
+            title={
+              componentListOpen
+                ? 'Hide component list'
+                : 'Show component list'
+            }
+            className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide ${tc.groupLabel} ${tc.itemHover} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-inset`}
+          >
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'} text-[11px] ${tc.textMuted}`}
+              aria-hidden
+            >
+              {componentListOpen ? (
+                <FiChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <FiChevronRight className="h-3.5 w-3.5" />
+              )}
+            </span>
+            <span id="sidebar-component-list-heading" className="min-w-0 truncate">
+              Component list
+            </span>
+          </button>
+        </div>
       </div>
+      {componentListOpen && (
+      <div
+        id="sidebar-palette-body"
+        role="region"
+        aria-labelledby="sidebar-component-list-heading"
+        className="min-h-0 flex-1 overflow-y-auto py-1"
+      >
+        {filteredSections.length === 0 ? (
+          <p className={`px-3 py-4 text-center text-[11px] ${tc.textMuted}`}>
+            No components match this search or category.
+          </p>
+        ) : (
+          filteredSections.map((section) => {
+            const isCollapsed = collapsed.has(section.collapseKey);
+            return (
+              <div
+                key={section.collapseKey}
+                className={`mb-1 mx-1 rounded-lg border ${
+                  isCollapsed
+                    ? 'border-transparent'
+                    : `${tc.border} ${theme === 'dark' ? 'bg-black/20' : 'bg-black/[0.03]'}`
+                } overflow-hidden`}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(section.collapseKey)}
+                  aria-expanded={!isCollapsed}
+                  aria-controls={`sidebar-group-${section.collapseKey}`}
+                  title={
+                    isCollapsed
+                      ? `Expand ${section.name} (${section.items.length})`
+                      : `Collapse ${section.name}`
+                  }
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold ${tc.groupLabel} uppercase tracking-wider ${tc.itemHover} transition-colors text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-inset`}
+                >
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'} text-[11px]`}
+                    aria-hidden
+                  >
+                    {isCollapsed ? <FiChevronRight /> : <FiChevronDown />}
+                  </span>
+                  <span className="min-w-0 truncate text-left">
+                    <span className="mr-1" aria-hidden>
+                      {section.emoji}
+                    </span>
+                    {section.name}
+                  </span>
+                  <span
+                    className={`ml-auto shrink-0 tabular-nums text-[10px] ${tc.textMuted} normal-case font-normal`}
+                  >
+                    {section.items.length}
+                  </span>
+                </button>
+                {!isCollapsed && (
+                  <div
+                    id={`sidebar-group-${section.collapseKey}`}
+                    className={`border-t ${tc.border} pb-1`}
+                  >
+                    {section.items.map((item, idx) =>
+                      renderPaletteRow(item, idx, section.collapseKey)
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+      )}
     </div>
   );
 };

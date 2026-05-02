@@ -128,6 +128,20 @@ export type WireColor =
   | 'red'
   | 'ethernet';
 
+/**
+ * Layer-like drawing style for wires (documentation / readability).
+ * Distinct from `wireCategory` (power/control/comm) used with the engine.
+ */
+export type WireStyleLayer =
+  | 'power_ac'
+  | 'power_dc'
+  | 'control_ac'
+  | 'control_dc'
+  | 'earth_pe'
+  | 'neutral'
+  | 'communication'
+  | 'instrumentation_analog';
+
 export type PhaseSystem = 'single_phase' | 'three_phase';
 
 export interface ConnectionPoint {
@@ -262,7 +276,8 @@ export interface ComponentProperties {
   loadType?: 'resistive' | 'inductive' | 'capacitive';
   powerFactor?: number;
 
-  crossSection?: 1.5 | 2.5 | 4 | 6 | 10;
+  /** Optional conductor size hint on some devices (mm²). */
+  crossSection?: number;
   wireColor?: WireColor;
 
   phaseSystem?: PhaseSystem;
@@ -391,6 +406,25 @@ export interface ComponentProperties {
   acDcHasRegulator?: boolean;
 }
 
+/** Per-target object snap while drawing wires (AutoCAD-style osnap modes). */
+export interface WireObjectSnapModes {
+  /** Component terminals / connection points */
+  connection: boolean;
+  /** Existing wire polyline vertices */
+  endpoint: boolean;
+  /** Midpoints of orthogonal wire segments */
+  midpoint: boolean;
+  /** Crossing of a horizontal and a vertical wire segment */
+  intersection: boolean;
+}
+
+export const DEFAULT_WIRE_OBJECT_SNAP_MODES: WireObjectSnapModes = {
+  connection: true,
+  endpoint: true,
+  midpoint: true,
+  intersection: true,
+};
+
 export interface Wire {
   id: string;
   fromComponentId: string;
@@ -406,6 +440,22 @@ export interface Wire {
   crossSection: number;
   energized: boolean;
   currentAmps: number;
+  /** Auto-generated designator (e.g. W1, W2, or `Q0.L1-Q1.L1` when `wireNumberAuto`). */
+  wireNumber?: string;
+  /**
+   * When true, `wireNumber` is derived from `{fromLabel}.{fromTerminal}-{toLabel}.{toTerminal}`
+   * and kept in sync when those labels change. When false/omitted, `wireNumber` is manual / legacy `Wn`.
+   */
+  wireNumberAuto?: boolean;
+  /** Manual label shown on drawing; overrides `wireNumber` when set. */
+  wireLabel?: string;
+  /** When false, this wire’s label is hidden (global toggle still applies). */
+  labelVisible?: boolean;
+  /** Optional documentation / schedule fields. */
+  sourceTag?: string;
+  destinationTag?: string;
+  /** Layer-like stroke preset (color, width, dash). When set, overrides plain conductor look. */
+  styleLayer?: WireStyleLayer;
 }
 
 export interface Circuit {
@@ -424,6 +474,8 @@ export interface Circuit {
    * current factors) exceeds this percent of the mean. Default 15.
    */
   phaseImbalanceWarningPercent?: number;
+  /** Master toggle for wire designator / label overlays. Default true. */
+  wireLabelsVisible?: boolean;
 }
 
 export interface NodeResult {
@@ -481,7 +533,21 @@ export interface FaultEvent {
 
 export type ToolMode = 'select' | 'wire' | 'delete' | 'pan';
 
+/** One BMS command attempt for the BMS simulator / audit log. */
+export interface BmsSimLogEntry {
+  id: string;
+  deviceId: string;
+  label: string;
+  deviceKind: 'ACB' | 'mMCCB';
+  command: string;
+  ok: boolean;
+  detail: string;
+  ts: number;
+}
+
 export interface HistoryEntry {
   circuit: Circuit;
   description: string;
+  /** BMS simulator log at this revision (restored with undo/redo). */
+  bmsSimLog: BmsSimLogEntry[];
 }

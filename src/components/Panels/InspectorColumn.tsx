@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import PropertyPanel from './PropertyPanel';
 import CircuitValidationPanel from './CircuitValidationPanel';
+import BmsSimulatorPanel from './BmsSimulatorPanel';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import { runCircuitDesignValidation } from '../../utils/circuitDesignValidation';
 
 const TAB_KEY = 'electroism.inspectorTab.v1';
 
-type TabId = 'properties' | 'validation';
+type TabId = 'properties' | 'validation' | 'bms';
 
 const InspectorColumn: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
@@ -67,9 +68,16 @@ const InspectorColumn: React.FC = () => {
       <div className={`flex shrink-0 border-b ${tc.border}`}>
         {tabBtn('properties', 'Properties')}
         {tabBtn('validation', 'Validation', warnCount)}
+        {tabBtn('bms', 'BMS sim')}
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {tab === 'properties' ? <PropertyPanel /> : <CircuitValidationPanel />}
+        {tab === 'properties' ? (
+          <PropertyPanel />
+        ) : tab === 'validation' ? (
+          <CircuitValidationPanel />
+        ) : (
+          <BmsSimulatorPanel />
+        )}
       </div>
     </div>
   );

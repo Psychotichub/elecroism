@@ -3,7 +3,9 @@ import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import {
   runCircuitDesignValidation,
+  buildProtectionCoordinationReport,
   type CircuitValidationIssue,
+  type ProtectionCoordinationRow,
 } from '../../utils/circuitDesignValidation';
 import { FiAlertCircle, FiAlertTriangle, FiInfo } from 'react-icons/fi';
 
@@ -34,6 +36,11 @@ const CircuitValidationPanel: React.FC = () => {
     [circuit, simulationResult]
   );
 
+  const coordination = useMemo(
+    () => buildProtectionCoordinationReport(circuit),
+    [circuit]
+  );
+
   return (
     <div
       className={`flex min-h-0 flex-1 flex-col overflow-hidden ${tc.panel} ${tc.text}`}
@@ -44,8 +51,9 @@ const CircuitValidationPanel: React.FC = () => {
         </h2>
         <p className={`mt-1 text-[11px] leading-snug ${tc.textMuted}`}>
           Static checks before you rely on the last simulation: supply topology,
-          motor phases, PE vs N, BMS control readiness, comms addressing, and
-          cable vs breaker / current hints.
+          motor phases, PE vs N, BMS control readiness, comms addressing,
+          protection coordination (feeder order and grading hints), and cable vs
+          breaker / current hints. Time–current curves are not drawn yet.
         </p>
         <div
           className={`mt-2 flex flex-wrap items-center gap-2 border-t pt-2 ${tc.border}`}
@@ -71,7 +79,69 @@ const CircuitValidationPanel: React.FC = () => {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-4">
+        {coordination.rows.length > 0 && (
+          <div>
+            <h3
+              className={`mb-1.5 text-[11px] font-bold uppercase tracking-wide ${tc.textMuted}`}
+            >
+              Protection coordination
+            </h3>
+            <p className={`mb-2 text-[10px] leading-snug ${tc.textMuted}`}>
+              Order is by shortest path (hops) from a supply live terminal to
+              each device&apos;s line-side IN — parallel feeders may look odd.
+              Trip labels are indicative (full I²t curves are not plotted).
+            </p>
+            <div className={`overflow-x-auto rounded-md border ${tc.border}`}>
+              <table className="w-full min-w-[280px] border-collapse text-left text-[10px]">
+                <thead>
+                  <tr className={theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.03]'}>
+                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
+                      Device
+                    </th>
+                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
+                      Iₙ (A)
+                    </th>
+                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
+                      Trip / type
+                    </th>
+                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
+                      Hops
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coordination.rows.map((r: ProtectionCoordinationRow) => (
+                    <tr key={r.componentId}>
+                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
+                        <button
+                          type="button"
+                          className={`text-left font-medium underline-offset-2 hover:underline ${tc.textBright}`}
+                          onClick={() => setSelected(r.componentId)}
+                        >
+                          {r.label}
+                        </button>
+                        <span className={`block font-normal ${tc.textMuted}`}>
+                          {r.deviceType.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
+                        {r.ratedAmps != null ? r.ratedAmps : '—'}
+                      </td>
+                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
+                        {r.tripOrFamily ?? '—'}
+                      </td>
+                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
+                        {r.minHopsFromLive != null ? r.minHopsFromLive : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {issues.length === 0 ? (
           <p
             className={`rounded-md border px-3 py-4 text-center text-xs ${tc.border} ${theme === 'dark' ? 'border-emerald-900/50 bg-emerald-950/30 text-emerald-200' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}

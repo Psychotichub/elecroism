@@ -16,6 +16,22 @@ export interface CircuitValidationIssue {
   componentIds: string[];
 }
 
+/** One row in the protection coordination feeder table (Validation tab). */
+export interface ProtectionCoordinationRow {
+  componentId: string;
+  label: string;
+  deviceType: string;
+  ratedAmps: number | null;
+  tripOrFamily: string | null;
+  /** Shortest graph hops from a supply live terminal to a line-side IN terminal */
+  minHopsFromLive: number | null;
+}
+
+export interface ProtectionCoordinationReport {
+  rows: ProtectionCoordinationRow[];
+  issues: CircuitValidationIssue[];
+}
+
 const SOURCE_TYPES = new Set([
   'power_source',
   'three_phase_source',
@@ -57,6 +73,22 @@ const BREAKER_TYPES_FOR_CABLE = new Set([
   'four_pole_motorized_mccb',
   'hrc_fuse',
   'control_circuit_fuse',
+]);
+
+/** Breakers / fuses / RCDs for feeder-order coordination (not ELR/CBCT — different role). */
+const PROTECTION_COORDINATION_TYPES = new Set([
+  'mcb',
+  'three_phase_mcb',
+  'mccb',
+  'motor_protection_circuit_breaker',
+  'four_phase_mcb',
+  'motorized_mccb',
+  'four_pole_motorized_mccb',
+  'hrc_fuse',
+  'control_circuit_fuse',
+  'air_circuit_breaker',
+  'rcd',
+  'residual_current_circuit_breaker',
 ]);
 
 function tKey(componentId: string, pointId: string): string {
@@ -156,21 +188,46 @@ function threePhaseMotorImbalancePercent(c: CircuitComponent): number {
   return (100 * (Math.max(f1, f2, f3) - Math.min(f1, f2, f3))) / meanF;
 }
 
+/** Typical continuous Cu capacity hints (A), rounded; not a substitute for standards tables. */
 function maxContinuousAmpsCu(crossSectionMm2: number): number {
   const table: Record<number, number> = {
+    1: 10,
     1.5: 14,
     2.5: 20,
     4: 28,
     6: 38,
     10: 55,
     16: 70,
+    25: 95,
+    35: 115,
+    50: 145,
+    70: 180,
+    95: 220,
+    120: 260,
+    150: 300,
+    185: 345,
+    240: 400,
   };
-  if (table[crossSectionMm2] !== undefined) return table[crossSectionMm2]!;
+  const key = Math.round(crossSectionMm2 * 1000) / 1000;
+  if (table[key] !== undefined) return table[key]!;
   if (crossSectionMm2 < 1) return 4;
-  return Math.min(200, Math.round(crossSectionMm2 * 8));
+  if (crossSectionMm2 > 240) return Math.round(400 + (crossSectionMm2 - 240) * 0.9);
+  // Linear interpolate between bracketing standard sizes
+  const sizes = Object.keys(table)
+    .map(Number)
+    .sort((a, b) => a - b);
+  for (let i = 0; i < sizes.length - 1; i++) {
+    const a = sizes[i];
+    const b = sizes[i + 1];
+    if (crossSectionMm2 > a && crossSectionMm2 < b) {
+      const t = (crossSectionMm2 - a) / (b - a);
+      return Math.round(table[a]! + t * (table[b]! - table[a]!));
+    }
+  }
+  return Math.round(Math.min(450, crossSectionMm2 * 1.65));
 }
 
-function collectSupplySeeds(circuit: Circuit): {
+export function collectSupplySeeds(circuit: Circuit): {
   live: Set<string>;
   neutral: Set<string>;
 } {
@@ -214,6 +271,159 @@ function breakerRatedAmps(c: CircuitComponent): number | null {
   return null;
 }
 
+function bfsShortestDistances(
+  graph: Map<string, Set<string>>,
+  starts: string[]
+): Map<string, number> {
+  const dist = new Map<string, number>();
+  const q: string[] = [];
+  for (const s of starts) {
+    if (graph.has(s) && !dist.has(s)) {
+      dist.set(s, 0);
+      q.push(s);
+    }
+  }
+  let i = 0;
+  while (i < q.length) {
+    const k = q[i++]!;
+    const d = dist.get(k)!;
+    for (const n of graph.get(k) ?? []) {
+      if (!dist.has(n)) {
+        dist.set(n, d + 1);
+        q.push(n);
+      }
+    }
+  }
+  return dist;
+}
+
+/** Terminals treated as line-side inputs for hop distance from supply live. */
+function breakerLiveInputKeys(c: CircuitComponent): string[] {
+  const keys: string[] = [];
+  for (const p of c.connectionPoints) {
+    const L = labelNorm(p.label);
+    if (L === 'IN' || L === 'IN_L' || L.startsWith('IN_L')) {
+      keys.push(tKey(c.id, p.id));
+    }
+  }
+  if (keys.length > 0) return keys;
+  for (const p of c.connectionPoints) {
+    const L = labelNorm(p.label);
+    if (L.startsWith('IN_')) {
+      keys.push(tKey(c.id, p.id));
+    }
+  }
+  return keys;
+}
+
+function protectiveRatedAmpsCoord(c: CircuitComponent): number | null {
+  return breakerRatedAmps(c);
+}
+
+function coordinationTripLabel(c: CircuitComponent): string | null {
+  const p = c.properties;
+  if (c.type === 'mcb') return p.tripCurve ?? null;
+  if (c.type === 'three_phase_mcb' || c.type === 'four_phase_mcb') {
+    return p.tripCurve ?? null;
+  }
+  if (c.type === 'hrc_fuse') return p.hrcType ?? null;
+  if (c.type === 'rcd' || c.type === 'residual_current_circuit_breaker') {
+    return p.rcdType ?? null;
+  }
+  if (c.type === 'air_circuit_breaker') {
+    const inst = p.acbInstantaneousMult;
+    return typeof inst === 'number' ? `Ir×${inst} inst` : null;
+  }
+  return null;
+}
+
+/**
+ * Upstream/downstream ordering from graph hop count from supply live terminals,
+ * plus coordination warnings (downstream In higher than upstream, unreachable
+ * devices). Cable vs breaker sizing stays in the main validation list.
+ */
+export function buildProtectionCoordinationReportInner(
+  circuit: Circuit,
+  graph: Map<string, Set<string>>,
+  liveSeedKeys: Set<string>
+): ProtectionCoordinationReport {
+  const issues: CircuitValidationIssue[] = [];
+  const rows: ProtectionCoordinationRow[] = [];
+
+  if (liveSeedKeys.size === 0 || graph.size === 0) {
+    return { rows: [], issues: [] };
+  }
+
+  const dist = bfsShortestDistances(graph, [...liveSeedKeys]);
+
+  for (const c of circuit.components) {
+    if (!PROTECTION_COORDINATION_TYPES.has(c.type)) continue;
+    const rating = protectiveRatedAmpsCoord(c);
+    const inKeys = breakerLiveInputKeys(c);
+    let minH: number | null = null;
+    for (const k of inKeys) {
+      const d = dist.get(k);
+      if (d !== undefined && (minH === null || d < minH)) minH = d;
+    }
+    if (minH === null && inKeys.length > 0) {
+      issues.push({
+        id: `coord-unreach-${c.id}`,
+        severity: 'info',
+        message: `Protection coordination: "${c.label}" line-side input does not reach a modeled supply live terminal (device open, wrong topology, or isolated).`,
+        componentIds: [c.id],
+      });
+    }
+    rows.push({
+      componentId: c.id,
+      label: c.label,
+      deviceType: c.type,
+      ratedAmps: rating,
+      tripOrFamily: coordinationTripLabel(c),
+      minHopsFromLive: minH,
+    });
+  }
+
+  rows.sort((a, b) => {
+    const ad = a.minHopsFromLive ?? 1_000_000;
+    const bd = b.minHopsFromLive ?? 1_000_000;
+    if (ad !== bd) return ad - bd;
+    return a.label.localeCompare(b.label);
+  });
+
+  for (let i = 0; i < rows.length - 1; i++) {
+    const up = rows[i]!;
+    const down = rows[i + 1]!;
+    const a = up.ratedAmps;
+    const b = down.ratedAmps;
+    if (
+      a !== null &&
+      b !== null &&
+      b > a &&
+      up.minHopsFromLive !== null &&
+      down.minHopsFromLive !== null &&
+      down.minHopsFromLive > up.minHopsFromLive
+    ) {
+      issues.push({
+        id: `coord-disc-${up.componentId}-${down.componentId}`,
+        severity: 'warning',
+        message: `Protection coordination: "${down.label}" (${b} A) appears downstream of "${up.label}" (${a} A) but has a higher rating — selective grading / backup rules may be violated.`,
+        componentIds: [up.componentId, down.componentId],
+      });
+    }
+  }
+
+  return { rows, issues };
+}
+
+export function buildProtectionCoordinationReport(
+  circuit: Circuit
+): ProtectionCoordinationReport {
+  const clone = structuredClone(circuit) as Circuit;
+  const graph = engine.getTerminalGraphForValidation(clone);
+  const { live } = collectSupplySeeds(circuit);
+  return buildProtectionCoordinationReportInner(circuit, graph, live);
+}
+
 /**
  * Design-time checks shown before / alongside simulation. Uses a clone of the
  * circuit so contactor pickup resolution does not mutate the store.
@@ -230,6 +440,14 @@ export function runCircuitDesignValidation(
   const { live: liveSeeds, neutral: neutralSeeds } = collectSupplySeeds(circuit);
   const skipPolarityPathChecks =
     liveSeeds.size === 0 || neutralSeeds.size === 0;
+
+  for (const iss of buildProtectionCoordinationReportInner(
+    circuit,
+    graph,
+    liveSeeds
+  ).issues) {
+    push(iss);
+  }
 
   const hasSource = circuit.components.some((c) => SOURCE_TYPES.has(c.type));
   const hasLoads = circuit.components.some((c) =>

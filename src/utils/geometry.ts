@@ -38,15 +38,31 @@ export function getWireColor(color: string): string {
   return colors[color] || '#1F2937';
 }
 
+/** Canvas stroke width from nominal mm² (sub-linear so large feeders stay readable). */
 export function getWireWidth(crossSection: number): number {
+  if (!Number.isFinite(crossSection) || crossSection <= 0) return 1.5;
+  const key = Math.round(crossSection * 1000) / 1000;
   const widths: Record<number, number> = {
+    1: 1,
     1.5: 1,
     2.5: 1.5,
     4: 2,
     6: 2.5,
     10: 3,
+    16: 3.5,
+    25: 4,
+    35: 4.5,
+    50: 5,
+    70: 5.5,
+    95: 6,
+    120: 6.5,
+    150: 6.5,
+    185: 6.5,
+    240: 6.5,
   };
-  return widths[crossSection] || 1.5;
+  if (widths[key] !== undefined) return widths[key];
+  const w = 0.9 + 0.2 * Math.sqrt(crossSection);
+  return Math.min(6.5, Math.max(1, w));
 }
 
 const SCALE_MIN = 0.25;

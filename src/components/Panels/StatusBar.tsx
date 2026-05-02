@@ -11,6 +11,13 @@ const StatusBar: React.FC = () => {
     simulationResult,
     tool,
     selectedId,
+    wireInProgress,
+    wirePoints,
+    wireObjectSnapEnabled,
+    wireSnapModes,
+    wireOrthoEnabled,
+    wireGridSnapEnabled,
+    wireAutoRouteEnabled,
     setTool,
     addComponent,
     setSelected,
@@ -27,6 +34,13 @@ const StatusBar: React.FC = () => {
   const faultCount = simulationResult?.faults.length || 0;
   const compCount = circuit.components.length;
   const wireCount = circuit.wires.length;
+  const wireVertexCount = wirePoints.length / 2;
+  const modeKeys: { key: keyof typeof wireSnapModes; letter: string }[] = [
+    { key: 'connection', letter: 'C' },
+    { key: 'endpoint', letter: 'E' },
+    { key: 'midpoint', letter: 'M' },
+    { key: 'intersection', letter: 'X' },
+  ];
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -70,6 +84,67 @@ const StatusBar: React.FC = () => {
       <span>
         Tool: <span className={tc.text + ' capitalize'}>{tool}</span>
       </span>
+      <div
+        className={`hidden min-[900px]:flex items-center gap-x-2 gap-y-0.5 border-l pl-3 ${tc.border} font-mono text-[10px] leading-tight`}
+        title="Wire drafting: F3 Osnap · F8 Ortho · F9 Grid · Tab leg · Enter finish on hover · Backspace undo last vertex · Shift temp ortho · Ctrl no snap"
+      >
+        <span className={`shrink-0 ${tc.textMuted}`}>Wire</span>
+        <span
+          className={
+            wireObjectSnapEnabled ? 'font-semibold text-amber-400' : 'opacity-40'
+          }
+        >
+          {wireObjectSnapEnabled ? 'OSNAP' : 'osnap'}
+        </span>
+        {wireObjectSnapEnabled ? (
+          <span className="flex gap-0.5" aria-label="Object snap modes">
+            {modeKeys.map(({ key, letter }) => (
+              <span
+                key={key}
+                className={
+                  wireSnapModes[key] ? `font-bold ${tc.text}` : 'opacity-30'
+                }
+              >
+                {letter}
+              </span>
+            ))}
+          </span>
+        ) : null}
+        <span className={`shrink-0 ${tc.textMuted} opacity-50`}>|</span>
+        <span
+          className={
+            wireOrthoEnabled ? 'font-semibold text-emerald-400' : 'opacity-40'
+          }
+        >
+          {wireOrthoEnabled ? 'ORTHO' : 'ortho'}
+        </span>
+        <span className={`shrink-0 ${tc.textMuted} opacity-50`}>|</span>
+        <span
+          className={
+            wireGridSnapEnabled ? 'font-semibold text-sky-400' : 'opacity-40'
+          }
+        >
+          {wireGridSnapEnabled ? 'GRID' : 'grid'}
+        </span>
+        <span className={`shrink-0 ${tc.textMuted} opacity-50`}>|</span>
+        <span
+          className={
+            wireAutoRouteEnabled
+              ? 'font-semibold text-violet-400'
+              : 'opacity-40'
+          }
+        >
+          {wireAutoRouteEnabled ? 'AUTO' : 'auto'}
+        </span>
+        {tool === 'wire' && wireInProgress ? (
+          <>
+            <span className={`shrink-0 ${tc.textMuted} opacity-50`}>|</span>
+            <span className={tc.textMuted}>
+              {wireVertexCount} pt{wireVertexCount !== 1 ? 's' : ''}
+            </span>
+          </>
+        ) : null}
+      </div>
       <span>
         Components: <span className={tc.text}>{compCount}</span>
       </span>

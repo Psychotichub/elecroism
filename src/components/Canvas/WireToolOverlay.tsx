@@ -1,5 +1,6 @@
 import React from 'react';
 import { Layer, Circle, Line, Rect } from 'react-konva';
+import Konva from 'konva';
 import type { Circuit } from '../../types';
 import { connectionPointWorld } from '../../utils/geometry';
 
@@ -25,11 +26,34 @@ interface Props {
   >;
   wireDockHint: WireDockHint | null;
   onConnectionPointClick: (componentId: string, pointId: string) => void;
+  /** When set and a wire is in progress, existing spans become T-junction targets (below terminals). */
+  onFinishWireSpan?: (
+    wireId: string,
+    segmentIndex: number,
+    worldX: number,
+    worldY: number
+  ) => void;
+  wireInProgress: boolean;
+  wirePoints: number[];
+}
+
+function pointerToWorld(
+  stage: Konva.Stage | null,
+  circuit: Circuit
+): { x: number; y: number } | null {
+  if (!stage) return null;
+  const p = stage.getPointerPosition();
+  if (!p) return null;
+  return {
+    x: (p.x - circuit.panX) / circuit.zoom,
+    y: (p.y - circuit.panY) / circuit.zoom,
+  };
 }
 
 /**
  * Invisible hit targets on every terminal while the wire tool is active,
- * hover ring, and perpendicular dock hint — extracted from CircuitCanvas.
+ * thick targets on existing wire spans for T-junctions, hover ring, and
+ * perpendicular dock hint — extracted from CircuitCanvas.
  */
 const WireToolOverlay: React.FC<Props> = ({
   circuit,
@@ -37,8 +61,45 @@ const WireToolOverlay: React.FC<Props> = ({
   setHoveredConnectionPoint,
   wireDockHint,
   onConnectionPointClick,
+  onFinishWireSpan,
+  wireInProgress,
+  wirePoints,
 }) => (
   <Layer>
+    {onFinishWireSpan &&
+      wireInProgress &&
+      wirePoints.length >= 2 &&
+      circuit.wires.map((w) => {
+        const pts = w.points;
+        const pairCount = pts.length / 2;
+        return (
+          <React.Fragment key={w.id}>
+            {Array.from({ length: Math.max(0, pairCount - 1) }, (_, segIdx) => {
+              const si = segIdx * 2;
+              const x0 = pts[si];
+              const y0 = pts[si + 1];
+              const x1 = pts[si + 2];
+              const y1 = pts[si + 3];
+              return (
+                <Line
+                  key={`${w.id}-span-${segIdx}`}
+                  points={[x0, y0, x1, y1]}
+                  stroke="rgba(59,130,246,0.04)"
+                  strokeWidth={10}
+                  hitStrokeWidth={18}
+                  onClick={(e) => {
+                    e.cancelBubble = true;
+                    const wld = pointerToWorld(e.target.getStage(), circuit);
+                    if (wld)
+                      onFinishWireSpan(w.id, segIdx, wld.x, wld.y);
+                  }}
+                />
+              );
+            })}
+          </React.Fragment>
+        );
+      })}
+
     {circuit.components.flatMap((comp) =>
       comp.connectionPoints.map((cp) => {
         const { x: absX, y: absY } = connectionPointWorld(comp, cp);
