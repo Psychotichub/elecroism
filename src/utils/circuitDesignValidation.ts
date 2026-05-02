@@ -191,6 +191,8 @@ function threePhaseMotorImbalancePercent(c: CircuitComponent): number {
 /** Typical continuous Cu capacity hints (A), rounded; not a substitute for standards tables. */
 function maxContinuousAmpsCu(crossSectionMm2: number): number {
   const table: Record<number, number> = {
+    0.5: 4,
+    0.75: 7,
     1: 10,
     1.5: 14,
     2.5: 20,
@@ -210,7 +212,7 @@ function maxContinuousAmpsCu(crossSectionMm2: number): number {
   };
   const key = Math.round(crossSectionMm2 * 1000) / 1000;
   if (table[key] !== undefined) return table[key]!;
-  if (crossSectionMm2 < 1) return 4;
+  if (crossSectionMm2 < 0.5) return 3;
   if (crossSectionMm2 > 240) return Math.round(400 + (crossSectionMm2 - 240) * 0.9);
   // Linear interpolate between bracketing standard sizes
   const sizes = Object.keys(table)

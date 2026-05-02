@@ -10,12 +10,10 @@ export const WIRE_COLORS: { value: WireColor; label: string }[] = [
 ];
 
 /**
- * Standard conductor nominal cross-sections (mm²), IEC-style ladder from 1 to 240.
- * Control panels often use flexible Cu (e.g. H07V-K) at 0.5–1.5 mm² for low-current
- * control circuits; this list starts at 1 mm² for power and control feeders on the diagram.
+ * Standard nominal cross-sections (mm²): small flexible control Cu (e.g. H07V-K) through feeders to 240.
  */
 export const CROSS_SECTIONS = [
-  1, 1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240,
+  0.5, 0.75, 1, 1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240,
 ] as const;
 
 export function defaultPhaseSystemForType(t: ComponentType): PhaseSystem {

@@ -660,7 +660,7 @@ export const WIRE_PANEL_DESCRIPTION: ComponentPanelDescription = {
     'Conductive path between two terminals; color and cross-section affect visualization and ampacity context. Control devices are often wired with flexible fine-stranded copper (e.g. H07V-K), typically about 0.5–1.5 mm², for low current, easy routing, and reliable terminations inside control panels — while larger feeders use the full cross-section range on the schedule.',
   features: [
     'Colour coding (L/N/PE, control, Ethernet inference)',
-    'Cross-section in mm² (1–240 mm² standard ladder)',
+    'Cross-section in mm² (0.5–240 mm² ladder, control through feeders)',
     'Energization and current from simulation',
   ],
   purpose:

@@ -2919,9 +2919,9 @@ const PropertyPanel: React.FC = () => {
             ))}
           </select>
           <p className={`text-[10px] mt-1 ${tc.textMuted} leading-snug`}>
-            Standard ladder 1–240 mm². Panel control circuits often use flexible
-            Cu (e.g. H07V-K) at about 0.5–1.5 mm²; pick 1 mm² or above here for
-            documentation and ampacity hints.
+            Ladder from <strong>0.5</strong> to <strong>240</strong> mm² (typical
+            panel control: flexible Cu such as H07V-K at about 0.5–1.5 mm²).
+            Values drive line weight and rough Cu ampacity hints in validation.
           </p>
         </Label>
         <Label text="Wire ID (designator)">

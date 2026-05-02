@@ -43,6 +43,8 @@ export function getWireWidth(crossSection: number): number {
   if (!Number.isFinite(crossSection) || crossSection <= 0) return 1.5;
   const key = Math.round(crossSection * 1000) / 1000;
   const widths: Record<number, number> = {
+    0.5: 0.95,
+    0.75: 0.95,
     1: 1,
     1.5: 1,
     2.5: 1.5,
