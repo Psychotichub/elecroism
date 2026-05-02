@@ -7,6 +7,10 @@ import type {
   Wire,
   AcbSimState,
 } from '../types';
+import {
+  validateContactorOverloadFaults,
+  validateEthernetWires,
+} from './wiringFaultValidation';
 
 interface PotentialSets {
   live: Set<string>;
@@ -224,23 +228,50 @@ export class CircuitEngine {
       }
 
       const pf = this.getPowerFactor(component);
-      const powerVA = this.loadUsesBalancedThreePhaseMath(component)
-        ? (voltageV || 0) * currentA * Math.sqrt(3)
-        : voltageV * currentA;
-      const powerW = powerVA * pf;
+      let powerVA: number;
+      let powerW: number;
+      let pfOut = pf;
+      if (
+        this.loadUsesBalancedThreePhaseMath(component) &&
+        this.hasExplicitPerPhasePower(component) &&
+        energized
+      ) {
+        const p1 = this.phaseWattsAtLeg(component, 1);
+        const p2 = this.phaseWattsAtLeg(component, 2);
+        const p3 = this.phaseWattsAtLeg(component, 3);
+        powerW = p1 + p2 + p3;
+        const pf1 = this.readPhasePowerFactor(component, 1);
+        const pf2 = this.readPhasePowerFactor(component, 2);
+        const pf3 = this.readPhasePowerFactor(component, 3);
+        powerVA =
+          p1 / Math.max(pf1, 0.05) +
+          p2 / Math.max(pf2, 0.05) +
+          p3 / Math.max(pf3, 0.05);
+        pfOut = powerVA > 1e-6 ? powerW / powerVA : pf;
+      } else {
+        powerVA = this.loadUsesBalancedThreePhaseMath(component)
+          ? (voltageV || 0) * currentA * Math.sqrt(3)
+          : voltageV * currentA;
+        powerW = powerVA * pf;
+      }
 
-      nodes[component.id] = {
+      const baseNode: NodeResult = {
         nodeId: component.id,
         voltageV,
         currentA,
         powerW,
         powerVA,
-        powerFactor: pf,
+        powerFactor: pfOut,
         energized,
         lineVoltageRmsV,
         lineCurrentRmsA,
         phaseVoltageRmsV,
       };
+      nodes[component.id] = this.mergeBalancedThreePhaseNodeResults(
+        component,
+        circuit,
+        baseNode
+      );
     }
 
     const lnFaultAnchors = this.getLiveSideAnchorsOfLineNeutralCrossWires(
@@ -310,17 +341,23 @@ export class CircuitEngine {
             ? component.properties.lineVoltage ||
               this.getDefaultThreePhaseLineVoltage(circuit)
             : defaultSingleVoltage;
-        nodes[component.id] = {
+        const updated: NodeResult = {
           ...nodes[component.id],
           currentA: branchCurrent,
           powerVA: vRef * branchCurrent,
           powerW: vRef * branchCurrent * pf,
         };
+        nodes[component.id] = this.mergeBalancedThreePhaseNodeResults(
+          component,
+          circuit,
+          updated
+        );
       }
     }
 
     faults.push(
-      ...this.validateContactorOverloadFaults(
+      ...validateContactorOverloadFaults(
+        circuit,
         seriesPathCurrents,
         contactorPickup,
         wallMs
@@ -398,7 +435,7 @@ export class CircuitEngine {
     }
 
     this.updateWireStates(circuit, nodes, potentials);
-    faults.push(...this.validateEthernetWires(circuit, wallMs));
+    faults.push(...validateEthernetWires(circuit, wallMs));
     this.updateMultimeterCurrentReadings(circuit, nodes);
 
     let totalPowerW = 0;
@@ -423,6 +460,19 @@ export class CircuitEngine {
   }
 
   /**
+   * Same terminal connectivity as simulation (contactor/timer pickup included),
+   * for static design checks. Mutates contactor-related `state` on the passed
+   * circuit while resolving pickup — pass a `structuredClone` if the store
+   * circuit must not change.
+   */
+  public getTerminalGraphForValidation(
+    circuit: Circuit
+  ): Map<string, Set<string>> {
+    const pickup = this.computeContactorPickupFixpoint(circuit, Date.now());
+    return this.buildTerminalGraph(circuit, null, pickup);
+  }
+
+  /**
    * Balanced three-phase active power P = √3 V_L-L I_L PF → I_L = P/(√3 V_L-L PF).
    * Driven by `phaseSystem` on `motor`; `three_phase_motor` uses this unless
    * explicitly set to single-phase (single-winding / single-supply model).
@@ -442,6 +492,57 @@ export class CircuitEngine {
     );
   }
 
+  /** Per-phase real power (W); unset legs treated as 0. */
+  private hasExplicitPerPhasePower(c: CircuitComponent): boolean {
+    if (!this.motorSupportsPhaseUnbalanceModel(c)) return false;
+    const p = c.properties;
+    const w1 = p.powerWattsL1,
+      w2 = p.powerWattsL2,
+      w3 = p.powerWattsL3;
+    if (w1 === undefined && w2 === undefined && w3 === undefined) return false;
+    const sum =
+      Math.max(0, w1 ?? 0) + Math.max(0, w2 ?? 0) + Math.max(0, w3 ?? 0);
+    return sum > 0;
+  }
+
+  private phaseWattsAtLeg(c: CircuitComponent, leg: 1 | 2 | 3): number {
+    const p = c.properties;
+    const v =
+      leg === 1 ? p.powerWattsL1 : leg === 2 ? p.powerWattsL2 : p.powerWattsL3;
+    if (v === undefined || v === null) return 0;
+    return Math.max(0, v);
+  }
+
+  /**
+   * Line currents from explicit P_L1–P_L3 on each phase (wye, 4-wire).
+   * Ignores current magnitude factors; uses per-phase PF and L–N voltages.
+   */
+  private computeExplicitPerPhaseCurrentMagnitudes(
+    c: CircuitComponent,
+    circuit: Circuit,
+    energized: boolean,
+    serviceFactor: number
+  ): { i1: number; i2: number; i3: number; vLL: number; vLN: [number, number, number] } | null {
+    if (!this.hasExplicitPerPhasePower(c)) return null;
+    const vLL =
+      c.properties.lineVoltage || this.getDefaultThreePhaseLineVoltage(circuit);
+    const [vLN1, vLN2, vLN3] = this.resolvePerPhaseLNVoltages(c, vLL);
+    if (!energized) {
+      return { i1: 0, i2: 0, i3: 0, vLL, vLN: [vLN1, vLN2, vLN3] };
+    }
+    const eps = 1e-3;
+    const i1 =
+      (this.phaseWattsAtLeg(c, 1) * serviceFactor) /
+      Math.max(vLN1 * this.readPhasePowerFactor(c, 1), eps);
+    const i2 =
+      (this.phaseWattsAtLeg(c, 2) * serviceFactor) /
+      Math.max(vLN2 * this.readPhasePowerFactor(c, 2), eps);
+    const i3 =
+      (this.phaseWattsAtLeg(c, 3) * serviceFactor) /
+      Math.max(vLN3 * this.readPhasePowerFactor(c, 3), eps);
+    return { i1, i2, i3, vLL, vLN: [vLN1, vLN2, vLN3] };
+  }
+
   private balancedThreePhaseLineCurrentA(
     c: CircuitComponent,
     circuit: Circuit,
@@ -458,6 +559,22 @@ export class CircuitEngine {
     const vLL =
       c.properties.lineVoltage ||
       this.getDefaultThreePhaseLineVoltage(circuit);
+    const explicit = this.computeExplicitPerPhaseCurrentMagnitudes(
+      c,
+      circuit,
+      energized,
+      serviceFactor
+    );
+    if (explicit) {
+      const { i1, i2, i3, vLN } = explicit;
+      const vPh = (vLN[0] + vLN[1] + vLN[2]) / 3;
+      return {
+        currentA: Math.max(i1, i2, i3),
+        voltageV: explicit.vLL,
+        vLL: explicit.vLL,
+        vPh,
+      };
+    }
     const pf = this.getPowerFactor(c);
     const p = c.properties.powerWatts || 0;
     const iLine =
@@ -467,6 +584,371 @@ export class CircuitEngine {
       voltageV: vLL,
       vLL,
       vPh: vLL / Math.sqrt(3),
+    };
+  }
+
+  private componentTypeUsesBalancedThreePhaseDisplay(type: string): boolean {
+    return (
+      type === 'three_phase_source' ||
+      type === 'three_phase_contactor' ||
+      type === 'four_phase_contactor' ||
+      type === 'energy_meter' ||
+      type === 'digital_multifunction_meter' ||
+      type === 'three_phase_mcb' ||
+      type === 'four_phase_mcb' ||
+      type === 'motorized_mccb' ||
+      type === 'four_pole_motorized_mccb' ||
+      type === 'air_circuit_breaker' ||
+      type === 'motor_protection_circuit_breaker' ||
+      type === 'three_phase_motor' ||
+      type === 'motor'
+    );
+  }
+
+  /**
+   * RMS neutral current for wye line currents with phase angles θ_k = θ_Vk − φ_k
+   * (V_a at 0, V_b at −120°, V_c at +120°; φ = arccos(PF) lag for inductive).
+   */
+  private neutralCurrentRmsWyePhasor(
+    i1: number,
+    i2: number,
+    i3: number,
+    phi1: number,
+    phi2: number,
+    phi3: number
+  ): number {
+    if (i1 <= 0 && i2 <= 0 && i3 <= 0) return 0;
+    const addPh = (
+      mag: number,
+      angleV: number,
+      phi: number
+    ): { re: number; im: number } => {
+      const th = angleV - phi;
+      return { re: mag * Math.cos(th), im: mag * Math.sin(th) };
+    };
+    const a = addPh(i1, 0, phi1);
+    const b = addPh(i2, (-2 * Math.PI) / 3, phi2);
+    const c = addPh(i3, (2 * Math.PI) / 3, phi3);
+    const re = a.re + b.re + c.re;
+    const im = a.im + b.im + c.im;
+    return Math.sqrt(re * re + im * im);
+  }
+
+  private clampPhaseCurrentFactor(x: number): number {
+    if (!Number.isFinite(x)) return 1;
+    return Math.min(3, Math.max(0.05, x));
+  }
+
+  private readPhaseCurrentFactors(c: CircuitComponent): [number, number, number] {
+    const p = c.properties;
+    return [
+      this.clampPhaseCurrentFactor(p.threePhaseCurrentFactorL1 ?? 1),
+      this.clampPhaseCurrentFactor(p.threePhaseCurrentFactorL2 ?? 1),
+      this.clampPhaseCurrentFactor(p.threePhaseCurrentFactorL3 ?? 1),
+    ];
+  }
+
+  private clampPhaseVoltageFactor(x: number): number {
+    if (!Number.isFinite(x)) return 1;
+    return Math.min(1.35, Math.max(0.65, x));
+  }
+
+  private readPhaseVoltageFactors(c: CircuitComponent): [number, number, number] {
+    const p = c.properties;
+    return [
+      this.clampPhaseVoltageFactor(p.threePhaseVoltageFactorL1 ?? 1),
+      this.clampPhaseVoltageFactor(p.threePhaseVoltageFactorL2 ?? 1),
+      this.clampPhaseVoltageFactor(p.threePhaseVoltageFactorL3 ?? 1),
+    ];
+  }
+
+  private readPhasePowerFactor(
+    c: CircuitComponent,
+    leg: 1 | 2 | 3
+  ): number {
+    const def = this.getPowerFactor(c);
+    const p = c.properties;
+    const raw =
+      leg === 1
+        ? p.threePhasePowerFactorL1
+        : leg === 2
+          ? p.threePhasePowerFactorL2
+          : p.threePhasePowerFactorL3;
+    if (raw === undefined || raw === null) return def;
+    return Math.min(1, Math.max(0.05, raw));
+  }
+
+  /** Current angle vs phase voltage: lag (+) inductive, lead (−) capacitive. */
+  private phaseCurrentAngleRad(c: CircuitComponent, pf: number): number {
+    const mag = Math.acos(Math.max(0.05, Math.min(1, pf)));
+    const lt = c.properties.loadType ?? 'inductive';
+    if (lt === 'capacitive') return -mag;
+    return mag;
+  }
+
+  /** Per-phase L–N magnitudes (symmetric 120° phasors, mean scale = 1). */
+  private resolvePerPhaseLNVoltages(
+    component: CircuitComponent,
+    vLL: number
+  ): [number, number, number] {
+    const base = vLL > 0 ? vLL / Math.sqrt(3) : 0;
+    if (!this.motorSupportsPhaseUnbalanceModel(component)) {
+      return [base, base, base];
+    }
+    const [f1, f2, f3] = this.readPhaseVoltageFactors(component);
+    const m = (f1 + f2 + f3) / 3;
+    if (m <= 0) return [base, base, base];
+    return [
+      (base * f1) / m,
+      (base * f2) / m,
+      (base * f3) / m,
+    ];
+  }
+
+  /** |V_ab|, |V_bc|, |V_ca| from unbalanced |V_an|,|V_bn|,|V_cn| at 0°,±120°. */
+  private lineToLineMagnitudesFromUnbalancedVLN(
+    v1: number,
+    v2: number,
+    v3: number
+  ): { u12: number; u23: number; u31: number } {
+    const Va = { re: v1, im: 0 };
+    const angB = (-2 * Math.PI) / 3;
+    const Vb = { re: v2 * Math.cos(angB), im: v2 * Math.sin(angB) };
+    const angC = (2 * Math.PI) / 3;
+    const Vc = { re: v3 * Math.cos(angC), im: v3 * Math.sin(angC) };
+    const sub = (
+      p: { re: number; im: number },
+      q: { re: number; im: number }
+    ) => ({ re: p.re - q.re, im: p.im - q.im });
+    const mag = (v: { re: number; im: number }) =>
+      Math.sqrt(v.re * v.re + v.im * v.im);
+    return {
+      u12: mag(sub(Va, Vb)),
+      u23: mag(sub(Vb, Vc)),
+      u31: mag(sub(Vc, Va)),
+    };
+  }
+
+  /** True 3φ motor symbols that support optional per-phase current factors. */
+  private motorSupportsPhaseUnbalanceModel(c: CircuitComponent): boolean {
+    if (c.type === 'three_phase_motor')
+      return c.properties.phaseSystem !== 'single_phase';
+    if (c.type === 'motor') return c.properties.phaseSystem === 'three_phase';
+    return false;
+  }
+
+  /**
+   * Line currents L1–L3 and neutral: explicit per-phase watts, or scaled from
+   * balanced I_line with optional current factors (mean 1).
+   */
+  private resolvePerPhaseLineCurrentsFromFactors(
+    component: CircuitComponent,
+    iLineBalanced: number
+  ): { i1: number; i2: number; i3: number; iN: number } {
+    const [f1, f2, f3] = this.readPhaseCurrentFactors(component);
+    const meanF = (f1 + f2 + f3) / 3;
+    if (meanF <= 0) {
+      return {
+        i1: iLineBalanced,
+        i2: iLineBalanced,
+        i3: iLineBalanced,
+        iN: 0,
+      };
+    }
+    const i1 = (iLineBalanced * f1) / meanF;
+    const i2 = (iLineBalanced * f2) / meanF;
+    const i3 = (iLineBalanced * f3) / meanF;
+    const phi1 = this.phaseCurrentAngleRad(
+      component,
+      this.readPhasePowerFactor(component, 1)
+    );
+    const phi2 = this.phaseCurrentAngleRad(
+      component,
+      this.readPhasePowerFactor(component, 2)
+    );
+    const phi3 = this.phaseCurrentAngleRad(
+      component,
+      this.readPhasePowerFactor(component, 3)
+    );
+    const iN = this.neutralCurrentRmsWyePhasor(i1, i2, i3, phi1, phi2, phi3);
+    return { i1, i2, i3, iN };
+  }
+
+  private resolvePerPhaseLineCurrentsForNode(
+    component: CircuitComponent,
+    circuit: Circuit,
+    node: NodeResult
+  ): { i1: number; i2: number; i3: number; iN: number } {
+    if (!this.motorSupportsPhaseUnbalanceModel(component)) {
+      const i = node.lineCurrentRmsA ?? node.currentA ?? 0;
+      return { i1: i, i2: i, i3: i, iN: 0 };
+    }
+    const serviceFactor = component.type === 'motor' ? 1.25 : 1;
+    const explicit = this.computeExplicitPerPhaseCurrentMagnitudes(
+      component,
+      circuit,
+      node.energized,
+      serviceFactor
+    );
+    if (explicit) {
+      const phi1 = this.phaseCurrentAngleRad(
+        component,
+        this.readPhasePowerFactor(component, 1)
+      );
+      const phi2 = this.phaseCurrentAngleRad(
+        component,
+        this.readPhasePowerFactor(component, 2)
+      );
+      const phi3 = this.phaseCurrentAngleRad(
+        component,
+        this.readPhasePowerFactor(component, 3)
+      );
+      const iN = this.neutralCurrentRmsWyePhasor(
+        explicit.i1,
+        explicit.i2,
+        explicit.i3,
+        phi1,
+        phi2,
+        phi3
+      );
+      return {
+        i1: explicit.i1,
+        i2: explicit.i2,
+        i3: explicit.i3,
+        iN,
+      };
+    }
+    const iLine = node.lineCurrentRmsA ?? node.currentA ?? 0;
+    return this.resolvePerPhaseLineCurrentsFromFactors(component, iLine);
+  }
+
+  private balancedThreePhaseExtrasFromCurrents(
+    i1: number,
+    i2: number,
+    i3: number,
+    iNeutral: number,
+    vLN1: number,
+    vLN2: number,
+    vLN3: number,
+    u12: number,
+    u23: number,
+    u31: number
+  ): Pick<
+    NodeResult,
+    | 'currentL1A'
+    | 'currentL2A'
+    | 'currentL3A'
+    | 'currentNeutralA'
+    | 'voltageL1NV'
+    | 'voltageL2NV'
+    | 'voltageL3NV'
+    | 'voltageL1L2V'
+    | 'voltageL2L3V'
+    | 'voltageL3L1V'
+  > {
+    return {
+      currentL1A: i1,
+      currentL2A: i2,
+      currentL3A: i3,
+      currentNeutralA: iNeutral,
+      voltageL1NV: vLN1,
+      voltageL2NV: vLN2,
+      voltageL3NV: vLN3,
+      voltageL1L2V: u12,
+      voltageL2L3V: u23,
+      voltageL3L1V: u31,
+    };
+  }
+
+  private resolveDisplayLineVoltageLl(
+    component: CircuitComponent,
+    circuit: Circuit,
+    node: NodeResult
+  ): number {
+    if (node.lineVoltageRmsV != null && node.lineVoltageRmsV > 0) {
+      return node.lineVoltageRmsV;
+    }
+    if (node.phaseVoltageRmsV != null && node.phaseVoltageRmsV > 0) {
+      return node.phaseVoltageRmsV * Math.sqrt(3);
+    }
+    const lv = component.properties.lineVoltage;
+    if (typeof lv === 'number' && lv > 0) return lv;
+    if (this.componentTypeUsesBalancedThreePhaseDisplay(component.type)) {
+      return this.getDefaultThreePhaseLineVoltage(circuit);
+    }
+    return 0;
+  }
+
+  /**
+   * Symmetric three-phase display (equal line currents, neutral 0, equal L–L).
+   * Skipped for single-supplied `three_phase_motor` and for single-phase `motor`.
+   */
+  private mergeBalancedThreePhaseNodeResults(
+    component: CircuitComponent,
+    circuit: Circuit,
+    node: NodeResult
+  ): NodeResult {
+    if (
+      component.type === 'three_phase_motor' &&
+      component.properties.phaseSystem === 'single_phase'
+    ) {
+      return node;
+    }
+    if (
+      component.type === 'motor' &&
+      component.properties.phaseSystem !== 'three_phase'
+    ) {
+      return node;
+    }
+    if (!this.componentTypeUsesBalancedThreePhaseDisplay(component.type)) {
+      return node;
+    }
+    const hasNominalVoltageOnNode =
+      (node.lineVoltageRmsV != null && node.lineVoltageRmsV > 0) ||
+      (node.phaseVoltageRmsV != null && node.phaseVoltageRmsV > 0);
+    if (!node.energized && !hasNominalVoltageOnNode) {
+      return node;
+    }
+    const vLL = this.resolveDisplayLineVoltageLl(component, circuit, node);
+    if (vLL <= 0) {
+      return node;
+    }
+    const { i1, i2, i3, iN } = this.resolvePerPhaseLineCurrentsForNode(
+      component,
+      circuit,
+      node
+    );
+    const [vLN1, vLN2, vLN3] = this.resolvePerPhaseLNVoltages(
+      component,
+      vLL
+    );
+    let u12 = vLL;
+    let u23 = vLL;
+    let u31 = vLL;
+    if (this.motorSupportsPhaseUnbalanceModel(component)) {
+      const ll = this.lineToLineMagnitudesFromUnbalancedVLN(
+        vLN1,
+        vLN2,
+        vLN3
+      );
+      u12 = ll.u12;
+      u23 = ll.u23;
+      u31 = ll.u31;
+    }
+    return {
+      ...node,
+      ...this.balancedThreePhaseExtrasFromCurrents(
+        i1,
+        i2,
+        i3,
+        iN,
+        vLN1,
+        vLN2,
+        vLN3,
+        u12,
+        u23,
+        u31
+      ),
     };
   }
 
@@ -928,7 +1410,19 @@ export class CircuitEngine {
       }
     }
 
+    // Latch memory between simulate() calls: the fixpoint always starts from a
+    // graph. If pickup were empty on every first iteration, aux NO 13–14 would
+    // be open while the start button is released, so the coil would never see
+    // seal-in and the contactor would drop out every frame. Seeding pickup from
+    // the previous solved state lets iteration 0 close 13–14 (and relay IN–OUT)
+    // so seal-in paths are present; the loop still removes ids if the coil is
+    // no longer electrically hot. Timers are excluded — pickup uses wall time.
     let pickup = new Set<string>();
+    for (const c of circuit.components) {
+      if (!this.isCoilActuatedContactorType(c.type)) continue;
+      if (c.type === 'timer') continue;
+      if (c.state === 'on') pickup.add(c.id);
+    }
     for (let iter = 0; iter < 16; iter++) {
       const graph = this.buildTerminalGraph(circuit, null, pickup);
       const potentials = this.propagatePotentials(circuit, graph);
@@ -964,6 +1458,12 @@ export class CircuitEngine {
     for (const c of circuit.components) {
       if (!this.isCoilActuatedContactorType(c.type)) continue;
       c.state = pickup.has(c.id) ? 'on' : 'off';
+    }
+    for (const c of circuit.components) {
+      if (c.type !== 'aux_contact_block') continue;
+      const fid = c.properties.auxContactFollowContactorId?.trim();
+      if (!fid) continue;
+      c.state = pickup.has(fid) ? 'on' : 'off';
     }
     return pickup;
   }
@@ -1169,21 +1669,29 @@ export class CircuitEngine {
             }
           }
           break;
-        case 'aux_contact_block':
-          // 1NO + 1NC block: "on" -> 13-14 closed, 21-22 open.
-          // "off" -> 13-14 open, 21-22 closed.
+        case 'aux_contact_block': {
+          // 1NO + 1NC: manual "on" closes 13–14; "off" closes 21–22.
+          // Optional `auxContactFollowContactorId` mirrors another coil’s
+          // pickup (fixpoint) so a snap-on block can seal-in like built-in aux.
           if (!skipInternalBridge) {
             const noIn = this.findTerminalByLabel(component, '13');
             const noOut = this.findTerminalByLabel(component, '14');
             const ncIn = this.findTerminalByLabel(component, '21');
             const ncOut = this.findTerminalByLabel(component, '22');
-            if (component.state === 'on') {
+            const followId =
+              component.properties.auxContactFollowContactorId?.trim() || '';
+            const noPairClosed =
+              followId && contactorPickupSet
+                ? contactorPickupSet.has(followId)
+                : component.state === 'on';
+            if (noPairClosed) {
               if (noIn && noOut) this.addEdge(graph, noIn, noOut);
             } else {
               if (ncIn && ncOut) this.addEdge(graph, ncIn, ncOut);
             }
           }
           break;
+        }
         case 'estop':
           // Mushroom-head NC: IN↔OUT closed while not latched (state==='on').
           // Pressing latches it open until reset (state==='off').
@@ -2049,7 +2557,7 @@ export class CircuitEngine {
     return component.acbSimState;
   }
 
-  /** ACB: UVR de-energized opens main contacts. mMCCB: loss of control volts or mechanism not ready. */
+  /** ACB: UVR de-energized opens main contacts. mMCCB: loss of control supply only (motor-ready gates close pulse in store, not main interlock). */
   private mainBreakerBmsInterlockOpen(component: CircuitComponent): boolean {
     if (component.type === 'air_circuit_breaker') {
       const p = component.properties;
@@ -2060,11 +2568,7 @@ export class CircuitEngine {
       component.type === 'four_pole_motorized_mccb'
     ) {
       const p = component.properties;
-      return Boolean(
-        p.mccbBmsEnabled &&
-          (p.mccbBmsCtrlVoltageOk === false ||
-            p.mccbBmsMotorReady === false)
-      );
+      return Boolean(p.mccbBmsEnabled && p.mccbBmsCtrlVoltageOk === false);
     }
     return false;
   }
@@ -2400,115 +2904,6 @@ export class CircuitEngine {
         0
       );
     }
-  }
-
-  /**
-   * Contactor poles are not protective devices — overload is normally cleared
-   * by upstream MCB/fuse. Here we still flag unsafe current vs nameplate
-   * `ratingAmps` when the contactor is picked up (main poles closed).
-   */
-  private validateContactorOverloadFaults(
-    seriesPathCurrents: Map<string, number>,
-    contactorPickup: Set<string>,
-    wallMs: number
-  ): FaultEvent[] {
-    const out: FaultEvent[] = [];
-    for (const c of circuit.components) {
-      if (
-        c.type !== 'contactor' &&
-        c.type !== 'three_phase_contactor' &&
-        c.type !== 'four_phase_contactor'
-      ) {
-        continue;
-      }
-      if (!contactorPickup.has(c.id)) continue;
-
-      const branch = seriesPathCurrents.get(c.id) ?? 0;
-      const rating = Math.max(0.5, c.properties.ratingAmps ?? 25);
-      const tag =
-        c.type === 'three_phase_contactor'
-          ? '3P contactor'
-          : c.type === 'four_phase_contactor'
-            ? '4P contactor'
-            : 'Contactor';
-
-      if (branch > rating * 10) {
-        out.push({
-          id: crypto.randomUUID(),
-          type: 'short_circuit',
-          affectedComponentId: c.id,
-          message: `${tag} "${c.label}": ${branch.toFixed(0)}A through closed poles >> ${rating}A rating — prospective bolted fault or severe coordination error.`,
-          severity: 'critical',
-          timestamp: wallMs,
-        });
-      } else if (branch > rating * 1.1) {
-        out.push({
-          id: crypto.randomUUID(),
-          type: 'overload',
-          affectedComponentId: c.id,
-          message: `${tag} "${c.label}": main-path current ${branch.toFixed(1)}A exceeds nameplate ${rating}A (~>110%) while poles are closed — undersized device or missing upstream protection.`,
-          severity: 'critical',
-          timestamp: wallMs,
-        });
-      }
-    }
-    return out;
-  }
-
-  private validateEthernetWires(
-    circuit: Circuit,
-    wallMs: number
-  ): FaultEvent[] {
-    const cpLabel = (
-      componentId: string,
-      pointId: string
-    ): string | null => {
-      const c = circuit.components.find((x) => x.id === componentId);
-      const cp = c?.connectionPoints.find((p) => p.id === pointId);
-      return cp?.label ?? null;
-    };
-    const isEthernetTerminal = (label: string | null): boolean => {
-      const u = (label ?? '').toUpperCase();
-      return (
-        u.includes('ETH') ||
-        u.includes('RJ45') ||
-        u.includes('LAN') ||
-        u.includes('MODBUS_TCP') ||
-        u.includes('BACNET_IP')
-      );
-    };
-
-    const out: FaultEvent[] = [];
-    for (const wire of circuit.wires) {
-      const fromLabel = cpLabel(wire.fromComponentId, wire.fromPointId);
-      const toLabel = cpLabel(wire.toComponentId, wire.toPointId);
-      const fromIsEth = isEthernetTerminal(fromLabel);
-      const toIsEth = isEthernetTerminal(toLabel);
-      const endpointLooksEthernet = fromIsEth || toIsEth;
-      const isEthernetWire =
-        wire.color === 'ethernet' || wire.wireProtocol === 'ethernet';
-
-      if (endpointLooksEthernet && !isEthernetWire) {
-        out.push({
-          id: crypto.randomUUID(),
-          type: 'overload',
-          affectedComponentId: wire.fromComponentId,
-          message: `Ethernet terminal mismatch: wire "${wire.id}" should be ethernet type.`,
-          severity: 'warning',
-          timestamp: wallMs,
-        });
-      } else if (!endpointLooksEthernet && wire.color === 'ethernet') {
-        out.push({
-          id: crypto.randomUUID(),
-          type: 'overload',
-          affectedComponentId: wire.fromComponentId,
-          message: `Ethernet wire "${wire.id}" connects non-ethernet terminals.`,
-          severity: 'warning',
-          timestamp: wallMs,
-        });
-      }
-    }
-    return out;
   }
 
 }

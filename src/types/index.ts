@@ -270,6 +270,33 @@ export interface ComponentProperties {
   lineVoltage?: number;
   /** Three-phase motor: nameplate line current for overload (A); optional */
   ratedLineAmps?: number;
+  /**
+   * Optional per-phase line-current multipliers (wye, currents aligned to ABC
+   * voltages). Normalized so mean(f) = 1 keeps the same balanced I_line from
+   * P/(√3·U_LL·PF); neutral I_N is computed from the phasor sum.
+   */
+  threePhaseCurrentFactorL1?: number;
+  threePhaseCurrentFactorL2?: number;
+  threePhaseCurrentFactorL3?: number;
+  /** Optional per-phase power factor (0.05–1); defaults to main powerFactor. */
+  threePhasePowerFactorL1?: number;
+  threePhasePowerFactorL2?: number;
+  threePhasePowerFactorL3?: number;
+  /**
+   * Optional L–N voltage multipliers (mean 1). L–L values are derived from the
+   * three phase-to-neutral phasors separated by 120°.
+   */
+  threePhaseVoltageFactorL1?: number;
+  threePhaseVoltageFactorL2?: number;
+  threePhaseVoltageFactorL3?: number;
+  /**
+   * Optional real power per phase (W) for 4-wire wye modeling. When any value
+   * is set and the sum is greater than 0, line currents use P_k/(U_L-N,k·PF_k) instead
+   * of splitting total `powerWatts` equally (current magnitude factors are ignored).
+   */
+  powerWattsL1?: number;
+  powerWattsL2?: number;
+  powerWattsL3?: number;
 
   buttonType?: 'NO' | 'NC';
 
@@ -284,6 +311,13 @@ export interface ComponentProperties {
   indicatorSupplyType?: 'ac' | 'dc';
   /** Timer relay ON-delay before IN↔OUT closes after coil energizes. */
   timerDelayMs?: number;
+
+  /**
+   * `aux_contact_block` only: when set to another component id (contactor,
+   * relay, timer, …), NO 13–14 / NC 21–22 follow that device’s coil pickup in
+   * simulation instead of the block’s manual on/off (seal-in / interlocks).
+   */
+  auxContactFollowContactorId?: string;
 
   /** Interposing-relay coil voltage label (V) — 24 V DC typical for BMS DOs. */
   relayCoilVoltage?: number;
@@ -385,6 +419,11 @@ export interface Circuit {
   panY: number;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Warn in validation when 3φ motor per-phase load imbalance (power or
+   * current factors) exceeds this percent of the mean. Default 15.
+   */
+  phaseImbalanceWarningPercent?: number;
 }
 
 export interface NodeResult {
@@ -403,6 +442,23 @@ export interface NodeResult {
   phaseVoltageRmsV?: number;
   /** Meter-specific detected signal type for display hints. */
   meterSignal?: 'ac' | 'dc';
+  /**
+   * Balanced three-phase model: equal line currents, neutral ≈ 0.
+   * Populated for 3φ sources, contactors, meters, breakers, and balanced 3φ loads.
+   */
+  currentL1A?: number;
+  currentL2A?: number;
+  currentL3A?: number;
+  /** Neutral conductor RMS (A); ~0 when phases are balanced in the model */
+  currentNeutralA?: number;
+  /** RMS phase-to-neutral (V), wye */
+  voltageL1NV?: number;
+  voltageL2NV?: number;
+  voltageL3NV?: number;
+  /** RMS line-to-line (V) */
+  voltageL1L2V?: number;
+  voltageL2L3V?: number;
+  voltageL3L1V?: number;
 }
 
 export interface SimulationResult {

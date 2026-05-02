@@ -11,6 +11,7 @@ import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import GridLayer from './GridLayer';
 import WireLayer from './WireLayer';
+import WireToolOverlay from './WireToolOverlay';
 import SwitchSymbol from '../Components/SwitchSymbol';
 import MCBSymbol from '../Components/MCBSymbol';
 import HrcFuseSymbol from '../Components/HrcFuseSymbol';
@@ -1331,127 +1332,13 @@ const CircuitCanvas: React.FC = () => {
         )}
 
         {tool === 'wire' && (
-          <Layer>
-            {circuit.components.flatMap((comp) =>
-              comp.connectionPoints.map((cp) => {
-                const { x: absX, y: absY } = connectionPointWorld(comp, cp);
-                return (
-                  <Circle
-                    key={`${comp.id}-${cp.id}-hotspot`}
-                    x={absX}
-                    y={absY}
-                    radius={4.5}
-                    fill="#3B82F6"
-                    opacity={0.01}
-                    hitStrokeWidth={8}
-                    onClick={(e) => {
-                      e.cancelBubble = true;
-                      handleConnectionPointClick(comp.id, cp.id);
-                    }}
-                    onMouseEnter={() =>
-                      setHoveredConnectionPoint({
-                        componentId: comp.id,
-                        pointId: cp.id,
-                        x: absX,
-                        y: absY,
-                      })
-                    }
-                    onMouseLeave={() => {
-                      setHoveredConnectionPoint((current) =>
-                        current &&
-                        current.componentId === comp.id &&
-                        current.pointId === cp.id
-                          ? null
-                          : current
-                      );
-                    }}
-                  />
-                );
-              })
-            )}
-
-            {hoveredConnectionPoint && (
-              <Circle
-                x={hoveredConnectionPoint.x}
-                y={hoveredConnectionPoint.y}
-                radius={3}
-                stroke="#22C55E"
-                strokeWidth={0.6}
-                fill="rgba(34,197,94,0.08)"
-                listening={false}
-              />
-            )}
-
-            {wireDockHint &&
-              (() => {
-                const stroke = wireDockHint.aligned ? '#16A34A' : '#F59E0B';
-                const fill = wireDockHint.aligned
-                  ? 'rgba(22,163,74,0.18)'
-                  : 'rgba(245,158,11,0.18)';
-                const half = 4;
-                const tickLen = 3;
-                // The "perp" glyph mimics AutoCAD's perpendicular osnap: a
-                // small square with a stem and a tick perpendicular to the
-                // terminal's outward axis, so the user can read the dock
-                // direction at a glance.
-                const stemPoints =
-                  wireDockHint.axis === 'h'
-                    ? [
-                        wireDockHint.x - half,
-                        wireDockHint.y,
-                        wireDockHint.x - half + tickLen,
-                        wireDockHint.y,
-                      ]
-                    : [
-                        wireDockHint.x,
-                        wireDockHint.y - half,
-                        wireDockHint.x,
-                        wireDockHint.y - half + tickLen,
-                      ];
-                const tickPoints =
-                  wireDockHint.axis === 'h'
-                    ? [
-                        wireDockHint.x - half + tickLen,
-                        wireDockHint.y - tickLen,
-                        wireDockHint.x - half + tickLen,
-                        wireDockHint.y + tickLen,
-                      ]
-                    : [
-                        wireDockHint.x - tickLen,
-                        wireDockHint.y - half + tickLen,
-                        wireDockHint.x + tickLen,
-                        wireDockHint.y - half + tickLen,
-                      ];
-                return (
-                  <>
-                    <Rect
-                      x={wireDockHint.x - half}
-                      y={wireDockHint.y - half}
-                      width={half * 2}
-                      height={half * 2}
-                      stroke={stroke}
-                      strokeWidth={0.6}
-                      fill={fill}
-                      listening={false}
-                    />
-                    <Line
-                      points={stemPoints}
-                      stroke={stroke}
-                      strokeWidth={0.6}
-                      lineCap="round"
-                      listening={false}
-                    />
-                    <Line
-                      points={tickPoints}
-                      stroke={stroke}
-                      strokeWidth={0.6}
-                      lineCap="round"
-                      listening={false}
-                    />
-                  </>
-                );
-              })()}
-          </Layer>
+          <WireToolOverlay
+            circuit={circuit}
+            hoveredConnectionPoint={hoveredConnectionPoint}
+            setHoveredConnectionPoint={setHoveredConnectionPoint}
+            wireDockHint={wireDockHint}
+            onConnectionPointClick={handleConnectionPointClick}
+          />
         )}
       </Stage>
       {paletteOpen && (

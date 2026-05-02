@@ -62,13 +62,11 @@ const SwitchSymbol: React.FC<Props> = ({
       y={component.y}
       rotation={component.rotation}
       draggable
+      dragDistance={isPush ? 10 : undefined}
       onPointerDown={(e) => {
         if (!isPush || tool !== 'select') return;
         e.cancelBubble = true;
         onPushChange?.(true);
-      }}
-      onDragStart={() => {
-        if (isPush) onPushChange?.(false);
       }}
       onClick={(e) => {
         e.cancelBubble = true;

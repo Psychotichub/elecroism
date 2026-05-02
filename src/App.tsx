@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react';
 import Toolbar from './components/Toolbar/Toolbar';
 import Sidebar from './components/Panels/Sidebar';
 import CircuitCanvas from './components/Canvas/CircuitCanvas';
-import PropertyPanel from './components/Panels/PropertyPanel';
+import InspectorColumn from './components/Panels/InspectorColumn';
 import StatusBar from './components/Panels/StatusBar';
 import FaultDialog from './components/Dialogs/FaultDialog';
 import ContinuityBuzzer from './components/Audio/ContinuityBuzzer';
+import { AppErrorBoundary } from './components/ErrorBoundary/AppErrorBoundary';
 import { themeColors, useThemeStore } from './store/themeStore';
+
+const errPanel =
+  'flex flex-col items-center justify-center gap-3 border border-amber-600/40 bg-amber-950/90 p-4 text-center text-amber-50';
 
 const SIDEBAR_COLLAPSED_KEY = 'electroism.sidebar.collapsed.v1';
 const PROPERTY_PANEL_COLLAPSED_KEY = 'electroism.propertyPanel.collapsed.v1';
@@ -58,9 +62,21 @@ function App() {
       }`}
       data-theme={theme}
     >
-      <Toolbar />
+      <AppErrorBoundary
+        areaName="Toolbar"
+        fallbackClassName={`w-full shrink-0 border-b border-amber-600/40 bg-amber-950/90 py-3 px-4 ${errPanel}`}
+      >
+        <Toolbar />
+      </AppErrorBoundary>
       <div className="flex flex-1 overflow-hidden">
-        {!sidebarCollapsed && <Sidebar />}
+        {!sidebarCollapsed && (
+          <AppErrorBoundary
+            areaName="Sidebar"
+            fallbackClassName={`h-full min-h-0 w-56 shrink-0 ${errPanel}`}
+          >
+            <Sidebar />
+          </AppErrorBoundary>
+        )}
         <button
           type="button"
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -69,7 +85,12 @@ function App() {
         >
           {sidebarCollapsed ? '>' : '<'}
         </button>
-        <CircuitCanvas />
+        <AppErrorBoundary
+          areaName="Canvas"
+          fallbackClassName={`flex min-h-0 min-w-0 flex-1 ${errPanel}`}
+        >
+          <CircuitCanvas />
+        </AppErrorBoundary>
         <button
           type="button"
           title={propertyCollapsed ? 'Expand properties' : 'Collapse properties'}
@@ -78,10 +99,27 @@ function App() {
         >
           {propertyCollapsed ? '<' : '>'}
         </button>
-        {!propertyCollapsed && <PropertyPanel />}
+        {!propertyCollapsed && (
+          <AppErrorBoundary
+            areaName="Inspector"
+            fallbackClassName={`h-full min-h-0 w-80 shrink-0 ${errPanel}`}
+          >
+            <InspectorColumn />
+          </AppErrorBoundary>
+        )}
       </div>
-      <StatusBar />
-      <FaultDialog />
+      <AppErrorBoundary
+        areaName="Status bar"
+        fallbackClassName={`w-full shrink-0 border-t border-amber-600/40 bg-amber-950/90 py-2 px-4 ${errPanel}`}
+      >
+        <StatusBar />
+      </AppErrorBoundary>
+      <AppErrorBoundary
+        areaName="Fault dialog"
+        fallbackClassName={`fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 ${errPanel} border-0`}
+      >
+        <FaultDialog />
+      </AppErrorBoundary>
       <ContinuityBuzzer />
     </div>
   );

@@ -1,0 +1,402 @@
+{
+  "version": "1.0",
+  "name": "TEMPLATE — 4P KM + AUX seal-in: Stop NC + Start NO push-buttons (mirror coil = 4P KM)",
+  "created": "2026-05-01T00:00:00.000Z",
+  "circuit": {
+    "phaseImbalanceWarningPercent": 15,
+    "components": [
+      {
+        "id": "tmpl4-ps-0001-4001-8001-000000000001",
+        "type": "power_source",
+        "label": "AC Supply",
+        "x": 60,
+        "y": 100,
+        "rotation": 0,
+        "state": "on",
+        "selected": false,
+        "properties": { "voltage": 230, "phaseSystem": "single_phase" },
+        "connectionPoints": [
+          {
+            "id": "tmpl4-ps-lout",
+            "componentId": "tmpl4-ps-0001-4001-8001-000000000001",
+            "x": -16,
+            "y": 32,
+            "label": "L_OUT"
+          },
+          {
+            "id": "tmpl4-ps-nout",
+            "componentId": "tmpl4-ps-0001-4001-8001-000000000001",
+            "x": 16,
+            "y": 32,
+            "label": "N_OUT"
+          }
+        ]
+      },
+      {
+        "id": "tmpl4-mcb-0001-4001-8001-000000000002",
+        "type": "mcb",
+        "label": "Control MCB 2P",
+        "x": 180,
+        "y": 100,
+        "rotation": 0,
+        "state": "on",
+        "selected": false,
+        "properties": {
+          "ratingAmps": 16,
+          "tripCurve": "C",
+          "breakingCapacity": 6000,
+          "poles": 2,
+          "phaseSystem": "single_phase"
+        },
+        "connectionPoints": [
+          {
+            "id": "tmpl4-mcb-inl",
+            "componentId": "tmpl4-mcb-0001-4001-8001-000000000002",
+            "x": -10,
+            "y": -25,
+            "label": "IN_L"
+          },
+          {
+            "id": "tmpl4-mcb-outl",
+            "componentId": "tmpl4-mcb-0001-4001-8001-000000000002",
+            "x": -10,
+            "y": 25,
+            "label": "OUT_L"
+          },
+          {
+            "id": "tmpl4-mcb-inn",
+            "componentId": "tmpl4-mcb-0001-4001-8001-000000000002",
+            "x": 10,
+            "y": -25,
+            "label": "IN_N"
+          },
+          {
+            "id": "tmpl4-mcb-outn",
+            "componentId": "tmpl4-mcb-0001-4001-8001-000000000002",
+            "x": 10,
+            "y": 25,
+            "label": "OUT_N"
+          }
+        ]
+      },
+      {
+        "id": "tmpl4-stop-0001-4001-8001-000000000003",
+        "type": "push_button",
+        "label": "Stop NC",
+        "x": 320,
+        "y": 80,
+        "rotation": 0,
+        "state": "off",
+        "pressed": false,
+        "selected": false,
+        "properties": { "buttonType": "NC", "phaseSystem": "single_phase" },
+        "connectionPoints": [
+          {
+            "id": "tmpl4-stop-in",
+            "componentId": "tmpl4-stop-0001-4001-8001-000000000003",
+            "x": 0,
+            "y": -20,
+            "label": "IN"
+          },
+          {
+            "id": "tmpl4-stop-out",
+            "componentId": "tmpl4-stop-0001-4001-8001-000000000003",
+            "x": 0,
+            "y": 20,
+            "label": "OUT"
+          }
+        ]
+      },
+      {
+        "id": "tmpl4-start-pb-0001-4001-8001-000000000004",
+        "type": "push_button",
+        "label": "Start NO",
+        "x": 440,
+        "y": 80,
+        "rotation": 0,
+        "state": "off",
+        "pressed": false,
+        "selected": false,
+        "properties": { "buttonType": "NO", "phaseSystem": "single_phase" },
+        "connectionPoints": [
+          {
+            "id": "tmpl4-start-in",
+            "componentId": "tmpl4-start-pb-0001-4001-8001-000000000004",
+            "x": 0,
+            "y": -20,
+            "label": "IN"
+          },
+          {
+            "id": "tmpl4-start-out",
+            "componentId": "tmpl4-start-pb-0001-4001-8001-000000000004",
+            "x": 0,
+            "y": 20,
+            "label": "OUT"
+          }
+        ]
+      },
+      {
+        "id": "tmpl4-km-0001-4001-8001-000000000005",
+        "type": "four_phase_contactor",
+        "label": "4P KM",
+        "x": 560,
+        "y": 100,
+        "rotation": 0,
+        "state": "off",
+        "selected": false,
+        "properties": { "phaseSystem": "single_phase" },
+        "connectionPoints": [
+          {
+            "id": "tmpl4-km-inl1",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": -30,
+            "y": -25,
+            "label": "IN_L1"
+          },
+          {
+            "id": "tmpl4-km-outl1",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": -30,
+            "y": 25,
+            "label": "OUT_L1"
+          },
+          {
+            "id": "tmpl4-km-inl2",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": -10,
+            "y": -25,
+            "label": "IN_L2"
+          },
+          {
+            "id": "tmpl4-km-outl2",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": -10,
+            "y": 25,
+            "label": "OUT_L2"
+          },
+          {
+            "id": "tmpl4-km-inl3",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": 10,
+            "y": -25,
+            "label": "IN_L3"
+          },
+          {
+            "id": "tmpl4-km-outl3",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": 10,
+            "y": 25,
+            "label": "OUT_L3"
+          },
+          {
+            "id": "tmpl4-km-inn",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": 30,
+            "y": -25,
+            "label": "IN_N"
+          },
+          {
+            "id": "tmpl4-km-outn",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": 30,
+            "y": 25,
+            "label": "OUT_N"
+          },
+          {
+            "id": "tmpl4-km-a1",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": -44,
+            "y": 0,
+            "label": "A1"
+          },
+          {
+            "id": "tmpl4-km-a2",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": 44,
+            "y": 0,
+            "label": "A2"
+          },
+          {
+            "id": "tmpl4-km-13",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": -12,
+            "y": 38,
+            "label": "13"
+          },
+          {
+            "id": "tmpl4-km-14",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": -12,
+            "y": 50,
+            "label": "14"
+          },
+          {
+            "id": "tmpl4-km-21",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": 12,
+            "y": 38,
+            "label": "21"
+          },
+          {
+            "id": "tmpl4-km-22",
+            "componentId": "tmpl4-km-0001-4001-8001-000000000005",
+            "x": 12,
+            "y": 50,
+            "label": "22"
+          }
+        ]
+      },
+      {
+        "id": "tmpl4-aux-0001-4001-8001-000000000006",
+        "type": "aux_contact_block",
+        "label": "AUX (mirror 4P KM)",
+        "x": 560,
+        "y": 220,
+        "rotation": 0,
+        "state": "off",
+        "selected": false,
+        "properties": {
+          "ratingAmps": 10,
+          "phaseSystem": "single_phase",
+          "auxContactFollowContactorId": "tmpl4-km-0001-4001-8001-000000000005"
+        },
+        "connectionPoints": [
+          {
+            "id": "tmpl4-aux-13",
+            "componentId": "tmpl4-aux-0001-4001-8001-000000000006",
+            "x": -16,
+            "y": -20,
+            "label": "13"
+          },
+          {
+            "id": "tmpl4-aux-14",
+            "componentId": "tmpl4-aux-0001-4001-8001-000000000006",
+            "x": 16,
+            "y": -20,
+            "label": "14"
+          },
+          {
+            "id": "tmpl4-aux-21",
+            "componentId": "tmpl4-aux-0001-4001-8001-000000000006",
+            "x": -16,
+            "y": 20,
+            "label": "21"
+          },
+          {
+            "id": "tmpl4-aux-22",
+            "componentId": "tmpl4-aux-0001-4001-8001-000000000006",
+            "x": 16,
+            "y": 20,
+            "label": "22"
+          }
+        ]
+      }
+    ],
+    "wires": [
+      {
+        "id": "tmpl4-w01",
+        "fromComponentId": "tmpl4-ps-0001-4001-8001-000000000001",
+        "fromPointId": "tmpl4-ps-lout",
+        "toComponentId": "tmpl4-mcb-0001-4001-8001-000000000002",
+        "toPointId": "tmpl4-mcb-inl",
+        "points": [60, 132, 180, 132],
+        "color": "brown",
+        "crossSection": 2.5,
+        "energized": false,
+        "currentAmps": 0,
+        "wireCategory": "power"
+      },
+      {
+        "id": "tmpl4-w02",
+        "fromComponentId": "tmpl4-ps-0001-4001-8001-000000000001",
+        "fromPointId": "tmpl4-ps-nout",
+        "toComponentId": "tmpl4-mcb-0001-4001-8001-000000000002",
+        "toPointId": "tmpl4-mcb-inn",
+        "points": [92, 132, 220, 132],
+        "color": "blue",
+        "crossSection": 2.5,
+        "energized": false,
+        "currentAmps": 0,
+        "wireCategory": "power"
+      },
+      {
+        "id": "tmpl4-w03",
+        "fromComponentId": "tmpl4-mcb-0001-4001-8001-000000000002",
+        "fromPointId": "tmpl4-mcb-outl",
+        "toComponentId": "tmpl4-stop-0001-4001-8001-000000000003",
+        "toPointId": "tmpl4-stop-in",
+        "points": [180, 125, 320, 100],
+        "color": "black",
+        "crossSection": 1.5,
+        "energized": false,
+        "currentAmps": 0,
+        "wireCategory": "power"
+      },
+      {
+        "id": "tmpl4-w04",
+        "fromComponentId": "tmpl4-stop-0001-4001-8001-000000000003",
+        "fromPointId": "tmpl4-stop-out",
+        "toComponentId": "tmpl4-start-pb-0001-4001-8001-000000000004",
+        "toPointId": "tmpl4-start-in",
+        "points": [320, 120, 440, 100],
+        "color": "black",
+        "crossSection": 1.5,
+        "energized": false,
+        "currentAmps": 0,
+        "wireCategory": "power"
+      },
+      {
+        "id": "tmpl4-w05",
+        "fromComponentId": "tmpl4-stop-0001-4001-8001-000000000003",
+        "fromPointId": "tmpl4-stop-out",
+        "toComponentId": "tmpl4-aux-0001-4001-8001-000000000006",
+        "toPointId": "tmpl4-aux-13",
+        "points": [320, 120, 544, 200],
+        "color": "black",
+        "crossSection": 1.5,
+        "energized": false,
+        "currentAmps": 0,
+        "wireCategory": "power"
+      },
+      {
+        "id": "tmpl4-w06",
+        "fromComponentId": "tmpl4-start-pb-0001-4001-8001-000000000004",
+        "fromPointId": "tmpl4-start-out",
+        "toComponentId": "tmpl4-km-0001-4001-8001-000000000005",
+        "toPointId": "tmpl4-km-a1",
+        "points": [440, 120, 516, 100],
+        "color": "black",
+        "crossSection": 1.5,
+        "energized": false,
+        "currentAmps": 0,
+        "wireCategory": "power"
+      },
+      {
+        "id": "tmpl4-w07",
+        "fromComponentId": "tmpl4-aux-0001-4001-8001-000000000006",
+        "fromPointId": "tmpl4-aux-14",
+        "toComponentId": "tmpl4-km-0001-4001-8001-000000000005",
+        "toPointId": "tmpl4-km-a1",
+        "points": [576, 200, 516, 100],
+        "color": "black",
+        "crossSection": 1.5,
+        "energized": false,
+        "currentAmps": 0,
+        "wireCategory": "power"
+      },
+      {
+        "id": "tmpl4-w08",
+        "fromComponentId": "tmpl4-mcb-0001-4001-8001-000000000002",
+        "fromPointId": "tmpl4-mcb-outn",
+        "toComponentId": "tmpl4-km-0001-4001-8001-000000000005",
+        "toPointId": "tmpl4-km-a2",
+        "points": [220, 125, 604, 100],
+        "color": "blue",
+        "crossSection": 1.5,
+        "energized": false,
+        "currentAmps": 0,
+        "wireCategory": "power"
+      }
+    ]
+  }
+}

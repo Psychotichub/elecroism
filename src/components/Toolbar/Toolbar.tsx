@@ -93,6 +93,8 @@ const Toolbar: React.FC = () => {
               components: data.circuit.components || [],
               wires: data.circuit.wires || [],
               name: data.name || 'Loaded Circuit',
+              phaseImbalanceWarningPercent:
+                data.circuit.phaseImbalanceWarningPercent ?? 15,
             });
           }
         } catch {

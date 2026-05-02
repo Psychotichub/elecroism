@@ -240,10 +240,11 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
       'Power-switching device with coil; main contacts close when coil is energized.',
     features: [
       'A1/A2 coil energization model',
-      'Auxiliary NO/NC feedback where configured',
+      'Aux NO 13–14 (seal-in) and NC 21–22 (opens when picked) for lamps or peer interlocks',
       'Simulation fault if main-path current exceeds nameplate rating while closed',
     ],
-    purpose: 'Motor starters, lighting banks, or any remotely switched load.',
+    purpose:
+      'Motor starters, lighting banks, or any remotely switched load; see templates/contactor-interlock-two-km.esim for cross-coil interlock.',
   },
   relay: {
     displayName: 'Relay',
@@ -346,6 +347,7 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
     features: [
       'Four switched poles',
       'Coil-controlled',
+      'Built-in aux 13–14 / 21–22 for seal-in or electrical interlock',
       'Simulation fault if main-path current exceeds nameplate rating while closed',
     ],
     purpose: 'Loads needing switched neutral or certain IT/TT configurations.',
@@ -392,9 +394,13 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
   },
   aux_contact_block: {
     displayName: 'Auxiliary contact block',
-    description: 'Snap-on 1NO + 1NC block mirroring contactor state.',
-    features: ['13–14 NO and 21–22 NC', 'State follows contactor block setting'],
-    purpose: 'Status feedback, interlocks, and lamp indication on starters.',
+    description:
+      'Snap-on 1NO + 1NC block. Optional “mirror coil” links 13–14 to a contactor/relay pickup for seal-in; otherwise use On/Off.',
+    features: [
+      '13–14 NO and 21–22 NC',
+      'Manual state or mirror a coil (Properties)',
+    ],
+    purpose: 'Status feedback, interlocks, seal-in with the aux symbol, lamp circuits.',
   },
   energy_meter: {
     displayName: 'Energy meter',

@@ -1,49 +1,19 @@
 import React, { useEffect } from 'react';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
-import type {
-  ComponentProperties,
-  WireColor,
-  ComponentType,
-  PhaseSystem,
-} from '../../types';
+import type { ComponentProperties, PhaseSystem } from '../../types';
 import { clampComponentScale, getWireColor } from '../../utils/geometry';
 import {
   COMPONENT_PANEL_DESCRIPTIONS,
   WIRE_PANEL_DESCRIPTION,
   formatComponentPanelHelpText,
 } from '../../utils/componentPanelInfo';
-
-const WIRE_COLORS: { value: WireColor; label: string }[] = [
-  { value: 'brown', label: 'Brown (L)' },
-  { value: 'blue', label: 'Blue (N)' },
-  { value: 'green_yellow', label: 'Green-Yellow (PE)' },
-  { value: 'black', label: 'Black' },
-  { value: 'grey', label: 'Grey' },
-  { value: 'red', label: 'Red' },
-];
-
-const CROSS_SECTIONS = [1.5, 2.5, 4, 6, 10];
-
-function defaultPhaseSystemForType(t: ComponentType): PhaseSystem {
-  switch (t) {
-    case 'dc_power_source':
-    case 'ac_dc_converter':
-      return 'single_phase';
-    case 'three_phase_source':
-    case 'three_phase_motor':
-    case 'three_phase_mcb':
-    case 'four_phase_mcb':
-    case 'air_circuit_breaker':
-    case 'motorized_mccb':
-    case 'four_pole_motorized_mccb':
-    case 'three_phase_contactor':
-    case 'four_phase_contactor':
-      return 'three_phase';
-    default:
-      return 'single_phase';
-  }
-}
+import {
+  WIRE_COLORS,
+  CROSS_SECTIONS,
+  defaultPhaseSystemForType,
+} from './propertyPanel/constants';
+import { Label } from './propertyPanel/PropertyPanelLabel';
 
 const PropertyPanel: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
@@ -145,7 +115,9 @@ const PropertyPanel: React.FC = () => {
 
   if (!selectedComp && !selectedWire) {
     return (
-      <div className={`w-72 ${tc.panel} ${tc.text} p-4 flex flex-col items-center justify-center border-l ${tc.border}`}>
+      <div
+        className={`flex w-full min-w-0 flex-col items-center justify-center p-4 ${tc.text}`}
+      >
         <p className={`text-sm ${tc.textMuted}`}>Select a component</p>
       </div>
     );
@@ -570,6 +542,315 @@ const PropertyPanel: React.FC = () => {
     </>
   );
 
+  /** Optional L1/L2/L3 line-current multipliers for true 3φ motors (phasor I_N). */
+  const renderPhaseCurrentUnbalanceFields = () => {
+    if (!selectedComp) return null;
+    const ps =
+      selectedComp.properties.phaseSystem ??
+      defaultPhaseSystemForType(selectedComp.type);
+    const show =
+      (selectedComp.type === 'three_phase_motor' && ps !== 'single_phase') ||
+      (selectedComp.type === 'motor' && ps === 'three_phase');
+    if (!show) return null;
+    const f1 = selectedComp.properties.threePhaseCurrentFactorL1 ?? 1;
+    const f2 = selectedComp.properties.threePhaseCurrentFactorL2 ?? 1;
+    const f3 = selectedComp.properties.threePhaseCurrentFactorL3 ?? 1;
+    return (
+      <div className={`rounded-md border p-2.5 space-y-2 ${tc.border}`}>
+        <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+          Phase detail (optional)
+        </p>
+        <p className={`text-[10px] leading-snug ${tc.textMuted}`}>
+          Set per-phase power (W) for a 4-wire board model (overrides total
+          powerWatts for line currents). Otherwise current factors keep mean = 1.
+          Per-phase PF sets angle vs voltage for I_N. Voltage factors scale L–N
+          (mean 1); L–L follows from 120° phasors.
+        </p>
+        <p className={`text-[9px] font-medium ${tc.textMuted}`}>Per-phase power (W)</p>
+        <Label text="P_L1">
+          <input
+            type="number"
+            min={0}
+            step={10}
+            value={
+              selectedComp.properties.powerWattsL1 === undefined
+                ? ''
+                : selectedComp.properties.powerWattsL1
+            }
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === '') {
+                updateProp({ powerWattsL1: undefined });
+                return;
+              }
+              updateProp({ powerWattsL1: Math.max(0, Number(raw) || 0) });
+            }}
+            placeholder="blank = use factors / total P"
+            className="input-field"
+          />
+        </Label>
+        <Label text="P_L2">
+          <input
+            type="number"
+            min={0}
+            step={10}
+            value={
+              selectedComp.properties.powerWattsL2 === undefined
+                ? ''
+                : selectedComp.properties.powerWattsL2
+            }
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === '') {
+                updateProp({ powerWattsL2: undefined });
+                return;
+              }
+              updateProp({ powerWattsL2: Math.max(0, Number(raw) || 0) });
+            }}
+            className="input-field"
+          />
+        </Label>
+        <Label text="P_L3">
+          <input
+            type="number"
+            min={0}
+            step={10}
+            value={
+              selectedComp.properties.powerWattsL3 === undefined
+                ? ''
+                : selectedComp.properties.powerWattsL3
+            }
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === '') {
+                updateProp({ powerWattsL3: undefined });
+                return;
+              }
+              updateProp({ powerWattsL3: Math.max(0, Number(raw) || 0) });
+            }}
+            className="input-field"
+          />
+        </Label>
+        <Label text="Factor L1">
+          <input
+            type="number"
+            step={0.05}
+            min={0.05}
+            max={3}
+            value={f1}
+            onChange={(e) =>
+              updateProp({
+                threePhaseCurrentFactorL1: Math.min(
+                  3,
+                  Math.max(0.05, Number(e.target.value) || 1)
+                ),
+              })
+            }
+            className="input-field"
+          />
+        </Label>
+        <Label text="Factor L2">
+          <input
+            type="number"
+            step={0.05}
+            min={0.05}
+            max={3}
+            value={f2}
+            onChange={(e) =>
+              updateProp({
+                threePhaseCurrentFactorL2: Math.min(
+                  3,
+                  Math.max(0.05, Number(e.target.value) || 1)
+                ),
+              })
+            }
+            className="input-field"
+          />
+        </Label>
+        <Label text="Factor L3">
+          <input
+            type="number"
+            step={0.05}
+            min={0.05}
+            max={3}
+            value={f3}
+            onChange={(e) =>
+              updateProp({
+                threePhaseCurrentFactorL3: Math.min(
+                  3,
+                  Math.max(0.05, Number(e.target.value) || 1)
+                ),
+              })
+            }
+            className="input-field"
+          />
+        </Label>
+        <p className={`text-[9px] font-medium ${tc.textMuted}`}>Power factor (per phase)</p>
+        <Label text="PF L1 (blank = main PF)">
+          <input
+            type="number"
+            step={0.01}
+            min={0.05}
+            max={1}
+            value={
+              selectedComp.properties.threePhasePowerFactorL1 === undefined
+                ? ''
+                : selectedComp.properties.threePhasePowerFactorL1
+            }
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === '') {
+                updateProp({ threePhasePowerFactorL1: undefined });
+                return;
+              }
+              updateProp({
+                threePhasePowerFactorL1: Math.min(
+                  1,
+                  Math.max(0.05, Number(raw) || 0.85)
+                ),
+              });
+            }}
+            placeholder={`${selectedComp.properties.powerFactor ?? 0.85}`}
+            className="input-field"
+          />
+        </Label>
+        <Label text="PF L2">
+          <input
+            type="number"
+            step={0.01}
+            min={0.05}
+            max={1}
+            value={
+              selectedComp.properties.threePhasePowerFactorL2 === undefined
+                ? ''
+                : selectedComp.properties.threePhasePowerFactorL2
+            }
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === '') {
+                updateProp({ threePhasePowerFactorL2: undefined });
+                return;
+              }
+              updateProp({
+                threePhasePowerFactorL2: Math.min(
+                  1,
+                  Math.max(0.05, Number(raw) || 0.85)
+                ),
+              });
+            }}
+            placeholder={`${selectedComp.properties.powerFactor ?? 0.85}`}
+            className="input-field"
+          />
+        </Label>
+        <Label text="PF L3">
+          <input
+            type="number"
+            step={0.01}
+            min={0.05}
+            max={1}
+            value={
+              selectedComp.properties.threePhasePowerFactorL3 === undefined
+                ? ''
+                : selectedComp.properties.threePhasePowerFactorL3
+            }
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === '') {
+                updateProp({ threePhasePowerFactorL3: undefined });
+                return;
+              }
+              updateProp({
+                threePhasePowerFactorL3: Math.min(
+                  1,
+                  Math.max(0.05, Number(raw) || 0.85)
+                ),
+              });
+            }}
+            placeholder={`${selectedComp.properties.powerFactor ?? 0.85}`}
+            className="input-field"
+          />
+        </Label>
+        <p className={`text-[9px] font-medium ${tc.textMuted}`}>L–N voltage (× nominal U_L-N)</p>
+        <Label text="U_L-N factor L1">
+          <input
+            type="number"
+            step={0.02}
+            min={0.65}
+            max={1.35}
+            value={selectedComp.properties.threePhaseVoltageFactorL1 ?? 1}
+            onChange={(e) =>
+              updateProp({
+                threePhaseVoltageFactorL1: Math.min(
+                  1.35,
+                  Math.max(0.65, Number(e.target.value) || 1)
+                ),
+              })
+            }
+            className="input-field"
+          />
+        </Label>
+        <Label text="U_L-N factor L2">
+          <input
+            type="number"
+            step={0.02}
+            min={0.65}
+            max={1.35}
+            value={selectedComp.properties.threePhaseVoltageFactorL2 ?? 1}
+            onChange={(e) =>
+              updateProp({
+                threePhaseVoltageFactorL2: Math.min(
+                  1.35,
+                  Math.max(0.65, Number(e.target.value) || 1)
+                ),
+              })
+            }
+            className="input-field"
+          />
+        </Label>
+        <Label text="U_L-N factor L3">
+          <input
+            type="number"
+            step={0.02}
+            min={0.65}
+            max={1.35}
+            value={selectedComp.properties.threePhaseVoltageFactorL3 ?? 1}
+            onChange={(e) =>
+              updateProp({
+                threePhaseVoltageFactorL3: Math.min(
+                  1.35,
+                  Math.max(0.65, Number(e.target.value) || 1)
+                ),
+              })
+            }
+            className="input-field"
+          />
+        </Label>
+        <button
+          type="button"
+          onClick={() =>
+            updateProp({
+              threePhaseCurrentFactorL1: undefined,
+              threePhaseCurrentFactorL2: undefined,
+              threePhaseCurrentFactorL3: undefined,
+              threePhasePowerFactorL1: undefined,
+              threePhasePowerFactorL2: undefined,
+              threePhasePowerFactorL3: undefined,
+              threePhaseVoltageFactorL1: undefined,
+              threePhaseVoltageFactorL2: undefined,
+              threePhaseVoltageFactorL3: undefined,
+              powerWattsL1: undefined,
+              powerWattsL2: undefined,
+              powerWattsL3: undefined,
+            })
+          }
+          className={`w-full rounded px-2 py-1.5 text-xs ${tc.btnBg} ${tc.btnText} ${tc.btnHover}`}
+        >
+          Reset phase options
+        </button>
+      </div>
+    );
+  };
+
   const renderRCDProps = () => (
     <>
       <Label text="Rating">
@@ -972,6 +1253,7 @@ const PropertyPanel: React.FC = () => {
           ))}
         </div>
       </Label>
+      {renderPhaseCurrentUnbalanceFields()}
     </>
   );
 
@@ -1338,6 +1620,7 @@ const PropertyPanel: React.FC = () => {
             ))}
           </div>
         </Label>
+        {renderPhaseCurrentUnbalanceFields()}
         <Label text="Nameplate line current (A)">
           <input
             type="number"
@@ -3687,28 +3970,64 @@ const PropertyPanel: React.FC = () => {
     </>
   );
 
-  const renderAuxContactBlockProps = () => (
-    <>
-      <Label text="Contact rating (A)">
-        <input
-          type="number"
-          value={selectedComp!.properties.ratingAmps ?? 10}
-          onChange={(e) =>
-            updateProp({
-              ratingAmps: Math.max(0, Number(e.target.value) || 0),
-            })
-          }
-          className="input-field"
-          min={0}
-        />
-      </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
-        Auxiliary block has one NO pair <strong>13-14</strong> and one NC pair{' '}
-        <strong>21-22</strong>. State <strong>on</strong> closes NO, while{' '}
-        <strong>off</strong> closes NC.
-      </p>
-    </>
-  );
+  const renderAuxContactBlockProps = () => {
+    const followCoilTypes: ReadonlyArray<(typeof circuit.components)[0]['type']> = [
+      'contactor',
+      'relay',
+      'smart_relay',
+      'timer',
+      'three_phase_contactor',
+      'four_phase_contactor',
+      'interposing_relay',
+    ];
+    const coilTargets = circuit.components.filter((c) =>
+      followCoilTypes.includes(c.type)
+    );
+    const followId = selectedComp!.properties.auxContactFollowContactorId ?? '';
+    return (
+      <>
+        <Label text="Contact rating (A)">
+          <input
+            type="number"
+            value={selectedComp!.properties.ratingAmps ?? 10}
+            onChange={(e) =>
+              updateProp({
+                ratingAmps: Math.max(0, Number(e.target.value) || 0),
+              })
+            }
+            className="input-field"
+            min={0}
+          />
+        </Label>
+        <Label text="Mirror coil (seal-in / interlock)">
+          <select
+            className="input-field"
+            value={followId}
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              updateProp({
+                auxContactFollowContactorId: v ? v : undefined,
+              });
+            }}
+          >
+            <option value="">Manual — On/Off toggles 13–14 vs 21–22</option>
+            {coilTargets.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </Label>
+        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+          For a <strong>seal-in</strong> path wired to this block’s{' '}
+          <strong>13–14</strong>, choose the same contactor/relay whose coil is{' '}
+          <strong>A1/A2</strong>. Otherwise 13–14 stays open unless you set the
+          block to <strong>On</strong> manually. Built-in <strong>13/14/21/22</strong>{' '}
+          on the contactor symbol already follow the coil automatically.
+        </p>
+      </>
+    );
+  };
 
   const renderEnergyMeterProps = () => (
     <>
@@ -4006,7 +4325,9 @@ const PropertyPanel: React.FC = () => {
   };
 
   return (
-    <div className={`w-72 ${tc.panel} ${tc.text} flex flex-col overflow-y-auto border-l ${tc.border}`}>
+    <div
+      className={`flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden ${tc.text}`}
+    >
       <div className={`px-3 py-3 border-b ${tc.border}`}>
         <h2 className={`text-sm font-bold ${tc.textBright}`}>Properties</h2>
       </div>
@@ -4233,6 +4554,45 @@ const PropertyPanel: React.FC = () => {
                 <span>{nodeResult.lineCurrentRmsA.toFixed(2)}A</span>
               </>
             )}
+            {nodeResult.voltageL1NV !== undefined && (
+              <>
+                <div className={`col-span-2 mt-2 border-t pt-2 ${tc.border}`}>
+                  <p
+                    className={`mb-1.5 text-[10px] font-semibold uppercase tracking-wide ${tc.textMuted}`}
+                  >
+                    Three-phase results
+                  </p>
+                  <p className={`mb-2 text-[10px] leading-snug ${tc.textMuted}`}>
+                    Symmetric supply by default. On 3φ motors set per-phase power (W)
+                    for uneven 4-wire loads, or use current factors; I_N uses phasor
+                    sum with per-phase PF angles. Validation warns if imbalance
+                    exceeds the threshold set under the Validation tab.
+                  </p>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px]">
+                    <span className={tc.textMuted}>I_L1:</span>
+                    <span>{(nodeResult.currentL1A ?? 0).toFixed(2)} A</span>
+                    <span className={tc.textMuted}>I_L2:</span>
+                    <span>{(nodeResult.currentL2A ?? 0).toFixed(2)} A</span>
+                    <span className={tc.textMuted}>I_L3:</span>
+                    <span>{(nodeResult.currentL3A ?? 0).toFixed(2)} A</span>
+                    <span className={tc.textMuted}>I_N:</span>
+                    <span>{(nodeResult.currentNeutralA ?? 0).toFixed(2)} A</span>
+                    <span className={tc.textMuted}>U_L1-N:</span>
+                    <span>{(nodeResult.voltageL1NV ?? 0).toFixed(1)} V</span>
+                    <span className={tc.textMuted}>U_L2-N:</span>
+                    <span>{(nodeResult.voltageL2NV ?? 0).toFixed(1)} V</span>
+                    <span className={tc.textMuted}>U_L3-N:</span>
+                    <span>{(nodeResult.voltageL3NV ?? 0).toFixed(1)} V</span>
+                    <span className={tc.textMuted}>U_L1-L2:</span>
+                    <span>{(nodeResult.voltageL1L2V ?? 0).toFixed(1)} V</span>
+                    <span className={tc.textMuted}>U_L2-L3:</span>
+                    <span>{(nodeResult.voltageL2L3V ?? 0).toFixed(1)} V</span>
+                    <span className={tc.textMuted}>U_L3-L1:</span>
+                    <span>{(nodeResult.voltageL3L1V ?? 0).toFixed(1)} V</span>
+                  </div>
+                </div>
+              </>
+            )}
             <span className={tc.textMuted}>Status:</span>
             <span
               className={
@@ -4349,17 +4709,5 @@ const PropertyPanel: React.FC = () => {
     </div>
   );
 };
-
-const Label: React.FC<{
-  text: string;
-  children: React.ReactNode;
-}> = ({ text, children }) => (
-  <div className="space-y-1">
-    <label className="text-xs text-gray-500 uppercase tracking-wider">
-      {text}
-    </label>
-    <div>{children}</div>
-  </div>
-);
 
 export default PropertyPanel;
