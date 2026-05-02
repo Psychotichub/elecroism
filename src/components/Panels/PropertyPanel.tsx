@@ -145,6 +145,30 @@ const PropertyPanel: React.FC = () => {
     });
   };
 
+  const renderTwoWaySwitchProps = () => (
+    <>
+      <p className={`text-[11px] ${tc.textMuted} leading-snug mb-2`}>
+        Maintained SPDT: <strong>ON</strong> connects <strong>COM</strong> to{' '}
+        <strong>T1</strong>; <strong>OFF</strong> connects <strong>COM</strong> to{' '}
+        <strong>T2</strong>. Double-click the symbol on the canvas to flip throws, or
+        use the button below.
+      </p>
+      <Label text="Throw">
+        <button
+          type="button"
+          onClick={() => toggleComponent(selectedComp!.id)}
+          className={`px-3 py-1 rounded text-xs font-medium ${
+            selectedComp!.state === 'on'
+              ? 'bg-green-600 text-white'
+              : 'bg-sky-600 text-white'
+          }`}
+        >
+          {selectedComp!.state === 'on' ? 'COM ↔ T1' : 'COM ↔ T2'}
+        </button>
+      </Label>
+    </>
+  );
+
   const renderSwitchProps = () => (
     <>
       <Label text="Type">
@@ -4374,6 +4398,8 @@ const PropertyPanel: React.FC = () => {
     switch (selectedComp.type) {
       case 'switch':
         return renderSwitchProps();
+      case 'two_way_switch':
+        return renderTwoWaySwitchProps();
       case 'push_button':
         return renderPushButtonProps();
       case 'mcb':

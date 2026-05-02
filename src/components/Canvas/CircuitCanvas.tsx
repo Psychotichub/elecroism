@@ -14,6 +14,7 @@ import WireLayer from './WireLayer';
 import WireGripLayer from './WireGripLayer';
 import WireToolOverlay from './WireToolOverlay';
 import SwitchSymbol from '../Components/SwitchSymbol';
+import TwoWaySwitchSymbol from '../Components/TwoWaySwitchSymbol';
 import MCBSymbol from '../Components/MCBSymbol';
 import HrcFuseSymbol from '../Components/HrcFuseSymbol';
 import EarthLeakageRelayCbctSymbol from '../Components/EarthLeakageRelayCbctSymbol';
@@ -1024,6 +1025,14 @@ const CircuitCanvas: React.FC = () => {
             {...commonProps}
             tool={tool}
             variant="switch"
+            onToggle={() => toggleComponent(comp.id)}
+          />
+        );
+      case 'two_way_switch':
+        return (
+          <TwoWaySwitchSymbol
+            key={comp.id}
+            {...commonProps}
             onToggle={() => toggleComponent(comp.id)}
           />
         );

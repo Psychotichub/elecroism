@@ -113,6 +113,8 @@ const POWER_COMPONENT_TYPES = new Set<CircuitComponent['type']>([
   'lamp',
   'motor',
   'heater',
+  'panel_heater',
+  'cooling_fan',
   'generic_load',
 ]);
 

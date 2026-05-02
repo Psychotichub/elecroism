@@ -195,6 +195,12 @@ const GROUPS: ComponentGroup[] = [
         detail: 'SPST / DPST in properties',
       },
       {
+        type: 'two_way_switch',
+        label: 'Two-way switch',
+        icon: <FiToggleLeft />,
+        detail: 'SPDT: COM · T1 · T2 — double-click to throw',
+      },
+      {
         type: 'push_button',
         label: 'Push button',
         icon: <FiCircle />,
@@ -462,18 +468,6 @@ const GROUPS: ComponentGroup[] = [
     emoji: '🧱',
     items: [
       {
-        type: 'panel_heater',
-        label: 'Panel heater',
-        icon: <FiSun />,
-        detail: 'Anti-condensation enclosure heater',
-      },
-      {
-        type: 'cooling_fan',
-        label: 'Cooling fan',
-        icon: <FiActivity />,
-        detail: 'Panel ventilation / heat removal',
-      },
-      {
         type: 'key_interlock',
         label: 'Key interlock',
         icon: <FiShield />,
@@ -590,6 +584,18 @@ const GROUPS: ComponentGroup[] = [
         detail: 'Wye · power in properties',
       },
       { type: 'heater', label: 'Heater', icon: <FiSun />, detail: 'Power in properties' },
+      {
+        type: 'panel_heater',
+        label: 'Panel heater',
+        icon: <FiSun />,
+        detail: 'Anti-condensation enclosure heater',
+      },
+      {
+        type: 'cooling_fan',
+        label: 'Cooling fan',
+        icon: <FiActivity />,
+        detail: 'Panel ventilation / heat removal',
+      },
       { type: 'generic_load', label: 'Generic load', icon: <FiCircle /> },
     ],
   },

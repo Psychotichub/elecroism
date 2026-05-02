@@ -2,6 +2,7 @@ import React from 'react';
 import { Group, Rect, Text, Line, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
+import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
 function coilTerminalTag(label: string): 'A1' | 'A2' | null {
   const u = label.toUpperCase();
@@ -107,15 +108,16 @@ const ThreePhaseContactorSymbol: React.FC<Props> = ({
         fill={isOn ? '#22C55E' : '#9CA3AF'}
       />
 
-      <Text
-        text={component.label}
+      <ComponentCanvasLabel
+        componentId={component.id}
+        label={component.label}
         x={minX}
         y={14}
         width={bodyW}
-        fontSize={7}
+        fontSize={component.properties.labelFontSize ?? 7}
         fill="#6B7280"
-        align="center"
-        listening={false}
+        offsetX={component.properties.labelOffsetX ?? 0}
+        offsetY={component.properties.labelOffsetY ?? 0}
       />
 
       {poleXs.map((dx, i) => (

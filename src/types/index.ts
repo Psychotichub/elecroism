@@ -1,5 +1,7 @@
 export type ComponentType =
   | 'switch'
+  /** Single-pole two-way (SPDT): COM, T1, T2 — maintained throw for stair/changeover wiring. */
+  | 'two_way_switch'
   | 'socket'
   | 'mcb'
   | 'hrc_fuse'

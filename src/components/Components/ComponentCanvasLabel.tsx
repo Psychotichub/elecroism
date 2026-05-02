@@ -56,6 +56,10 @@ export const ComponentCanvasLabel: React.FC<ComponentCanvasLabelProps> = ({
         e.cancelBubble = true;
         const targetId = componentId || selectedId;
         if (!targetId) return;
+        const comp = useCircuitStore
+          .getState()
+          .circuit.components.find((c) => c.id === targetId);
+        if (!comp) return;
         const snap = (v: number) => {
           const g = Math.max(1, gridSize);
           return Math.round(v / g) * g;
@@ -66,6 +70,7 @@ export const ComponentCanvasLabel: React.FC<ComponentCanvasLabelProps> = ({
         e.target.y(ny);
         updateComponent(targetId, {
           properties: {
+            ...comp.properties,
             labelOffsetX: nx - x,
             labelOffsetY: ny - y,
           },

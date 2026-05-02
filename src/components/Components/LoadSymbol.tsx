@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Group, Circle, Line, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
+import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 import Konva from 'konva';
 
 interface Props {
@@ -24,7 +25,10 @@ const LoadSymbol: React.FC<Props> = ({
   const energized = nodeResult?.energized || false;
   const isLamp = component.type === 'lamp';
   const isMotor = component.type === 'motor';
+  const isPanelHeater = component.type === 'panel_heater';
+  const isCoolingFan = component.type === 'cooling_fan';
   const motorRef = useRef<Konva.Group>(null);
+  const fanRef = useRef<Konva.Group>(null);
   const glowRef = useRef<Konva.Circle>(null);
 
   useEffect(() => {
@@ -38,6 +42,19 @@ const LoadSymbol: React.FC<Props> = ({
       return () => { anim.stop(); };
     }
   }, [isMotor, energized]);
+
+  useEffect(() => {
+    if (component.type !== 'cooling_fan' || !energized || !fanRef.current) return;
+    const anim = new Konva.Animation((frame) => {
+      if (frame && fanRef.current) {
+        fanRef.current.rotation(frame.time * 0.35);
+      }
+    }, fanRef.current.getLayer());
+    anim.start();
+    return () => {
+      anim.stop();
+    };
+  }, [component.type, energized]);
 
   useEffect(() => {
     if (isLamp && energized && glowRef.current) {
@@ -56,6 +73,8 @@ const LoadSymbol: React.FC<Props> = ({
     if (!energized) return '#E5E7EB';
     if (isLamp) return '#FCD34D';
     if (isMotor) return '#4ADE80';
+    if (isCoolingFan) return '#7DD3FC';
+    if (isPanelHeater || component.type === 'heater') return '#FB923C';
     return '#FB923C';
   };
 
@@ -148,13 +167,15 @@ const LoadSymbol: React.FC<Props> = ({
       <Line points={[0, -16, 0, -20]} stroke="#374151" strokeWidth={2} />
       <Line points={[0, 16, 0, 20]} stroke="#374151" strokeWidth={2} />
 
-      <Text
-        text={component.label}
-        x={18}
-        y={-5}
-        fontSize={9}
-        fill="#6B7280"
-        listening={false}
+      <ComponentCanvasLabel
+        componentId={component.id}
+        label={component.label}
+        x={14}
+        y={-8}
+        width={72}
+        fontSize={component.properties.labelFontSize ?? 9}
+        offsetX={component.properties.labelOffsetX ?? 0}
+        offsetY={component.properties.labelOffsetY ?? 0}
       />
       <Text
         text={`${component.properties.powerWatts || 0}W`}

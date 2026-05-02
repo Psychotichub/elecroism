@@ -18,6 +18,7 @@ export const CROSS_SECTIONS = [
 
 export function defaultPhaseSystemForType(t: ComponentType): PhaseSystem {
   switch (t) {
+    case 'two_way_switch':
     case 'dc_power_source':
     case 'ac_dc_converter':
       return 'single_phase';

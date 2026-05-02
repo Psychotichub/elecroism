@@ -85,6 +85,7 @@ type CadCommandContext = {
 
 const ALL_COMPONENT_TYPES: ComponentType[] = [
   'switch',
+  'two_way_switch',
   'socket',
   'mcb',
   'hrc_fuse',

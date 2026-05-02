@@ -633,6 +633,12 @@ function createConnectionPoints(
         { id: uuid(), componentId, x: 0, y: -20, label: 'IN' },
         { id: uuid(), componentId, x: 0, y: 20, label: 'OUT' },
       ];
+    case 'two_way_switch':
+      return [
+        { id: uuid(), componentId, x: 0, y: 20, label: 'COM' },
+        { id: uuid(), componentId, x: -14, y: -20, label: 'T1' },
+        { id: uuid(), componentId, x: 14, y: -20, label: 'T2' },
+      ];
     case 'mcb':
       return createMcbConnectionPoints(
         componentId,

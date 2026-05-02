@@ -570,6 +570,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     if (!comp) return;
     const toggleable = [
       'switch',
+      'two_way_switch',
       'mcb',
       'hrc_fuse',
       'control_circuit_fuse',

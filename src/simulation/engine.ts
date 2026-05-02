@@ -1045,6 +1045,7 @@ export class CircuitEngine {
   private isSeriesPathComponent(c: CircuitComponent): boolean {
     return (
       c.type === 'switch' ||
+      c.type === 'two_way_switch' ||
       c.type === 'push_button' ||
       c.type === 'mcb' ||
       c.type === 'hrc_fuse' ||
@@ -1551,6 +1552,19 @@ export class CircuitEngine {
             }
           }
           break;
+        case 'two_way_switch': {
+          if (skipInternalBridge) break;
+          const com = this.findTerminalByLabel(component, 'COM');
+          const t1 = this.findTerminalByLabel(component, 'T1');
+          const t2 = this.findTerminalByLabel(component, 'T2');
+          if (!com || !t1 || !t2) break;
+          if (component.state === 'on') {
+            this.addEdge(graph, com, t1);
+          } else {
+            this.addEdge(graph, com, t2);
+          }
+          break;
+        }
         case 'mechanical_interlock':
           // Mechanical interlock is treated as NC permissive contact:
           // state==='off' => closed (conducting), state==='on' => open.

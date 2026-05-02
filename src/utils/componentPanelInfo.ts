@@ -43,6 +43,18 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
     purpose:
       'Use for isolators, local disconnects, or control-path selection in single-line or control diagrams.',
   },
+  two_way_switch: {
+    displayName: 'Two-way switch (SPDT)',
+    description:
+      'Single-pole changeover: one common (COM) and two throws (T1, T2). Only one throw is connected at a time — typical for stair lighting or A/B routing.',
+    features: [
+      'Terminals COM, T1, T2',
+      'Maintained position: ON = COM–T1, OFF = COM–T2',
+      'Double-click symbol to flip throws',
+    ],
+    purpose:
+      'Model two-way lighting circuits, manual source selection, or any SPDT maintained schematic element.',
+  },
   socket: {
     displayName: 'Socket outlet',
     description:

@@ -302,6 +302,8 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
       };
     case 'switch':
       return { switchType: 'SPST', poles: 1, phaseSystem: 'single_phase' };
+    case 'two_way_switch':
+      return { phaseSystem: 'single_phase' };
     case 'push_button':
       return { buttonType: 'NO', phaseSystem: 'single_phase' };
     case 'mcb':
@@ -582,6 +584,7 @@ function getInitialState(type: ComponentType): CircuitComponent['state'] {
   // Components that represent user-operated switching/protection start open/off.
   const startsOff = new Set<ComponentType>([
     'switch',
+    'two_way_switch',
     'push_button',
     'mcb',
     'hrc_fuse',
