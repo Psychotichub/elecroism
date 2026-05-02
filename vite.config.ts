@@ -17,6 +17,8 @@ function manualChunkFromNodeModules(id: string): string | undefined {
 
 // https://vite.dev/config/
 export default defineConfig({
+  /** Required for Electron `loadFile(dist/index.html)` — absolute `/assets/…` breaks under `file://`. */
+  base: './',
   plugins: [react()],
   build: {
     rollupOptions: {
