@@ -76,20 +76,20 @@ const PropertyPanel: React.FC = () => {
     const expected =
       poles >= 4
         ? [
-            { x: -24, y: -25, label: 'IN_L1' },
-            { x: -8, y: -25, label: 'IN_L2' },
-            { x: 8, y: -25, label: 'IN_L3' },
-            { x: 24, y: -25, label: 'IN_N' },
-            { x: -24, y: 25, label: 'OUT_L1' },
-            { x: -8, y: 25, label: 'OUT_L2' },
-            { x: 8, y: 25, label: 'OUT_L3' },
-            { x: 24, y: 25, label: 'OUT_N' },
+            { x: -30, y: -25, label: '1' },
+            { x: -30, y: 25, label: '2' },
+            { x: -10, y: -25, label: '3' },
+            { x: -10, y: 25, label: '4' },
+            { x: 10, y: -25, label: '5' },
+            { x: 10, y: 25, label: '6' },
+            { x: 30, y: -25, label: '7' },
+            { x: 30, y: 25, label: '8' },
           ]
         : [
-            { x: -14, y: -25, label: 'IN_L' },
-            { x: 14, y: -25, label: 'IN_N' },
-            { x: -14, y: 25, label: 'OUT_L' },
-            { x: 14, y: 25, label: 'OUT_N' },
+            { x: -10, y: -25, label: '1' },
+            { x: -10, y: 25, label: '2' },
+            { x: 10, y: -25, label: '3' },
+            { x: 10, y: 25, label: '4' },
           ];
     const same =
       c.connectionPoints.length === expected.length &&
@@ -362,16 +362,16 @@ const PropertyPanel: React.FC = () => {
                   const points =
                     p === 3
                       ? [
-                          { x: -24, y: -25, label: 'IN_L1' },
-                          { x: -24, y: 25, label: 'OUT_L1' },
-                          { x: 0, y: -25, label: 'IN_L2' },
-                          { x: 0, y: 25, label: 'OUT_L2' },
-                          { x: 24, y: -25, label: 'IN_L3' },
-                          { x: 24, y: 25, label: 'OUT_L3' },
+                          { x: -20, y: -25, label: '1' },
+                          { x: -20, y: 25, label: '2' },
+                          { x: 0, y: -25, label: '3' },
+                          { x: 0, y: 25, label: '4' },
+                          { x: 20, y: -25, label: '5' },
+                          { x: 20, y: 25, label: '6' },
                         ]
                       : [
-                          { x: 0, y: -25, label: 'IN' },
-                          { x: 0, y: 25, label: 'OUT' },
+                          { x: 0, y: -25, label: '1' },
+                          { x: 0, y: 25, label: '2' },
                         ];
                   updateComponent(selectedComp!.id, {
                     properties: {
@@ -953,20 +953,20 @@ const PropertyPanel: React.FC = () => {
                 const points =
                   p === 4
                     ? [
-                        { x: -24, y: -25, label: 'IN_L1' },
-                        { x: -8, y: -25, label: 'IN_L2' },
-                        { x: 8, y: -25, label: 'IN_L3' },
-                        { x: 24, y: -25, label: 'IN_N' },
-                        { x: -24, y: 25, label: 'OUT_L1' },
-                        { x: -8, y: 25, label: 'OUT_L2' },
-                        { x: 8, y: 25, label: 'OUT_L3' },
-                        { x: 24, y: 25, label: 'OUT_N' },
+                        { x: -30, y: -25, label: '1' },
+                        { x: -30, y: 25, label: '2' },
+                        { x: -10, y: -25, label: '3' },
+                        { x: -10, y: 25, label: '4' },
+                        { x: 10, y: -25, label: '5' },
+                        { x: 10, y: 25, label: '6' },
+                        { x: 30, y: -25, label: '7' },
+                        { x: 30, y: 25, label: '8' },
                       ]
                     : [
-                        { x: -14, y: -25, label: 'IN_L' },
-                        { x: -14, y: 25, label: 'OUT_L' },
-                        { x: 14, y: -25, label: 'IN_N' },
-                        { x: 14, y: 25, label: 'OUT_N' },
+                        { x: -10, y: -25, label: '1' },
+                        { x: -10, y: 25, label: '2' },
+                        { x: 10, y: -25, label: '3' },
+                        { x: 10, y: 25, label: '4' },
                       ];
                 updateComponent(selectedComp!.id, {
                   properties: {
@@ -1004,7 +1004,10 @@ const PropertyPanel: React.FC = () => {
       )}
       <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
         RCD compares line and neutral current continuously. Leakage imbalance
-        above setting trips quickly for shock/fire protection.
+        above setting trips quickly for shock/fire protection. Terminals follow
+        odd-in / even-out numbering: 2P uses <strong>1–4</strong> (line pair then
+        neutral pair); 4P uses <strong>1–8</strong> (L1–L3 pairs then{' '}
+        <strong>7–8</strong> for N).
       </p>
       {selectedComp!.type === 'hrc_fuse' && (
         <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
@@ -1090,16 +1093,16 @@ const PropertyPanel: React.FC = () => {
                 const points =
                   p === 3
                     ? [
-                        { x: -12, y: -25, label: 'IN_L1' },
-                        { x: -12, y: 25, label: 'OUT_L1' },
-                        { x: 0, y: -25, label: 'IN_L2' },
-                        { x: 0, y: 25, label: 'OUT_L2' },
-                        { x: 12, y: -25, label: 'IN_L3' },
-                        { x: 12, y: 25, label: 'OUT_L3' },
+                        { x: -20, y: -25, label: '1' },
+                        { x: -20, y: 25, label: '2' },
+                        { x: 0, y: -25, label: '3' },
+                        { x: 0, y: 25, label: '4' },
+                        { x: 20, y: -25, label: '5' },
+                        { x: 20, y: 25, label: '6' },
                       ]
                     : [
-                        { x: 0, y: -25, label: 'IN' },
-                        { x: 0, y: 25, label: 'OUT' },
+                        { x: 0, y: -25, label: '1' },
+                        { x: 0, y: 25, label: '2' },
                       ];
                 updateComponent(selectedComp!.id, {
                   properties: {
@@ -1725,7 +1728,7 @@ const PropertyPanel: React.FC = () => {
         </p>
         <p className={`text-[9px] ${tc.textMuted} leading-snug`}>
           Wiring: choose the Wire tool, then click the terminals on the ACB.
-          Main power stays on the pole terminals (IN_L1…OUT_N). BMS control uses
+          Main power stays on the pole terminals (1–8). BMS control uses
           the extra terminals on the left of the symbol: CC_A1/A2, ST_A1/A2,
           UVR_A1/A2, AUX_52A, AUX_52B, AUX_TRIP — for your diagram to
           junctions, relay coils, or a notional BMS block. The simulator does
@@ -2346,7 +2349,7 @@ const PropertyPanel: React.FC = () => {
           BMS (motor ON / shunt / aux / trip)
         </p>
         <p className={`text-[9px] ${tc.textMuted} leading-snug`}>
-          Wire the <strong>power</strong> poles (IN_L1…OUT_L3) like a 3P MCB.
+          Wire the <strong>power</strong> poles (1–6) like a 3P MCB.
           On the <strong>left</strong> of the symbol: MOT_A1/A2 (motor close),
           ST_A1/A2 (shunt trip), AUX_COM / AUX_NO / AUX_NC (status changeover),
           TRIP_T1/T2 (fault contact). Simulator does not model control-circuit
@@ -2776,6 +2779,23 @@ const PropertyPanel: React.FC = () => {
         <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
           Main contacts close only when the coil terminals see line on one side
           and neutral on the other. Coil voltage is not modeled numerically.
+        </p>
+        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+          Power path:{' '}
+          {variant === '4p' ? (
+            <>
+              <strong>T1–T2</strong>, <strong>T3–T4</strong>,{' '}
+              <strong>T5–T6</strong>, <strong>T7–T8</strong> (odd line in, even
+              load out per pole), plus <strong>A1/A2</strong> and aux 13–14 /
+              21–22.
+            </>
+          ) : (
+            <>
+              <strong>T1–T2</strong>, <strong>T3–T4</strong>,{' '}
+              <strong>T5–T6</strong> (odd in, even out per line pole), plus{' '}
+              <strong>A1/A2</strong> and aux 13–14 / 21–22.
+            </>
+          )}
         </p>
       </>
     );
@@ -4525,7 +4545,7 @@ const PropertyPanel: React.FC = () => {
       className={`flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden ${tc.text}`}
     >
       <div className={`px-3 py-3 border-b ${tc.border}`}>
-        <h2 className={`text-sm font-bold ${tc.textBright}`}>Properties</h2>
+        <h2 className={`text-xs font-bold ${tc.textBright}`}>Properties</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
@@ -4546,12 +4566,12 @@ const PropertyPanel: React.FC = () => {
             <Label text="Label text size">
               <input
                 type="number"
-                value={selectedComp.properties.labelFontSize ?? 9}
+                value={selectedComp.properties.labelFontSize ?? 8}
                 onChange={(e) =>
                   updateProp({
                     labelFontSize: Math.min(
                       24,
-                      Math.max(6, Number(e.target.value) || 9)
+                      Math.max(6, Number(e.target.value) || 8)
                     ),
                   })
                 }

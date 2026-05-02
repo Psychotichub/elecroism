@@ -173,7 +173,7 @@ const LoadSymbol: React.FC<Props> = ({
         x={14}
         y={-8}
         width={72}
-        fontSize={component.properties.labelFontSize ?? 9}
+        fontSize={component.properties.labelFontSize ?? 8}
         offsetX={component.properties.labelOffsetX ?? 0}
         offsetY={component.properties.labelOffsetY ?? 0}
       />
@@ -181,7 +181,7 @@ const LoadSymbol: React.FC<Props> = ({
         text={`${component.properties.powerWatts || 0}W`}
         x={18}
         y={5}
-        fontSize={8}
+        fontSize={7}
         fill="#9CA3AF"
         listening={false}
       />

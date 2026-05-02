@@ -112,7 +112,10 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
     displayName: 'RCD / RCCB',
     description:
       'Residual current device that trips on imbalance between line and neutral currents.',
-    features: ['2P or 4P terminal layouts', 'Sensitivity and type (AC/A/B) metadata'],
+    features: [
+      '2P terminals 1–4 or 4P 1–8 (odd in, even out per pole)',
+      'Sensitivity and type (AC/A/B) metadata',
+    ],
     purpose:
       'Model shock protection, fire risk reduction, or TT/TN-S final circuit protection.',
   },
@@ -120,7 +123,10 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
     displayName: 'Residual current circuit breaker (RCBO-style)',
     description:
       'Combined overcurrent and residual-current protection in one device footprint.',
-    features: ['Pole-aware IN/OUT mapping', 'RCD parameters plus MCB-style behaviour'],
+    features: [
+      'Pole-aware 1–4 / 1–8 terminal mapping',
+      'RCD parameters plus MCB-style behaviour',
+    ],
     purpose:
       'Use where a single-pole device must show both overload and 30 mA (typ.) protection.',
   },
@@ -348,7 +354,7 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
     description: 'Three-pole power contactor for motor or heater switching.',
     features: [
       'Coil pickup',
-      'Three line poles',
+      'Main poles T1–T2, T3–T4, T5–T6 (IEC-style line/load pairs)',
       'Simulation fault if summed load current exceeds nameplate rating while closed',
     ],
     purpose: 'Motor starters, capacitor steps, or 3φ load switching.',
@@ -357,7 +363,7 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
     displayName: 'Four-pole contactor',
     description: 'Contactor switching L1–L3 and neutral.',
     features: [
-      'Four switched poles',
+      'Main poles T1–T8 (L1–L3 + N, odd in / even out per pole)',
       'Coil-controlled',
       'Built-in aux 13–14 / 21–22 for seal-in or electrical interlock',
       'Simulation fault if main-path current exceeds nameplate rating while closed',

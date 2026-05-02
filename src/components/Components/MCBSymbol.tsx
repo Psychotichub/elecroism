@@ -209,7 +209,7 @@ const MCBSymbol: React.FC<Props> = ({
         x={-bodyW / 2 - 10}
         y={32}
         width={bodyW + 20}
-        fontSize={component.properties.labelFontSize ?? 8}
+        fontSize={component.properties.labelFontSize ?? 7}
                 offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

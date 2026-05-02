@@ -100,7 +100,7 @@ const EarthLeakageRelayCbctSymbol: React.FC<Props> = ({
         ))}
         {energized && <Circle x={18} y={-12} radius={2.8} fill="#22C55E" />}
         <ComponentCanvasLabel
-          componentId={component.id} label={component.label} x={-30} y={28} width={60}           fontSize={component.properties.labelFontSize ?? 8}
+          componentId={component.id} label={component.label} x={-30} y={28} width={60}           fontSize={component.properties.labelFontSize ?? 7}
                   offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

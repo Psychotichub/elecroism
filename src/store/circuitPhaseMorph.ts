@@ -76,13 +76,17 @@ function morphLabelPairs(
   if (fromType === 'mcb' && toType === 'three_phase_mcb') {
     if (mcbLayoutPoles(fromComp) === 2) {
       return [
-        ['IN_L', 'IN_L1'],
-        ['OUT_L', 'OUT_L1'],
+        ['1', '1'],
+        ['2', '2'],
+        ['IN_L', '1'],
+        ['OUT_L', '2'],
       ];
     }
     return [
-      ['IN', 'IN_L1'],
-      ['OUT', 'OUT_L1'],
+      ['1', '1'],
+      ['2', '2'],
+      ['IN', '1'],
+      ['OUT', '2'],
     ];
   }
   if (
@@ -91,15 +95,23 @@ function morphLabelPairs(
   ) {
     if (fromType === 'four_phase_mcb') {
       return [
-        ['IN_L1', 'IN_L'],
-        ['OUT_L1', 'OUT_L'],
-        ['IN_N', 'IN_N'],
-        ['OUT_N', 'OUT_N'],
+        ['1', '1'],
+        ['2', '2'],
+        ['7', '3'],
+        ['8', '4'],
+        ['IN_L1', '1'],
+        ['OUT_L1', '2'],
+        ['IN_N', '3'],
+        ['OUT_N', '4'],
+        ['IN_L', '1'],
+        ['OUT_L', '2'],
       ];
     }
     return [
-      ['IN_L1', 'IN'],
-      ['OUT_L1', 'OUT'],
+      ['1', '1'],
+      ['2', '2'],
+      ['IN_L1', '1'],
+      ['OUT_L1', '2'],
     ];
   }
   if (
@@ -109,8 +121,10 @@ function morphLabelPairs(
     toType === 'three_phase_contactor'
   ) {
     return [
-      ['IN', 'IN_L1'],
-      ['OUT', 'OUT_L1'],
+      ['T1', 'T1'],
+      ['T2', 'T2'],
+      ['IN', 'T1'],
+      ['OUT', 'T2'],
       ['A1', 'A1'],
       ['A2', 'A2'],
     ];
@@ -121,8 +135,10 @@ function morphLabelPairs(
     toType === 'contactor'
   ) {
     return [
-      ['IN_L1', 'IN'],
-      ['OUT_L1', 'OUT'],
+      ['T1', 'T1'],
+      ['T2', 'T2'],
+      ['IN_L1', 'T1'],
+      ['OUT_L1', 'T2'],
       ['A1', 'A1'],
       ['A2', 'A2'],
     ];

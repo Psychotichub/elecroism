@@ -64,7 +64,6 @@ import {
   getInitialState,
   createEmptyCircuit,
 } from './circuitDefaults';
-import { appendRecentPaletteUse } from '../utils/sidebarPaletteStorage';
 import {
   removeCollinearInteriorVertices,
   trimWireBetweenVertexIndices,
@@ -386,6 +385,12 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     }
     const mcbPolesForCp =
       type === 'mcb' ? (properties.poles === 2 ? 2 : 1) : undefined;
+    const rcdPolesForCp =
+      type === 'rcd' || type === 'residual_current_circuit_breaker'
+        ? properties.poles === 4
+          ? 4
+          : 2
+        : undefined;
     const newComp: CircuitComponent = {
       id,
       type,
@@ -399,6 +404,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       selected: false,
       connectionPoints: createConnectionPoints(id, type, {
         mcbPoles: mcbPolesForCp,
+        rcdPoles: rcdPolesForCp,
       }),
       properties,
     };
@@ -409,7 +415,6 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         updatedAt: new Date().toISOString(),
       },
     }));
-    appendRecentPaletteUse(type);
     get().pushHistory(`Added ${type}`);
     get().runSimulation();
   },
@@ -435,14 +440,20 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const pairs: [string, string][] =
       prevLayout === 1 && clamped === 2
         ? [
-            ['IN', 'IN_L'],
-            ['OUT', 'OUT_L'],
+            ['IN', '1'],
+            ['OUT', '2'],
+            ['1', '1'],
+            ['2', '2'],
           ]
         : [
-            ['IN_L', 'IN'],
-            ['OUT_L', 'OUT'],
-            ['IN_N', 'IN'],
-            ['OUT_N', 'OUT'],
+            ['IN_L', '1'],
+            ['OUT_L', '2'],
+            ['IN_N', '1'],
+            ['OUT_N', '2'],
+            ['1', '1'],
+            ['2', '2'],
+            ['3', '1'],
+            ['4', '2'],
           ];
     const remap = buildPointRemapByLabels(comp, newCps, pairs);
     const newWires = remapWireEndpointsForMorph(
@@ -521,8 +532,15 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
           ? 2
           : 1
         : undefined;
+    const rcdPolesForCpMorph =
+      nextType === 'rcd' || nextType === 'residual_current_circuit_breaker'
+        ? (newProps.poles ?? 2) >= 4
+          ? 4
+          : 2
+        : undefined;
     const newCps = createConnectionPoints(comp.id, nextType, {
       mcbPoles: mcbPolesForCp,
+      rcdPoles: rcdPolesForCpMorph,
     });
     const pairs = morphLabelPairs(comp, nextType);
     if (!pairs) {
@@ -2092,17 +2110,85 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         ? { ...c, pressed: false }
         : c
     );
-    const components = withPush.map((c) => {
+    const afterMcb = withPush.map((c) => {
       if (c.type !== 'mcb') return c;
       if ((c.properties.poles ?? 1) !== 2) return c;
-      if (c.connectionPoints.some((p) => labelNorm(p.label) === 'IN_L')) {
+      const labs = new Set(c.connectionPoints.map((p) => labelNorm(p.label)));
+      if (
+        labs.has('1') &&
+        labs.has('2') &&
+        labs.has('3') &&
+        labs.has('4')
+      ) {
         return c;
       }
       const newCps = createConnectionPoints(c.id, 'mcb', { mcbPoles: 2 });
       const remap = buildPointRemapByLabels(c, newCps, [
-        ['IN', 'IN_L'],
-        ['OUT', 'OUT_L'],
+        ['IN', '1'],
+        ['OUT', '2'],
+        ['IN_L', '1'],
+        ['OUT_L', '2'],
+        ['IN_N', '3'],
+        ['OUT_N', '4'],
+        ['1', '1'],
+        ['2', '2'],
+        ['3', '3'],
+        ['4', '4'],
       ]);
+      wires = remapWireEndpointsForMorph(wires, c.id, remap);
+      return { ...c, connectionPoints: newCps };
+    });
+    const components = afterMcb.map((c) => {
+      if (c.type !== 'rcd' && c.type !== 'residual_current_circuit_breaker') {
+        return c;
+      }
+      const poles = (c.properties.poles ?? 2) >= 4 ? 4 : 2;
+      const labs = new Set(c.connectionPoints.map((p) => labelNorm(p.label)));
+      const hasModern2 =
+        poles === 2 &&
+        labs.has('1') &&
+        labs.has('2') &&
+        labs.has('3') &&
+        labs.has('4');
+      const hasModern4 =
+        poles === 4 &&
+        ['1', '2', '3', '4', '5', '6', '7', '8'].every((d) => labs.has(d));
+      if (hasModern2 || hasModern4) return c;
+
+      const newCps = createConnectionPoints(c.id, c.type, {
+        rcdPoles: poles === 4 ? 4 : 2,
+      });
+      const pairs: [string, string][] =
+        poles === 4
+          ? [
+              ['IN_L1', '1'],
+              ['OUT_L1', '2'],
+              ['IN_L2', '3'],
+              ['OUT_L2', '4'],
+              ['IN_L3', '5'],
+              ['OUT_L3', '6'],
+              ['IN_N', '7'],
+              ['OUT_N', '8'],
+              ['1', '1'],
+              ['2', '2'],
+              ['3', '3'],
+              ['4', '4'],
+              ['5', '5'],
+              ['6', '6'],
+              ['7', '7'],
+              ['8', '8'],
+            ]
+          : [
+              ['IN_L', '1'],
+              ['OUT_L', '2'],
+              ['IN_N', '3'],
+              ['OUT_N', '4'],
+              ['1', '1'],
+              ['2', '2'],
+              ['3', '3'],
+              ['4', '4'],
+            ];
+      const remap = buildPointRemapByLabels(c, newCps, pairs);
       wires = remapWireEndpointsForMorph(wires, c.id, remap);
       return { ...c, connectionPoints: newCps };
     });

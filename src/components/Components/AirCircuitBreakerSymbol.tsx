@@ -233,7 +233,7 @@ const AirCircuitBreakerSymbol: React.FC<Props> = ({
         x={minX - 6}
         y={52}
         width={bodyW + 12}
-        fontSize={component.properties.labelFontSize ?? 8}
+        fontSize={component.properties.labelFontSize ?? 7}
                 offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

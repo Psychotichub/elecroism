@@ -22,7 +22,7 @@ export const ComponentCanvasLabel: React.FC<ComponentCanvasLabelProps> = ({
   x,
   y,
   width,
-  fontSize = 8,
+  fontSize = 7,
   fill = '#6B7280',
   offsetX = 0,
   offsetY = 0,

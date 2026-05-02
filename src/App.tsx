@@ -6,6 +6,7 @@ import InspectorColumn from './components/Panels/InspectorColumn';
 import StatusBar from './components/Panels/StatusBar';
 import FaultDialog from './components/Dialogs/FaultDialog';
 import ContinuityBuzzer from './components/Audio/ContinuityBuzzer';
+import TripSound from './components/Audio/TripSound';
 import { AppErrorBoundary } from './components/ErrorBoundary/AppErrorBoundary';
 import { themeColors, useThemeStore } from './store/themeStore';
 
@@ -121,6 +122,7 @@ function App() {
         <FaultDialog />
       </AppErrorBoundary>
       <ContinuityBuzzer />
+      <TripSound />
     </div>
   );
 }

@@ -239,7 +239,7 @@ const MultimeterSymbol: React.FC<Props> = ({
           x={minX - 2}
           y={maxY + 8}
           width={bodyW + 4}
-          fontSize={component.properties.labelFontSize ?? 9}
+          fontSize={component.properties.labelFontSize ?? 8}
           offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

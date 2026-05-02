@@ -136,7 +136,7 @@ const IndicatorLampSymbol: React.FC<Props> = ({
           x={-24}
           y={20}
           width={48}
-          fontSize={component.properties.labelFontSize ?? 8}
+          fontSize={component.properties.labelFontSize ?? 7}
                   offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

@@ -11,6 +11,17 @@ import {
   validateContactorOverloadFaults,
   validateEthernetWires,
 } from './wiringFaultValidation';
+import { isSeriesProtectionTripType } from '../utils/seriesProtectionTripTypes';
+import { mcbLayoutPoles } from '../store/circuitConnectionGeometry';
+import {
+  BRIDGE_PAIRS_1P,
+  BRIDGE_PAIRS_2P_LN,
+  BRIDGE_PAIRS_3P_LLL,
+  BRIDGE_PAIRS_4P_LLLN,
+  BRIDGE_PAIRS_SINGLE_CONT,
+  BRIDGE_PAIRS_T_POWER_3P,
+  BRIDGE_PAIRS_T_POWER_4P,
+} from '../utils/terminalBridgeAliases';
 
 interface PotentialSets {
   live: Set<string>;
@@ -1008,22 +1019,7 @@ export class CircuitEngine {
   }
 
   private isSeriesProtectionDevice(c: CircuitComponent): boolean {
-    return (
-      c.type === 'mcb' ||
-      c.type === 'hrc_fuse' ||
-      c.type === 'control_circuit_fuse' ||
-      c.type === 'earth_leakage_relay_cbct' ||
-      c.type === 'rcd' ||
-      c.type === 'residual_current_circuit_breaker' ||
-      c.type === 'overload_relay' ||
-      c.type === 'three_phase_mcb' ||
-      c.type === 'mccb' ||
-      c.type === 'motor_protection_circuit_breaker' ||
-      c.type === 'four_phase_mcb' ||
-      c.type === 'motorized_mccb' ||
-      c.type === 'four_pole_motorized_mccb' ||
-      c.type === 'air_circuit_breaker'
-    );
+    return isSeriesProtectionTripType(c.type);
   }
 
   /**
@@ -1515,16 +1511,12 @@ export class CircuitEngine {
           break;
         case 'terminal_block':
           if (!skipInternalBridge) {
-            const inKey = this.findTerminalByLabel(component, 'IN');
-            const outKey = this.findTerminalByLabel(component, 'OUT');
-            if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+            this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_1P);
           }
           break;
         case 'push_button':
           if (this.pushButtonConducting(component) && !skipInternalBridge) {
-            const inKey = this.findTerminalByLabel(component, 'IN');
-            const outKey = this.findTerminalByLabel(component, 'OUT');
-            if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+            this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_1P);
           }
           break;
         case 'switch':
@@ -1534,21 +1526,12 @@ export class CircuitEngine {
         case 'overload_relay':
           if (component.state === 'on' && !skipInternalBridge) {
             if (component.type === 'hrc_fuse') {
-              const polePairs: [string, string][] = [
-                ['IN', 'OUT'],
-                ['IN_L1', 'OUT_L1'],
-                ['IN_L2', 'OUT_L2'],
-                ['IN_L3', 'OUT_L3'],
-              ];
-              for (const [a, b] of polePairs) {
-                const ak = this.findTerminalByLabel(component, a);
-                const bk = this.findTerminalByLabel(component, b);
-                if (ak && bk) this.addEdge(graph, ak, bk);
-              }
+              this.bridgeLabelPairs(graph, component, [
+                ...BRIDGE_PAIRS_1P,
+                ...BRIDGE_PAIRS_3P_LLL,
+              ]);
             } else {
-              const inKey = this.findTerminalByLabel(component, 'IN');
-              const outKey = this.findTerminalByLabel(component, 'OUT');
-              if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+              this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_1P);
             }
           }
           break;
@@ -1570,72 +1553,39 @@ export class CircuitEngine {
           // state==='off' => closed (conducting), state==='on' => open.
           // This keeps behavior distinct from door interlock (NO style).
           if (component.state !== 'on' && !skipInternalBridge) {
-            const inKey = this.findTerminalByLabel(component, 'IN');
-            const outKey = this.findTerminalByLabel(component, 'OUT');
-            if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+            this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_1P);
           }
           break;
         case 'rcd':
         case 'residual_current_circuit_breaker':
           if (component.state === 'on' && !skipInternalBridge) {
-            const polePairs: [string, string][] = [
-              ['IN', 'OUT'],
-              ['IN_L', 'OUT_L'],
-              ['IN_N', 'OUT_N'],
-              ['IN_L1', 'OUT_L1'],
-              ['IN_L2', 'OUT_L2'],
-              ['IN_L3', 'OUT_L3'],
-            ];
-            for (const [a, b] of polePairs) {
-              const ak = this.findTerminalByLabel(component, a);
-              const bk = this.findTerminalByLabel(component, b);
-              if (ak && bk) this.addEdge(graph, ak, bk);
-            }
+            this.bridgeLabelPairs(graph, component, [
+              ...BRIDGE_PAIRS_1P,
+              ...BRIDGE_PAIRS_2P_LN,
+              ...BRIDGE_PAIRS_4P_LLLN,
+            ]);
           }
           break;
         case 'earth_leakage_relay_cbct':
           if (component.state === 'on' && !skipInternalBridge) {
-            const pairs: [string, string][] = [
-              ['IN', 'OUT'],
-              ['IN_L1', 'OUT_L1'],
-              ['IN_L2', 'OUT_L2'],
-              ['IN_L3', 'OUT_L3'],
-            ];
-            for (const [a, b] of pairs) {
-              const ak = this.findTerminalByLabel(component, a);
-              const bk = this.findTerminalByLabel(component, b);
-              if (ak && bk) this.addEdge(graph, ak, bk);
-            }
+            this.bridgeLabelPairs(graph, component, [
+              ...BRIDGE_PAIRS_1P,
+              ...BRIDGE_PAIRS_3P_LLL,
+            ]);
           }
           break;
         case 'control_circuit_fuse':
           if (component.state === 'on' && !skipInternalBridge) {
-            const inKey = this.findTerminalByLabel(component, 'IN');
-            const outKey = this.findTerminalByLabel(component, 'OUT');
-            if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+            this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_1P);
           }
           break;
         case 'mcb':
           if (component.state === 'on' && !skipInternalBridge) {
-            const poles = component.properties.poles ?? 1;
-            const is2p =
-              poles >= 2 ||
-              !!this.findTerminalByLabel(component, 'IN_L');
-            if (is2p) {
-              const polePairs: [string, string][] = [
-                ['IN_L', 'OUT_L'],
-                ['IN_N', 'OUT_N'],
-              ];
-              for (const [a, b] of polePairs) {
-                const ak = this.findTerminalByLabel(component, a);
-                const bk = this.findTerminalByLabel(component, b);
-                if (ak && bk) this.addEdge(graph, ak, bk);
-              }
-            } else {
-              const inKey = this.findTerminalByLabel(component, 'IN');
-              const outKey = this.findTerminalByLabel(component, 'OUT');
-              if (inKey && outKey) this.addEdge(graph, inKey, outKey);
-            }
+            const pairs =
+              mcbLayoutPoles(component) === 2
+                ? BRIDGE_PAIRS_2P_LN
+                : BRIDGE_PAIRS_1P;
+            this.bridgeLabelPairs(graph, component, pairs);
           }
           break;
         case 'contactor':
@@ -1644,9 +1594,7 @@ export class CircuitEngine {
           if (!skipInternalBridge && contactorPickupSet) {
             const pickedUp = contactorPickupSet.has(component.id);
             if (pickedUp) {
-              const inKey = this.findTerminalByLabel(component, 'IN');
-              const outKey = this.findTerminalByLabel(component, 'OUT');
-              if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+              this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_SINGLE_CONT);
             }
             this.bridgeAuxContacts(graph, component, pickedUp);
           }
@@ -1662,24 +1610,20 @@ export class CircuitEngine {
             if (com && no && pickedUp) this.addEdge(graph, com, no);
             if (com && nc && !pickedUp) this.addEdge(graph, com, nc);
 
-            // Backward compatibility for older projects using IN/OUT as timed NO.
+            // Backward compatibility: legacy IN/OUT or numbered 1–2 as timed NO.
             if (pickedUp) {
-              const inKey = this.findTerminalByLabel(component, 'IN');
-              const outKey = this.findTerminalByLabel(component, 'OUT');
-              if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+              this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_1P);
             }
           }
           break;
         case 'interposing_relay':
-          // Same as a normal relay: IN↔OUT bridges only when the A1/A2 coil
+          // Same as a normal relay: main poles bridge only when the A1/A2 coil
           // sees its operating voltage. No separate 13/14/21/22 aux block —
           // interposing relays are typically packaged with one dry NO.
           if (!skipInternalBridge && contactorPickupSet) {
             const pickedUp = contactorPickupSet.has(component.id);
             if (pickedUp) {
-              const inKey = this.findTerminalByLabel(component, 'IN');
-              const outKey = this.findTerminalByLabel(component, 'OUT');
-              if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+              this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_SINGLE_CONT);
             }
           }
           break;
@@ -1707,12 +1651,10 @@ export class CircuitEngine {
           break;
         }
         case 'estop':
-          // Mushroom-head NC: IN↔OUT closed while not latched (state==='on').
+          // Mushroom-head NC: pass-through closed while not latched (state==='on').
           // Pressing latches it open until reset (state==='off').
           if (component.state === 'on' && !skipInternalBridge) {
-            const inKey = this.findTerminalByLabel(component, 'IN');
-            const outKey = this.findTerminalByLabel(component, 'OUT');
-            if (inKey && outKey) this.addEdge(graph, inKey, outKey);
+            this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_1P);
           }
           break;
         case 'selector_switch': {
@@ -1735,34 +1677,14 @@ export class CircuitEngine {
         case 'energy_meter':
           // Energy meter path is always pass-through (metering-only element).
           if (!skipInternalBridge) {
-            const pairs: [string, string][] = [
-              ['IN_L1', 'OUT_L1'],
-              ['IN_L2', 'OUT_L2'],
-              ['IN_L3', 'OUT_L3'],
-              ['IN_N', 'OUT_N'],
-            ];
-            for (const [a, b] of pairs) {
-              const ak = this.findTerminalByLabel(component, a);
-              const bk = this.findTerminalByLabel(component, b);
-              if (ak && bk) this.addEdge(graph, ak, bk);
-            }
+            this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_4P_LLLN);
           }
           break;
         case 'digital_multifunction_meter':
           // DMFM pass-through is explicitly state-controlled so it can be used
           // as a supervisory metering/isolated section marker in studies.
           if (!skipInternalBridge && component.state === 'on') {
-            const pairs: [string, string][] = [
-              ['IN_L1', 'OUT_L1'],
-              ['IN_L2', 'OUT_L2'],
-              ['IN_L3', 'OUT_L3'],
-              ['IN_N', 'OUT_N'],
-            ];
-            for (const [a, b] of pairs) {
-              const ak = this.findTerminalByLabel(component, a);
-              const bk = this.findTerminalByLabel(component, b);
-              if (ak && bk) this.addEdge(graph, ak, bk);
-            }
+            this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_4P_LLLN);
           }
           break;
         case 'signal_isolator':
@@ -1869,17 +1791,7 @@ export class CircuitEngine {
         case 'power_quality_analyzer':
           // PQA is a metering element with pass-through measurement taps.
           if (!skipInternalBridge) {
-            const pairs: [string, string][] = [
-              ['IN_L1', 'OUT_L1'],
-              ['IN_L2', 'OUT_L2'],
-              ['IN_L3', 'OUT_L3'],
-              ['IN_N', 'OUT_N'],
-            ];
-            for (const [a, b] of pairs) {
-              const ak = this.findTerminalByLabel(component, a);
-              const bk = this.findTerminalByLabel(component, b);
-              if (ak && bk) this.addEdge(graph, ak, bk);
-            }
+            this.bridgeLabelPairs(graph, component, BRIDGE_PAIRS_4P_LLLN);
           }
           break;
         case 'shunt_trip_coil':
@@ -1911,24 +1823,11 @@ export class CircuitEngine {
           if (!skipInternalBridge && contactorPickupSet) {
             const pickedUp = contactorPickupSet.has(component.id);
             if (pickedUp) {
-              const pairs: [string, string][] =
+              const pairs =
                 component.type === 'four_phase_contactor'
-                  ? [
-                      ['IN_L1', 'OUT_L1'],
-                      ['IN_L2', 'OUT_L2'],
-                      ['IN_L3', 'OUT_L3'],
-                      ['IN_N', 'OUT_N'],
-                    ]
-                  : [
-                      ['IN_L1', 'OUT_L1'],
-                      ['IN_L2', 'OUT_L2'],
-                      ['IN_L3', 'OUT_L3'],
-                    ];
-              for (const [a, b] of pairs) {
-                const ak = this.findTerminalByLabel(component, a);
-                const bk = this.findTerminalByLabel(component, b);
-                if (ak && bk) this.addEdge(graph, ak, bk);
-              }
+                  ? BRIDGE_PAIRS_T_POWER_4P
+                  : BRIDGE_PAIRS_T_POWER_3P;
+              this.bridgeLabelPairs(graph, component, pairs);
             }
             this.bridgeAuxContacts(graph, component, pickedUp);
           }
@@ -1945,26 +1844,13 @@ export class CircuitEngine {
             !this.mainBreakerBmsInterlockOpen(component) &&
             !skipInternalBridge
           ) {
-            const pairs: [string, string][] =
+            const pairs =
               component.type === 'four_phase_mcb' ||
               component.type === 'air_circuit_breaker' ||
               component.type === 'four_pole_motorized_mccb'
-                ? [
-                    ['IN_L1', 'OUT_L1'],
-                    ['IN_L2', 'OUT_L2'],
-                    ['IN_L3', 'OUT_L3'],
-                    ['IN_N', 'OUT_N'],
-                  ]
-                : [
-                    ['IN_L1', 'OUT_L1'],
-                    ['IN_L2', 'OUT_L2'],
-                    ['IN_L3', 'OUT_L3'],
-                  ];
-            for (const [a, b] of pairs) {
-              const ak = this.findTerminalByLabel(component, a);
-              const bk = this.findTerminalByLabel(component, b);
-              if (ak && bk) this.addEdge(graph, ak, bk);
-            }
+                ? BRIDGE_PAIRS_4P_LLLN
+                : BRIDGE_PAIRS_3P_LLL;
+            this.bridgeLabelPairs(graph, component, pairs);
           }
           break;
         default:
@@ -1979,11 +1865,24 @@ export class CircuitEngine {
     component: CircuitComponent,
     expectedLabel: string
   ): string | null {
+    const u = expectedLabel.toUpperCase();
     const found = component.connectionPoints.find(
-      (cp) => cp.label.toUpperCase() === expectedLabel
+      (cp) => cp.label.toUpperCase() === u
     );
     if (!found) return null;
     return this.terminalKey(component.id, found.id);
+  }
+
+  private bridgeLabelPairs(
+    graph: Map<string, Set<string>>,
+    component: CircuitComponent,
+    pairs: readonly [string, string][]
+  ): void {
+    for (const [a, b] of pairs) {
+      const ak = this.findTerminalByLabel(component, a);
+      const bk = this.findTerminalByLabel(component, b);
+      if (ak && bk) this.addEdge(graph, ak, bk);
+    }
   }
 
   /**
@@ -2766,9 +2665,7 @@ export class CircuitEngine {
               ? '4P Motorized MCCB'
               : component.type === 'motorized_mccb'
                 ? 'Motorized MCCB'
-                : component.type === 'mcb' &&
-                  ((component.properties.poles ?? 1) >= 2 ||
-                    this.findTerminalByLabel(component, 'IN_L'))
+                : component.type === 'mcb' && mcbLayoutPoles(component) === 2
                 ? '2P MCB'
                 : 'MCB';
       const inA = Math.max(0.1, p.ratingAmps ?? 16);

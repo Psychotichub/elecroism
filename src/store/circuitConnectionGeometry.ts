@@ -22,8 +22,10 @@ function getConnectionPointAbsolutePosition(
 }
 
 export type CreateConnectionPointsOptions = {
-  /** Single-phase MCB: 1 pole (IN/OUT) or 2 pole (IN_L/OUT_L + IN_N/OUT_N). */
+  /** Single-phase MCB: 1 pole (1/2) or 2 pole (1–2 line, 3–4 neutral). */
   mcbPoles?: 1 | 2;
+  /** RCD / RCCB: 2P (1–4) or 4P (1–8). */
+  rcdPoles?: 2 | 4;
 };
 
 function createMcbConnectionPoints(
@@ -32,15 +34,15 @@ function createMcbConnectionPoints(
 ): ConnectionPoint[] {
   if (poles === 2) {
     return [
-      { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L' },
-      { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L' },
-      { id: uuid(), componentId, x: 10, y: -25, label: 'IN_N' },
-      { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_N' },
+      { id: uuid(), componentId, x: -10, y: -25, label: '1' },
+      { id: uuid(), componentId, x: -10, y: 25, label: '2' },
+      { id: uuid(), componentId, x: 10, y: -25, label: '3' },
+      { id: uuid(), componentId, x: 10, y: 25, label: '4' },
     ];
   }
   return [
-    { id: uuid(), componentId, x: 0, y: -25, label: 'IN' },
-    { id: uuid(), componentId, x: 0, y: 25, label: 'OUT' },
+    { id: uuid(), componentId, x: 0, y: -25, label: '1' },
+    { id: uuid(), componentId, x: 0, y: 25, label: '2' },
   ];
 }
 
@@ -104,14 +106,14 @@ function acbPowerConnectionPoints(componentId: string): ConnectionPoint[] {
   // (top at -36, bottom at +42) so orthogonal docking feels correct.
   const xs = [-30, -10, 10, 30];
   return [
-    { id: uuid(), componentId, x: xs[0], y: -36, label: 'IN_L1' },
-    { id: uuid(), componentId, x: xs[0], y: 42, label: 'OUT_L1' },
-    { id: uuid(), componentId, x: xs[1], y: -36, label: 'IN_L2' },
-    { id: uuid(), componentId, x: xs[1], y: 42, label: 'OUT_L2' },
-    { id: uuid(), componentId, x: xs[2], y: -36, label: 'IN_L3' },
-    { id: uuid(), componentId, x: xs[2], y: 42, label: 'OUT_L3' },
-    { id: uuid(), componentId, x: xs[3], y: -36, label: 'IN_N' },
-    { id: uuid(), componentId, x: xs[3], y: 42, label: 'OUT_N' },
+    { id: uuid(), componentId, x: xs[0], y: -36, label: '1' },
+    { id: uuid(), componentId, x: xs[0], y: 42, label: '2' },
+    { id: uuid(), componentId, x: xs[1], y: -36, label: '3' },
+    { id: uuid(), componentId, x: xs[1], y: 42, label: '4' },
+    { id: uuid(), componentId, x: xs[2], y: -36, label: '5' },
+    { id: uuid(), componentId, x: xs[2], y: 42, label: '6' },
+    { id: uuid(), componentId, x: xs[3], y: -36, label: '7' },
+    { id: uuid(), componentId, x: xs[3], y: 42, label: '8' },
   ];
 }
 
@@ -505,8 +507,8 @@ function createConnectionPoints(
       ];
     case 'key_interlock':
       return [
-        { id: uuid(), componentId, x: -12, y: -22, label: 'IN' },
-        { id: uuid(), componentId, x: 12, y: -22, label: 'OUT' },
+        { id: uuid(), componentId, x: -12, y: -22, label: '1' },
+        { id: uuid(), componentId, x: 12, y: -22, label: '2' },
       ];
     case 'neutral_link':
       return [
@@ -551,14 +553,14 @@ function createConnectionPoints(
       ];
     case 'power_quality_analyzer':
       return [
-        { id: uuid(), componentId, x: -30, y: -12, label: 'IN_L1' },
-        { id: uuid(), componentId, x: -30, y: -4, label: 'IN_L2' },
-        { id: uuid(), componentId, x: -30, y: 4, label: 'IN_L3' },
-        { id: uuid(), componentId, x: -30, y: 12, label: 'IN_N' },
-        { id: uuid(), componentId, x: 30, y: -12, label: 'OUT_L1' },
-        { id: uuid(), componentId, x: 30, y: -4, label: 'OUT_L2' },
-        { id: uuid(), componentId, x: 30, y: 4, label: 'OUT_L3' },
-        { id: uuid(), componentId, x: 30, y: 12, label: 'OUT_N' },
+        { id: uuid(), componentId, x: -30, y: -12, label: '1' },
+        { id: uuid(), componentId, x: -30, y: -4, label: '3' },
+        { id: uuid(), componentId, x: -30, y: 4, label: '5' },
+        { id: uuid(), componentId, x: -30, y: 12, label: '7' },
+        { id: uuid(), componentId, x: 30, y: -12, label: '2' },
+        { id: uuid(), componentId, x: 30, y: -4, label: '4' },
+        { id: uuid(), componentId, x: 30, y: 4, label: '6' },
+        { id: uuid(), componentId, x: 30, y: 12, label: '8' },
         { id: uuid(), componentId, x: -10, y: -24, label: 'AUX_24V' },
         { id: uuid(), componentId, x: 10, y: -24, label: 'AUX_0V' },
         { id: uuid(), componentId, x: 0, y: 24, label: 'RS485_A' },
@@ -582,45 +584,45 @@ function createConnectionPoints(
     case 'mccb':
     case 'motor_protection_circuit_breaker':
       return [
-        { id: uuid(), componentId, x: -20, y: -25, label: 'IN_L1' },
-        { id: uuid(), componentId, x: -20, y: 25, label: 'OUT_L1' },
-        { id: uuid(), componentId, x: 0, y: -25, label: 'IN_L2' },
-        { id: uuid(), componentId, x: 0, y: 25, label: 'OUT_L2' },
-        { id: uuid(), componentId, x: 20, y: -25, label: 'IN_L3' },
-        { id: uuid(), componentId, x: 20, y: 25, label: 'OUT_L3' },
+        { id: uuid(), componentId, x: -20, y: -25, label: '1' },
+        { id: uuid(), componentId, x: -20, y: 25, label: '2' },
+        { id: uuid(), componentId, x: 0, y: -25, label: '3' },
+        { id: uuid(), componentId, x: 0, y: 25, label: '4' },
+        { id: uuid(), componentId, x: 20, y: -25, label: '5' },
+        { id: uuid(), componentId, x: 20, y: 25, label: '6' },
       ];
     case 'motorized_mccb':
       return [
-        { id: uuid(), componentId, x: -20, y: -25, label: 'IN_L1' },
-        { id: uuid(), componentId, x: -20, y: 25, label: 'OUT_L1' },
-        { id: uuid(), componentId, x: 0, y: -25, label: 'IN_L2' },
-        { id: uuid(), componentId, x: 0, y: 25, label: 'OUT_L2' },
-        { id: uuid(), componentId, x: 20, y: -25, label: 'IN_L3' },
-        { id: uuid(), componentId, x: 20, y: 25, label: 'OUT_L3' },
+        { id: uuid(), componentId, x: -20, y: -25, label: '1' },
+        { id: uuid(), componentId, x: -20, y: 25, label: '2' },
+        { id: uuid(), componentId, x: 0, y: -25, label: '3' },
+        { id: uuid(), componentId, x: 0, y: 25, label: '4' },
+        { id: uuid(), componentId, x: 20, y: -25, label: '5' },
+        { id: uuid(), componentId, x: 20, y: 25, label: '6' },
         ...mccbControlConnectionPoints(componentId),
       ];
     case 'four_pole_motorized_mccb':
       return [
-        { id: uuid(), componentId, x: -30, y: -25, label: 'IN_L1' },
-        { id: uuid(), componentId, x: -30, y: 25, label: 'OUT_L1' },
-        { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L2' },
-        { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L2' },
-        { id: uuid(), componentId, x: 10, y: -25, label: 'IN_L3' },
-        { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_L3' },
-        { id: uuid(), componentId, x: 30, y: -25, label: 'IN_N' },
-        { id: uuid(), componentId, x: 30, y: 25, label: 'OUT_N' },
+        { id: uuid(), componentId, x: -30, y: -25, label: '1' },
+        { id: uuid(), componentId, x: -30, y: 25, label: '2' },
+        { id: uuid(), componentId, x: -10, y: -25, label: '3' },
+        { id: uuid(), componentId, x: -10, y: 25, label: '4' },
+        { id: uuid(), componentId, x: 10, y: -25, label: '5' },
+        { id: uuid(), componentId, x: 10, y: 25, label: '6' },
+        { id: uuid(), componentId, x: 30, y: -25, label: '7' },
+        { id: uuid(), componentId, x: 30, y: 25, label: '8' },
         ...mccbControlConnectionPoints(componentId),
       ];
     case 'four_phase_mcb':
       return [
-        { id: uuid(), componentId, x: -30, y: -25, label: 'IN_L1' },
-        { id: uuid(), componentId, x: -30, y: 25, label: 'OUT_L1' },
-        { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L2' },
-        { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L2' },
-        { id: uuid(), componentId, x: 10, y: -25, label: 'IN_L3' },
-        { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_L3' },
-        { id: uuid(), componentId, x: 30, y: -25, label: 'IN_N' },
-        { id: uuid(), componentId, x: 30, y: 25, label: 'OUT_N' },
+        { id: uuid(), componentId, x: -30, y: -25, label: '1' },
+        { id: uuid(), componentId, x: -30, y: 25, label: '2' },
+        { id: uuid(), componentId, x: -10, y: -25, label: '3' },
+        { id: uuid(), componentId, x: -10, y: 25, label: '4' },
+        { id: uuid(), componentId, x: 10, y: -25, label: '5' },
+        { id: uuid(), componentId, x: 10, y: 25, label: '6' },
+        { id: uuid(), componentId, x: 30, y: -25, label: '7' },
+        { id: uuid(), componentId, x: 30, y: 25, label: '8' },
       ];
     case 'air_circuit_breaker':
       return [
@@ -630,8 +632,8 @@ function createConnectionPoints(
     case 'switch':
     case 'push_button':
       return [
-        { id: uuid(), componentId, x: 0, y: -20, label: 'IN' },
-        { id: uuid(), componentId, x: 0, y: 20, label: 'OUT' },
+        { id: uuid(), componentId, x: 0, y: -20, label: '1' },
+        { id: uuid(), componentId, x: 0, y: 20, label: '2' },
       ];
     case 'two_way_switch':
       return [
@@ -647,26 +649,35 @@ function createConnectionPoints(
     case 'hrc_fuse':
     case 'control_circuit_fuse':
       return [
-        { id: uuid(), componentId, x: 0, y: -25, label: 'IN' },
-        { id: uuid(), componentId, x: 0, y: 25, label: 'OUT' },
+        { id: uuid(), componentId, x: 0, y: -25, label: '1' },
+        { id: uuid(), componentId, x: 0, y: 25, label: '2' },
       ];
     case 'earth_leakage_relay_cbct':
       return [
-        { id: uuid(), componentId, x: 0, y: -25, label: 'IN' },
-        { id: uuid(), componentId, x: 0, y: 25, label: 'OUT' },
+        { id: uuid(), componentId, x: 0, y: -25, label: '1' },
+        { id: uuid(), componentId, x: 0, y: 25, label: '2' },
       ];
     case 'rcd':
-    case 'residual_current_circuit_breaker':
-      return [
-        { id: uuid(), componentId, x: -14, y: -25, label: 'IN_L' },
-        { id: uuid(), componentId, x: -14, y: 25, label: 'OUT_L' },
-        { id: uuid(), componentId, x: 14, y: -25, label: 'IN_N' },
-        { id: uuid(), componentId, x: 14, y: 25, label: 'OUT_N' },
-      ];
+    case 'residual_current_circuit_breaker': {
+      const poles = options?.rcdPoles === 4 ? 4 : 2;
+      if (poles === 4) {
+        return [
+          { id: uuid(), componentId, x: -30, y: -25, label: '1' },
+          { id: uuid(), componentId, x: -30, y: 25, label: '2' },
+          { id: uuid(), componentId, x: -10, y: -25, label: '3' },
+          { id: uuid(), componentId, x: -10, y: 25, label: '4' },
+          { id: uuid(), componentId, x: 10, y: -25, label: '5' },
+          { id: uuid(), componentId, x: 10, y: 25, label: '6' },
+          { id: uuid(), componentId, x: 30, y: -25, label: '7' },
+          { id: uuid(), componentId, x: 30, y: 25, label: '8' },
+        ];
+      }
+      return createMcbConnectionPoints(componentId, 2);
+    }
     case 'overload_relay':
       return [
-        { id: uuid(), componentId, x: 0, y: -25, label: 'IN' },
-        { id: uuid(), componentId, x: 0, y: 25, label: 'OUT' },
+        { id: uuid(), componentId, x: 0, y: -25, label: '1' },
+        { id: uuid(), componentId, x: 0, y: 25, label: '2' },
       ];
     case 'socket':
       return [
@@ -697,8 +708,8 @@ function createConnectionPoints(
       }));
     case 'terminal_block':
       return [
-        { id: uuid(), componentId, x: 0, y: -20, label: 'IN' },
-        { id: uuid(), componentId, x: 0, y: 20, label: 'OUT' },
+        { id: uuid(), componentId, x: 0, y: -20, label: '1' },
+        { id: uuid(), componentId, x: 0, y: 20, label: '2' },
       ];
     case 'junction':
       return [
@@ -711,8 +722,8 @@ function createConnectionPoints(
     case 'relay':
     case 'smart_relay':
       return [
-        { id: uuid(), componentId, x: 0, y: -25, label: 'IN' },
-        { id: uuid(), componentId, x: 0, y: 25, label: 'OUT' },
+        { id: uuid(), componentId, x: 0, y: -25, label: 'T1' },
+        { id: uuid(), componentId, x: 0, y: 25, label: 'T2' },
         { id: uuid(), componentId, x: -20, y: 0, label: 'A1' },
         { id: uuid(), componentId, x: 20, y: 0, label: 'A2' },
         ...(type === 'contactor' ? contactorAuxConnectionPoints(componentId) : []),
@@ -727,26 +738,26 @@ function createConnectionPoints(
       ];
     case 'three_phase_contactor':
       return [
-        { id: uuid(), componentId, x: -20, y: -25, label: 'IN_L1' },
-        { id: uuid(), componentId, x: -20, y: 25, label: 'OUT_L1' },
-        { id: uuid(), componentId, x: 0, y: -25, label: 'IN_L2' },
-        { id: uuid(), componentId, x: 0, y: 25, label: 'OUT_L2' },
-        { id: uuid(), componentId, x: 20, y: -25, label: 'IN_L3' },
-        { id: uuid(), componentId, x: 20, y: 25, label: 'OUT_L3' },
+        { id: uuid(), componentId, x: -20, y: -25, label: 'T1' },
+        { id: uuid(), componentId, x: -20, y: 25, label: 'T2' },
+        { id: uuid(), componentId, x: 0, y: -25, label: 'T3' },
+        { id: uuid(), componentId, x: 0, y: 25, label: 'T4' },
+        { id: uuid(), componentId, x: 20, y: -25, label: 'T5' },
+        { id: uuid(), componentId, x: 20, y: 25, label: 'T6' },
         { id: uuid(), componentId, x: -36, y: 0, label: 'A1' },
         { id: uuid(), componentId, x: 36, y: 0, label: 'A2' },
         ...contactorAuxConnectionPoints(componentId),
       ];
     case 'four_phase_contactor':
       return [
-        { id: uuid(), componentId, x: -30, y: -25, label: 'IN_L1' },
-        { id: uuid(), componentId, x: -30, y: 25, label: 'OUT_L1' },
-        { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L2' },
-        { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L2' },
-        { id: uuid(), componentId, x: 10, y: -25, label: 'IN_L3' },
-        { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_L3' },
-        { id: uuid(), componentId, x: 30, y: -25, label: 'IN_N' },
-        { id: uuid(), componentId, x: 30, y: 25, label: 'OUT_N' },
+        { id: uuid(), componentId, x: -30, y: -25, label: 'T1' },
+        { id: uuid(), componentId, x: -30, y: 25, label: 'T2' },
+        { id: uuid(), componentId, x: -10, y: -25, label: 'T3' },
+        { id: uuid(), componentId, x: -10, y: 25, label: 'T4' },
+        { id: uuid(), componentId, x: 10, y: -25, label: 'T5' },
+        { id: uuid(), componentId, x: 10, y: 25, label: 'T6' },
+        { id: uuid(), componentId, x: 30, y: -25, label: 'T7' },
+        { id: uuid(), componentId, x: 30, y: 25, label: 'T8' },
         { id: uuid(), componentId, x: -44, y: 0, label: 'A1' },
         { id: uuid(), componentId, x: 44, y: 0, label: 'A2' },
         ...contactorAuxConnectionPoints(componentId),
@@ -755,15 +766,15 @@ function createConnectionPoints(
       // IEC mushroom NC: IN top, OUT bottom — series device that opens when
       // the head is pressed (latched). Reset via Properties → Reset.
       return [
-        { id: uuid(), componentId, x: 0, y: -22, label: 'IN' },
-        { id: uuid(), componentId, x: 0, y: 22, label: 'OUT' },
+        { id: uuid(), componentId, x: 0, y: -22, label: '1' },
+        { id: uuid(), componentId, x: 0, y: 22, label: '2' },
       ];
     case 'door_interlock':
     case 'mechanical_interlock':
       // Guarded door switch in series with control loop.
       return [
-        { id: uuid(), componentId, x: 0, y: -20, label: 'IN' },
-        { id: uuid(), componentId, x: 0, y: 20, label: 'OUT' },
+        { id: uuid(), componentId, x: 0, y: -20, label: '1' },
+        { id: uuid(), componentId, x: 0, y: 20, label: '2' },
       ];
     case 'selector_switch':
       // 3-position rotary: COM at top, AUTO bottom-left, MANUAL bottom-right.
@@ -797,11 +808,11 @@ function createConnectionPoints(
         { id: uuid(), componentId, x: 18, y: 22, label: 'DC_MINUS' },
       ];
     case 'interposing_relay':
-      // BMS-interface relay: 24 V DC coil A1/A2, dry NO contact IN/OUT.
+      // BMS-interface relay: 24 V DC coil A1/A2, dry NO contact T1–T2.
       // Sized smaller than a normal control relay; no 13/14/21/22 aux block.
       return [
-        { id: uuid(), componentId, x: 0, y: -20, label: 'IN' },
-        { id: uuid(), componentId, x: 0, y: 20, label: 'OUT' },
+        { id: uuid(), componentId, x: 0, y: -20, label: 'T1' },
+        { id: uuid(), componentId, x: 0, y: 20, label: 'T2' },
         { id: uuid(), componentId, x: -16, y: 0, label: 'A1' },
         { id: uuid(), componentId, x: 16, y: 0, label: 'A2' },
       ];
@@ -815,17 +826,16 @@ function createConnectionPoints(
     case 'energy_meter':
     case 'digital_multifunction_meter':
       // 3φ + N pass-through multifunction meter (current via internal CTs).
-      // Ports labelled IN_L1..IN_N (top) and OUT_L1..OUT_N (bottom) so the
-      // engine bridges them like a busbar segment without protection logic.
+      // Numbered in/out pairs 1–2 … 7–8 (odd in, even out).
       return [
-        { id: uuid(), componentId, x: -30, y: -25, label: 'IN_L1' },
-        { id: uuid(), componentId, x: -30, y: 25, label: 'OUT_L1' },
-        { id: uuid(), componentId, x: -10, y: -25, label: 'IN_L2' },
-        { id: uuid(), componentId, x: -10, y: 25, label: 'OUT_L2' },
-        { id: uuid(), componentId, x: 10, y: -25, label: 'IN_L3' },
-        { id: uuid(), componentId, x: 10, y: 25, label: 'OUT_L3' },
-        { id: uuid(), componentId, x: 30, y: -25, label: 'IN_N' },
-        { id: uuid(), componentId, x: 30, y: 25, label: 'OUT_N' },
+        { id: uuid(), componentId, x: -30, y: -25, label: '1' },
+        { id: uuid(), componentId, x: -30, y: 25, label: '2' },
+        { id: uuid(), componentId, x: -10, y: -25, label: '3' },
+        { id: uuid(), componentId, x: -10, y: 25, label: '4' },
+        { id: uuid(), componentId, x: 10, y: -25, label: '5' },
+        { id: uuid(), componentId, x: 10, y: 25, label: '6' },
+        { id: uuid(), componentId, x: 30, y: -25, label: '7' },
+        { id: uuid(), componentId, x: 30, y: 25, label: '8' },
       ];
     case 'multimeter':
       return [
@@ -867,6 +877,18 @@ function mcbLayoutPoles(comp: CircuitComponent): 1 | 2 {
   if (comp.properties.poles === 2) return 2;
   if (
     comp.connectionPoints.some((cp) => labelNorm(cp.label) === 'IN_L')
+  ) {
+    return 2;
+  }
+  const labs = new Set(
+    comp.connectionPoints.map((cp) => labelNorm(cp.label))
+  );
+  if (
+    labs.has('1') &&
+    labs.has('2') &&
+    labs.has('3') &&
+    labs.has('4') &&
+    comp.connectionPoints.length >= 4
   ) {
     return 2;
   }

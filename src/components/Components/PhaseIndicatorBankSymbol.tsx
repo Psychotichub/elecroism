@@ -65,7 +65,7 @@ const PhaseIndicatorBankSymbol: React.FC<Props> = ({
         <Text text="L3" x={12} y={-3} width={12} fontSize={7} align="center" fill="#111827" listening={false} />
 
         <ComponentCanvasLabel
-          componentId={component.id} label={component.label} x={-40} y={30} width={80}           fontSize={component.properties.labelFontSize ?? 8}
+          componentId={component.id} label={component.label} x={-40} y={30} width={80}           fontSize={component.properties.labelFontSize ?? 7}
                   offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

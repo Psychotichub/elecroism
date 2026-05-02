@@ -74,7 +74,7 @@ const TerminalBlockSymbol: React.FC<Props> = ({
         <Line points={[0, 18, 0, 22]} stroke="#374151" strokeWidth={2} />
         {energized && <Circle x={12} y={-10} radius={2.8} fill="#22C55E" />}
         <ComponentCanvasLabel
-          componentId={component.id} label={component.label} x={-30} y={24} width={60}           fontSize={component.properties.labelFontSize ?? 8}
+          componentId={component.id} label={component.label} x={-30} y={24} width={60}           fontSize={component.properties.labelFontSize ?? 7}
                   offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

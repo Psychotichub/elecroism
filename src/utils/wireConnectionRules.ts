@@ -1,4 +1,5 @@
 import type { Circuit, CircuitComponent, WireStyleLayer } from '../types';
+import { mcbLayoutPoles } from '../store/circuitConnectionGeometry';
 
 export type WireConnectionSeverity = 'ok' | 'warning' | 'blocked';
 
@@ -61,12 +62,69 @@ function isCommLabel(label: string): boolean {
   return /\b(TX|RX)\b/i.test(u) && /\b(RS|ETH|LAN)\b/i.test(u);
 }
 
-function phaseToken(label: string): 'L1' | 'L2' | 'L3' | null {
+function phaseTokenFromLegacyLabels(label: string): 'L1' | 'L2' | 'L3' | null {
   const u = norm(label);
   if (/\bL1\b/.test(u) || /\bIN_L1\b/.test(u) || /\bOUT_L1\b/.test(u)) return 'L1';
   if (/\bL2\b/.test(u) || /\bIN_L2\b/.test(u) || /\bOUT_L2\b/.test(u)) return 'L2';
   if (/\bL3\b/.test(u) || /\bIN_L3\b/.test(u) || /\bOUT_L3\b/.test(u)) return 'L3';
   return null;
+}
+
+/** Line phase for numbered / T-series poles on multi-pole power devices. */
+function seriesDeviceLinePhase(
+  comp: CircuitComponent,
+  label: string
+): 'L1' | 'L2' | 'L3' | null {
+  const u = norm(label).replace(/\s+/g, '');
+  const t = comp.type;
+  const threePole = new Set<CircuitComponent['type']>([
+    'three_phase_mcb',
+    'mccb',
+    'motor_protection_circuit_breaker',
+    'motorized_mccb',
+    'three_phase_contactor',
+  ]);
+  const fourPole = new Set<CircuitComponent['type']>([
+    'four_phase_mcb',
+    'four_pole_motorized_mccb',
+    'air_circuit_breaker',
+    'four_phase_contactor',
+    'energy_meter',
+    'digital_multifunction_meter',
+    'power_quality_analyzer',
+  ]);
+  if (threePole.has(t)) {
+    if (/^T[12]$/.test(u) || u === '1' || u === '2') return 'L1';
+    if (/^T[34]$/.test(u) || u === '3' || u === '4') return 'L2';
+    if (/^T[56]$/.test(u) || u === '5' || u === '6') return 'L3';
+  }
+  if (fourPole.has(t)) {
+    if (/^T[12]$/.test(u) || u === '1' || u === '2') return 'L1';
+    if (/^T[34]$/.test(u) || u === '3' || u === '4') return 'L2';
+    if (/^T[56]$/.test(u) || u === '5' || u === '6') return 'L3';
+  }
+  if (t === 'rcd' || t === 'residual_current_circuit_breaker') {
+    const poles = comp.properties.poles ?? 2;
+    if (poles >= 4) {
+      if (u === '1' || u === '2') return 'L1';
+      if (u === '3' || u === '4') return 'L2';
+      if (u === '5' || u === '6') return 'L3';
+      return null;
+    }
+    if (u === '1' || u === '2') return 'L1';
+    return null;
+  }
+  if (t === 'mcb' && mcbLayoutPoles(comp) === 2) {
+    if (u === '1' || u === '2') return 'L1';
+  }
+  return null;
+}
+
+function phaseToken(
+  comp: CircuitComponent,
+  label: string
+): 'L1' | 'L2' | 'L3' | null {
+  return seriesDeviceLinePhase(comp, label) ?? phaseTokenFromLegacyLabels(label);
 }
 
 function isOutputLikeLabel(label: string): boolean {
@@ -163,8 +221,8 @@ function ruleSameDeviceCrossPhase(
   toLabel: string
 ): WireConnectionCheck {
   if (fromComp.id !== toComp.id) return OK;
-  const p1 = phaseToken(fromLabel);
-  const p2 = phaseToken(toLabel);
+  const p1 = phaseToken(fromComp, fromLabel);
+  const p2 = phaseToken(fromComp, toLabel);
   if (p1 && p2 && p1 !== p2) {
     return blocked(`Same device: ${p1} must not tie directly to ${p2}.`);
   }

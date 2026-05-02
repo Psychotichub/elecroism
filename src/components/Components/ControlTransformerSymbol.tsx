@@ -80,7 +80,7 @@ const ControlTransformerSymbol: React.FC<Props> = ({
         <Line points={[18, 22, 18, 26]} stroke="#374151" strokeWidth={2} />
         {energized && <Circle x={22} y={-14} radius={2.8} fill="#22C55E" />}
         <ComponentCanvasLabel
-          componentId={component.id} label={component.label} x={-32} y={28} width={64}           fontSize={component.properties.labelFontSize ?? 8}
+          componentId={component.id} label={component.label} x={-32} y={28} width={64}           fontSize={component.properties.labelFontSize ?? 7}
                   offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

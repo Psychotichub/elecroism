@@ -90,7 +90,7 @@ const AuxContactBlockSymbol: React.FC<Props> = ({
         <Text text="NC" x={-2} y={10} width={24} fontSize={6} fill="#6B7280" listening={false} />
 
         <ComponentCanvasLabel
-          componentId={component.id} label={component.label} x={-30} y={30} width={60} fontSize={component.properties.labelFontSize ?? 9}           offsetX={component.properties.labelOffsetX ?? 0}
+          componentId={component.id} label={component.label} x={-30} y={30} width={60} fontSize={component.properties.labelFontSize ?? 8}           offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />
 

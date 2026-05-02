@@ -361,7 +361,7 @@ const ACDCConverterSymbol: React.FC<Props> = ({
           x={minX - 4}
           y={maxY + 8}
           width={bodyW + 8}
-          fontSize={component.properties.labelFontSize ?? 8}
+          fontSize={component.properties.labelFontSize ?? 7}
           offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

@@ -112,7 +112,7 @@ const DoorInterlockSymbol: React.FC<Props> = ({
           x={-30}
           y={28}
           width={60}
-          fontSize={component.properties.labelFontSize ?? 8}
+          fontSize={component.properties.labelFontSize ?? 7}
           offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

@@ -187,7 +187,7 @@ const PowerSourceSymbol: React.FC<Props> = ({
         x={-28}
         y={labelY}
         width={56}
-        fontSize={component.properties.labelFontSize ?? 9}
+        fontSize={component.properties.labelFontSize ?? 8}
         offsetX={component.properties.labelOffsetX ?? 0}
         offsetY={component.properties.labelOffsetY ?? 0}
       />

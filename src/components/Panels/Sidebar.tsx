@@ -30,9 +30,7 @@ import {
 } from 'react-icons/fi';
 import {
   loadFavoriteTypes,
-  loadRecentTypes,
   toggleFavoriteType,
-  PALETTE_RECENT_CHANGED,
 } from '../../utils/sidebarPaletteStorage';
 
 /** Persisted across reloads so users keep their preferred groups expanded. */
@@ -722,9 +720,6 @@ const Sidebar: React.FC = () => {
   const [favorites, setFavorites] = useState<string[]>(() =>
     loadFavoriteTypes(ALL_PALETTE_TYPES)
   );
-  const [recent, setRecent] = useState<string[]>(() =>
-    loadRecentTypes(ALL_PALETTE_TYPES)
-  );
 
   useEffect(() => {
     saveCollapsed(collapsed);
@@ -737,13 +732,6 @@ const Sidebar: React.FC = () => {
   useEffect(() => {
     saveComponentListOpen(componentListOpen);
   }, [componentListOpen]);
-
-  useEffect(() => {
-    const syncRecent = () =>
-      setRecent(loadRecentTypes(ALL_PALETTE_TYPES));
-    window.addEventListener(PALETTE_RECENT_CHANGED, syncRecent);
-    return () => window.removeEventListener(PALETTE_RECENT_CHANGED, syncRecent);
-  }, []);
 
   const filteredSections: SidebarSection[] = React.useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -771,24 +759,10 @@ const Sidebar: React.FC = () => {
       });
     }
 
-    const recItems = recent
-      .map((t) => ITEM_BY_TYPE.get(t as ComponentType))
-      .filter((x): x is ComponentItem => !!x)
-      .filter(matches)
-      .filter(catOk);
-    if (recItems.length > 0) {
-      out.push({
-        collapseKey: 'Recent',
-        name: 'Recent',
-        emoji: '🕐',
-        items: recItems,
-      });
-    }
-
     for (const g of GROUPS) {
       if (categoryFilter !== 'all' && g.name !== categoryFilter) continue;
       // Always list every type in its home group so you can place the same
-      // part many times; Favorites / Recent are extra shortcuts (may duplicate).
+      // part many times; Favorites are an extra shortcut (may duplicate).
       const items = g.items.filter(matches).filter(catOk);
       if (items.length === 0) continue;
       out.push({
@@ -800,7 +774,7 @@ const Sidebar: React.FC = () => {
     }
 
     return out;
-  }, [searchQuery, categoryFilter, favorites, recent]);
+  }, [searchQuery, categoryFilter, favorites]);
 
   const toggleGroup = (name: string) => {
     setCollapsed((prev) => {
@@ -853,11 +827,11 @@ const Sidebar: React.FC = () => {
         )}
         className={`flex items-center gap-2 px-3 py-1.5 mx-1 rounded cursor-grab ${tc.itemHover} transition-colors active:cursor-grabbing`}
       >
-        <span className={`text-base shrink-0 ${tc.groupLabel}`}>{item.icon}</span>
+        <span className={`text-sm shrink-0 ${tc.groupLabel}`}>{item.icon}</span>
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className={`text-xs ${tc.text}`}>{item.label}</span>
+          <span className={`text-[11px] leading-tight ${tc.text}`}>{item.label}</span>
           {item.detail && (
-            <span className={`text-[10px] ${tc.textMuted}`}>{item.detail}</span>
+            <span className={`text-[9px] leading-tight ${tc.textMuted}`}>{item.detail}</span>
           )}
         </div>
         <button
@@ -896,7 +870,7 @@ const Sidebar: React.FC = () => {
         <div className={`px-3 py-2 flex items-center justify-between gap-2`}>
           <h2
             id="sidebar-palette-heading"
-            className={`text-sm font-bold ${tc.textBright} tracking-wide min-w-0 truncate`}
+            className={`text-xs font-bold ${tc.textBright} tracking-wide min-w-0 truncate`}
           >
             Components
           </h2>
@@ -947,7 +921,7 @@ const Sidebar: React.FC = () => {
               {searchPanelOpen ? (
                 <FiChevronDown className="h-3.5 w-3.5" />
               ) : (
-                <FiChevronRight className="h-3.5 w-3.5" />
+                <FiChevronRight className="h-3 w-3" />
               )}
             </span>
             <span id="sidebar-search-panel-heading" className="min-w-0 truncate">
@@ -976,14 +950,14 @@ const Sidebar: React.FC = () => {
                   placeholder="Search…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className={`input-field w-full py-1.5 pl-7 text-xs ${theme === 'dark' ? 'bg-black/25' : ''}`}
+                  className={`input-field w-full py-1 pl-7 text-[11px] ${theme === 'dark' ? 'bg-black/25' : ''}`}
                 />
               </div>
               <div className="flex flex-wrap gap-1">
                 <button
                   type="button"
                   onClick={() => setCategoryFilter('all')}
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                  className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-colors ${
                     categoryFilter === 'all'
                       ? 'bg-blue-600 text-white'
                       : `${tc.textMuted} ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'}`
@@ -996,7 +970,7 @@ const Sidebar: React.FC = () => {
                     key={g.name}
                     type="button"
                     onClick={() => setCategoryFilter(g.name)}
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                    className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-colors ${
                       categoryFilter === g.name
                         ? 'bg-blue-600 text-white'
                         : `${tc.textMuted} ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'}`
@@ -1022,16 +996,16 @@ const Sidebar: React.FC = () => {
                 ? 'Hide component list'
                 : 'Show component list'
             }
-            className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide ${tc.groupLabel} ${tc.itemHover} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-inset`}
+            className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide ${tc.groupLabel} ${tc.itemHover} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-inset`}
           >
             <span
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'} text-[11px] ${tc.textMuted}`}
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'} text-[10px] ${tc.textMuted}`}
               aria-hidden
             >
               {componentListOpen ? (
-                <FiChevronDown className="h-3.5 w-3.5" />
+                <FiChevronDown className="h-3 w-3" />
               ) : (
-                <FiChevronRight className="h-3.5 w-3.5" />
+                <FiChevronRight className="h-3 w-3" />
               )}
             </span>
             <span id="sidebar-component-list-heading" className="min-w-0 truncate">
@@ -1048,7 +1022,7 @@ const Sidebar: React.FC = () => {
         className="min-h-0 flex-1 overflow-y-auto py-1"
       >
         {filteredSections.length === 0 ? (
-          <p className={`px-3 py-4 text-center text-[11px] ${tc.textMuted}`}>
+          <p className={`px-3 py-4 text-center text-[10px] ${tc.textMuted}`}>
             No components match this search or category.
           </p>
         ) : (
@@ -1073,10 +1047,10 @@ const Sidebar: React.FC = () => {
                       ? `Expand ${section.name} (${section.items.length})`
                       : `Collapse ${section.name}`
                   }
-                  className={`w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold ${tc.groupLabel} uppercase tracking-wider ${tc.itemHover} transition-colors text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-inset`}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-[11px] font-semibold ${tc.groupLabel} uppercase tracking-wider ${tc.itemHover} transition-colors text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-inset`}
                 >
                   <span
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'} text-[11px]`}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${theme === 'dark' ? 'bg-white/10' : 'bg-black/[0.06]'} text-[10px]`}
                     aria-hidden
                   >
                     {isCollapsed ? <FiChevronRight /> : <FiChevronDown />}
@@ -1088,7 +1062,7 @@ const Sidebar: React.FC = () => {
                     {section.name}
                   </span>
                   <span
-                    className={`ml-auto shrink-0 tabular-nums text-[10px] ${tc.textMuted} normal-case font-normal`}
+                    className={`ml-auto shrink-0 tabular-nums text-[9px] ${tc.textMuted} normal-case font-normal`}
                   >
                     {section.items.length}
                   </span>

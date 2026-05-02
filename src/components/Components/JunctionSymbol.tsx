@@ -61,7 +61,7 @@ const JunctionSymbol: React.FC<Props> = ({
         x={-36}
         y={14}
         width={72}
-        fontSize={component.properties.labelFontSize ?? 8}
+        fontSize={component.properties.labelFontSize ?? 7}
                 offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

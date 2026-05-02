@@ -139,7 +139,7 @@ const ControlSymbol: React.FC<Props> = ({
         x={-22}
         y={12}
         width={44}
-        fontSize={component.properties.labelFontSize ?? 8}
+        fontSize={component.properties.labelFontSize ?? 7}
         offsetX={component.properties.labelOffsetX ?? 0}
         offsetY={component.properties.labelOffsetY ?? 0}
       />

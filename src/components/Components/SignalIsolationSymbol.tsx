@@ -134,7 +134,7 @@ const SignalIsolationSymbol: React.FC<Props> = ({
         )}
         {energized && <Circle x={22} y={-14} radius={2.8} fill="#22C55E" />}
         <ComponentCanvasLabel
-          componentId={component.id} label={component.label} x={-34} y={28} width={68}           fontSize={component.properties.labelFontSize ?? 8}
+          componentId={component.id} label={component.label} x={-34} y={28} width={68}           fontSize={component.properties.labelFontSize ?? 7}
                   offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />

@@ -126,7 +126,7 @@ const InterposingRelaySymbol: React.FC<Props> = ({
           x={-26}
           y={28}
           width={52}
-          fontSize={component.properties.labelFontSize ?? 9}
+          fontSize={component.properties.labelFontSize ?? 8}
                   offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />
