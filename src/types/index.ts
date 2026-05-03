@@ -478,6 +478,11 @@ export interface Circuit {
   phaseImbalanceWarningPercent?: number;
   /** Master toggle for wire designator / label overlays. Default true. */
   wireLabelsVisible?: boolean;
+  /**
+   * Minimum simulated power (W) on a multimeter in continuity mode before the
+   * UI treats the path as closed (buzzer + BEEP). Default 0.5.
+   */
+  continuityPowerThresholdW?: number;
 }
 
 export interface NodeResult {

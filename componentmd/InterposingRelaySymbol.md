@@ -20,17 +20,16 @@ Props
 
 Behavior
 --------
-- Renders a compact relay body, a small indicator LED for coil energization and labels coil terminals A1/A2 when cp labels match.
+- Renders a compact relay body, a small indicator LED for coil energization and labels coil terminals A1/A2 when cp labels match the shared `coilTerminalTag()` rules.
 
 Potential Issues / Things To Verify
 ----------------------------------
-- coilTerminalTag only recognizes exact labels 'A1' and 'A2' — if your connection point labels vary, tags won't show.
-- No code changes were made.
+- **Labels:** Same matching as contactors — see `src/utils/coilTerminalTag.ts`. Extend there if new import spellings are required.
 
 Testing Notes
 -------------
-- Ensure coil tags appear when connectionPoints have labels 'A1'/'A2' and that the energised indicator follows nodeResult or state.
+- Ensure coil tags appear for `A1`/`A2` and common variants (`A-1`, `COIL_A`, …) and that the energised indicator follows `nodeResult` or state.
 
 Implementation Notes / Required Modifications
 -------------------------------------------
-- The coilTerminalTag helper is strict (exact match). If your imported/created components use alternate coil labelling, extend the helper to trim/pattern-match common variants (e.g., allow 'A-1', 'A_1', 'COIL1').
+- Uses `coilTerminalTag` from `src/utils/coilTerminalTag.ts` (shared with `ThreePhaseContactorSymbol` and `ControlSymbol`).

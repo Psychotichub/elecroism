@@ -340,6 +340,8 @@ interface CircuitStore {
 
   setPhaseImbalanceWarningPercent: (percent: number) => void;
 
+  setContinuityPowerThresholdW: (watts: number) => void;
+
   setCircuitWireLabelsVisible: (visible: boolean) => void;
 }
 
@@ -2226,6 +2228,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         wires: c.wires,
         phaseImbalanceWarningPercent: c.phaseImbalanceWarningPercent ?? 15,
         wireLabelsVisible: c.wireLabelsVisible !== false,
+        continuityPowerThresholdW: c.continuityPowerThresholdW ?? 0.5,
       },
     };
     const json = JSON.stringify(data, null, 2);
@@ -2302,6 +2305,17 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       circuit: {
         ...state.circuit,
         phaseImbalanceWarningPercent: p,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  },
+
+  setContinuityPowerThresholdW: (watts) => {
+    const w = Math.min(500, Math.max(0.01, Number(watts) || 0.5));
+    set((state) => ({
+      circuit: {
+        ...state.circuit,
+        continuityPowerThresholdW: w,
         updatedAt: new Date().toISOString(),
       },
     }));

@@ -26,7 +26,7 @@ Behavior
 Potential Issues / Things To Verify
 ----------------------------------
 - The connection point label mapping is case-insensitive and looks for substrings like 'PLUS'/'MINUS' or exact 'AC_L'. If your connection labels differ, the tag mapping may be off.
-- No code changes were made.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 
 Testing Notes
 -------------

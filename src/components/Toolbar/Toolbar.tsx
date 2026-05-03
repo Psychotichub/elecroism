@@ -111,6 +111,8 @@ const Toolbar: React.FC = () => {
               name: data.name || 'Loaded Circuit',
               phaseImbalanceWarningPercent:
                 data.circuit.phaseImbalanceWarningPercent ?? 15,
+              continuityPowerThresholdW:
+                data.circuit.continuityPowerThresholdW ?? 0.5,
             });
           }
         } catch {

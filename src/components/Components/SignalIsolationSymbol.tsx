@@ -13,6 +13,22 @@ interface Props {
   selected: boolean;
 }
 
+function signalIsolationTerminalTag(raw: string): string {
+  let s = raw.trim();
+  if (!s) return '';
+  s = s.replace(/_(SIG|CH)\b/gi, '').replace(/_/g, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
+  s = s
+    .replace(/\bANALOG\b/gi, 'AI')
+    .replace(/\bFIELD\b/gi, 'FO')
+    .replace(/\bDRY\b/gi, 'DO')
+    .replace(/\bRETURN\b/gi, 'RTN')
+    .replace(/\bNEG\b/gi, '-')
+    .replace(/\bPOS\b/gi, '+');
+  s = s.replace(/\s+/g, ' ').trim();
+  return s.slice(0, 8);
+}
+
 const SignalIsolationSymbol: React.FC<Props> = ({
   component,
   nodeResult,
@@ -23,17 +39,6 @@ const SignalIsolationSymbol: React.FC<Props> = ({
 }) => {
   const energized = nodeResult?.energized || false;
   const isOpto = component.type === 'optocoupler_module';
-  const terminalTag = (label: string) =>
-    label
-      .replace(/_(SIG|CH)/g, '')
-      .replace(/_/g, ' ')
-      .replace('ANALOG', 'AI')
-      .replace('FIELD', 'FO')
-      .replace('DRY', 'DO')
-      .replace('RETURN', 'RTN')
-      .replace('NEG', '-')
-      .replace('POS', '+')
-      .slice(0, 8);
   return (
     <Group
       x={component.x}
@@ -167,7 +172,7 @@ const SignalIsolationSymbol: React.FC<Props> = ({
                 listening={false}
               />
               <Text
-                text={terminalTag(cp.label)}
+                text={signalIsolationTerminalTag(cp.label)}
                 x={nx}
                 y={ny}
                 width={16}

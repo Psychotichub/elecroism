@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Group, Circle, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import Konva from 'konva';
+import { startKonvaLayerAnimation } from '../../utils/konvaLayerAnimation';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 import {
@@ -34,13 +35,13 @@ const ThreePhaseMotorSymbol: React.FC<Props> = ({
   const rotorRef = useRef<Konva.Group>(null);
 
   useEffect(() => {
-    if (!energized || isFault || !rotorRef.current) return;
-    const anim = new Konva.Animation((frame) => {
+    if (!energized || isFault) return;
+    const anim = startKonvaLayerAnimation(rotorRef.current, (frame) => {
       if (frame && rotorRef.current) {
         rotorRef.current.rotation(frame.time * 0.08);
       }
-    }, rotorRef.current.getLayer());
-    anim.start();
+    });
+    if (!anim) return;
     return () => {
       anim.stop();
     };

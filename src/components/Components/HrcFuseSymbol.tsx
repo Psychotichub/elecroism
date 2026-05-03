@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useTripFlash } from '../../hooks/useTripFlash';
 import { Group, Rect, Text, Line, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
@@ -24,8 +25,8 @@ const HrcFuseSymbol: React.FC<Props> = ({
   selected,
 }) => {
   const OUTLINE = 1.6;
-  const [flashVisible, setFlashVisible] = useState(true);
   const isTripped = component.state === 'tripped';
+  const flashVisible = useTripFlash(isTripped, 450);
   const isClosed = component.state === 'on';
   const energized = nodeResult?.energized || false;
   const rating = component.properties.ratingAmps ?? 32;
@@ -44,12 +45,6 @@ const HrcFuseSymbol: React.FC<Props> = ({
   const hrcClass = component.properties.hrcType ?? 'gG';
   const hrcKa = component.properties.hrcBreakingCapacityKa ?? 80;
   const title = component.type === 'control_circuit_fuse' ? 'CTRL' : 'HRC';
-
-  useEffect(() => {
-    if (!isTripped) return;
-    const interval = setInterval(() => setFlashVisible((v) => !v), 450);
-    return () => clearInterval(interval);
-  }, [isTripped]);
 
   return (
     <Group

@@ -3,13 +3,7 @@ import { Group, Rect, Text, Line, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
-
-function coilTerminalTag(label: string): 'A1' | 'A2' | null {
-  const u = label.toUpperCase();
-  if (u === 'A1') return 'A1';
-  if (u === 'A2') return 'A2';
-  return null;
-}
+import { coilTerminalTag } from '../../utils/coilTerminalTag';
 
 interface Props {
   component: CircuitComponent;

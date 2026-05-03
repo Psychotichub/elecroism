@@ -25,8 +25,7 @@ Behavior
 
 Potential Issues / Things To Verify
 ----------------------------------
-- The component expects nodeResult fields like lineVoltageRmsV and lineCurrentRmsA; ensure the simulator returns them for accurate reading display.
-- No code changes were made.
+- **`lineVoltageRmsV` / `lineCurrentRmsA`:** Filled by the engine when the meter’s node is evaluated with branch data (`src/simulation/engine.ts`). The symbol also falls back to `currentA` / `component.properties.lineVoltage` where coded — verify your circuit still shows sensible numbers.
 
 Testing Notes
 -------------
@@ -34,4 +33,4 @@ Testing Notes
 
 Implementation Notes / Required Modifications
 -------------------------------------------
-- The energy meter expects `nodeResult.lineVoltageRmsV` and `nodeResult.lineCurrentRmsA`. If your simulation returns different fields (for example `voltageV`/`currentA`), update the simulator or add mapping logic in the component so the meter shows correct values.
+- Prefer aligning simulator output with `lineVoltageRmsV` / `lineCurrentRmsA`; partial fallbacks exist in `EnergyMeterSymbol.tsx` for current and rated voltage.

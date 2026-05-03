@@ -20,13 +20,12 @@ Props
 
 Behavior
 --------
-- Colour palette is defined in COLOR_HEX and glow animation is created via Konva.Animation when energized.
+- Colour palette is defined in COLOR_HEX and glow animation uses **`startKonvaLayerAnimation`** from `src/utils/konvaLayerAnimation.ts` when energized (no animation if the node has no layer yet).
 - Displays a phaseTag letter on the lamp and optional selection outline.
 
 Potential Issues / Things To Verify
 ----------------------------------
-- Konva.Animation creation calls getLayer() on the glowRef — ensure the symbol is attached to a Konva layer at animation creation time. In practice this is true when rendered inside ScaledSymbolInner and the main canvas.
-- No code changes were made.
+- Glow cadence uses `Math.sin(frame.time * 0.004)`; adjust constant if product wants faster/slower pulse.
 
 Testing Notes
 -------------
@@ -34,4 +33,4 @@ Testing Notes
 
 Implementation Notes / Required Modifications
 -------------------------------------------
-- Risk: The code assumes `glowRef.current.getLayer()` is available when the effect runs. In some render ordering cases (or if the symbol is rendered outside the standard canvas layer) `getLayer()` can be null and creating Konva.Animation will fail. Add a guard around `getLayer()` or defer animation start until the node's layer is available (for example by listening for the 'layer' property or using a post-mount tick).
+- Share the same Konva layer guard as `LoadSymbol` / `ThreePhaseMotorSymbol` via `startKonvaLayerAnimation`.

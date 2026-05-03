@@ -24,7 +24,7 @@ Behavior
 
 Potential Issues / Things To Verify
 ----------------------------------
-- No code changes were made.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 
 Testing Notes
 -------------

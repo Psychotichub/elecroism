@@ -27,7 +27,7 @@ Behavior
 Potential Issues / Things To Verify
 ----------------------------------
 - stubFromCenter computes a unit vector from the center to the cp. If a cp is at the origin the function returns a fallback stub downward. Ensure connectionPoints are sensible.
-- No code changes were made.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 
 Testing Notes
 -------------

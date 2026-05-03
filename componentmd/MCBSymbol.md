@@ -26,7 +26,7 @@ Behavior
 
 Potential Issues / Things To Verify
 ----------------------------------
-- No code changes were made.
+- Tripped-state flash: implemented with `useTripFlash` (`src/hooks/useTripFlash.ts`) — ref-backed interval cleanup for Strict Mode and rapid trip/reset.
 
 Testing Notes
 -------------
@@ -34,4 +34,4 @@ Testing Notes
 
 Implementation Notes / Required Modifications
 -------------------------------------------
-- Flashing indicator uses setInterval created inside a useEffect that depends on `isTripped`. The interval is cleared in the cleanup function so the current implementation is correct. As a small hardening, consider storing the interval id in a ref (useRef<number|null>) to make the cleanup explicit and robust in environments where effects can be invoked more than once (React Strict Mode dev behaviors).
+- Trip flash uses `useTripFlash(isTripped, 500)` from `src/hooks/useTripFlash.ts`.

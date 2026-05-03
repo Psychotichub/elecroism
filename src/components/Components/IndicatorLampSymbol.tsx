@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Group, Circle, Line, Text } from 'react-konva';
 import Konva from 'konva';
 import type { CircuitComponent, NodeResult } from '../../types';
+import { startKonvaLayerAnimation } from '../../utils/konvaLayerAnimation';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
@@ -44,14 +45,14 @@ const IndicatorLampSymbol: React.FC<Props> = ({
   const glowRef = useRef<Konva.Circle>(null);
 
   useEffect(() => {
-    if (!energized || !glowRef.current) return;
-    const anim = new Konva.Animation((frame) => {
+    if (!energized) return;
+    const anim = startKonvaLayerAnimation(glowRef.current, (frame) => {
       if (frame && glowRef.current) {
         const o = 0.25 + 0.12 * Math.sin(frame.time * 0.004);
         glowRef.current.opacity(o);
       }
-    }, glowRef.current.getLayer());
-    anim.start();
+    });
+    if (!anim) return;
     return () => {
       anim.stop();
     };

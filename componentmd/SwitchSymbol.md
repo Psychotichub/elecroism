@@ -30,7 +30,7 @@ Behavior
 Potential Issues / Things To Verify
 ----------------------------------
 - The component listens for global pointerup/pointercancel events when pressed to ensure release is detected even if pointer leaves the control. This is correct but verify interactions in touch scenarios.
-- No code changes were made.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 
 Testing Notes
 -------------

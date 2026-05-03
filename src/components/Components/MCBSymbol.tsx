@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useTripFlash } from '../../hooks/useTripFlash';
 import { Group, Line, Rect, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import { mcbLayoutPoles } from '../../store/circuitConnectionGeometry';
@@ -34,18 +35,12 @@ const MCBSymbol: React.FC<Props> = ({
   showConnectionPoints,
   selected,
 }) => {
-  const [flashVisible, setFlashVisible] = useState(true);
   const isTripped = component.state === 'tripped';
   const isOn = component.state === 'on';
   const energized = nodeResult?.energized || false;
+  const flashVisible = useTripFlash(isTripped, 500);
 
   const is2P = mcbLayoutPoles(component) === 2;
-
-  useEffect(() => {
-    if (!isTripped) return;
-    const interval = setInterval(() => setFlashVisible((v) => !v), 500);
-    return () => clearInterval(interval);
-  }, [isTripped]);
 
   const bodyW = is2P ? 40 : 30;
   const bodyH = 56;

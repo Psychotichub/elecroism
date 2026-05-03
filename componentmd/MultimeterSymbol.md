@@ -27,14 +27,12 @@ Behavior
 
 Potential Issues / Things To Verify
 ----------------------------------
-- The component expects nodeResult possibly enriched with meterSignal ('ac'|'dc'). Ensure the simulation layer provides that value for accurate AC/DC display.
-- No code changes were made.
+- **`meterSignal`:** The simulation engine sets `nodeResult.meterSignal` on the multimeter read path when it resolves a signal type (see `src/simulation/engine.ts`). On Auto, missing `meterSignal` falls back to treating the source as AC — note that when testing edge topologies.
 
 Testing Notes
 -------------
-- Test mode cycling via the MODE button and confirm continuity detection threshold (powerW > 0.5) aligns with expectations.
+- Test mode cycling via the MODE button; continuity uses **`circuit.continuityPowerThresholdW`** (default 0.5 W, set in **Circuit validation**).
 
 Implementation Notes / Required Modifications
 -------------------------------------------
-- This component relies on `nodeResult` fields: `voltageV`, `currentA`, and (optionally) `meterSignal`. If your simulator does not populate `meterSignal` the 'auto' signal detection falls back to 'ac', which may be misleading. Either ensure the simulator populates `meterSignal` or add a mapping layer to the component to derive AC/DC from available measurements.
-- Continuity uses `powerW > 0.5` as a heuristic. If you want resistance-based continuity detection or a different threshold, make the threshold configurable.
+- Relies on `nodeResult.voltageV`, `currentA`, and optionally `meterSignal` (engine populates when available). Continuity compares `powerW` to **`circuit.continuityPowerThresholdW`** (same field as **ContinuityBuzzer**; default 0.5 W).

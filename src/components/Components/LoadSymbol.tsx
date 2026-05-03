@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import Konva from 'konva';
 import { Group, Circle, Line, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
@@ -10,7 +11,7 @@ import {
   TerminalPocket,
 } from './SymbolPrimitives';
 import { SymbolColors } from './SymbolTokens';
-import Konva from 'konva';
+import { startKonvaLayerAnimation } from '../../utils/konvaLayerAnimation';
 
 interface Props {
   component: CircuitComponent;
@@ -39,41 +40,43 @@ const LoadSymbol: React.FC<Props> = ({
   const glowRef = useRef<Konva.Circle>(null);
 
   useEffect(() => {
-    if (isMotor && energized && motorRef.current) {
-      const anim = new Konva.Animation((frame) => {
-        if (frame && motorRef.current) {
-          motorRef.current.rotation(frame.time * 0.1);
-        }
-      }, motorRef.current.getLayer());
-      anim.start();
-      return () => { anim.stop(); };
-    }
+    if (!isMotor || !energized) return;
+    const anim = startKonvaLayerAnimation(motorRef.current, (frame) => {
+      if (frame && motorRef.current) {
+        motorRef.current.rotation(frame.time * 0.1);
+      }
+    });
+    if (!anim) return;
+    return () => {
+      anim.stop();
+    };
   }, [isMotor, energized]);
 
   useEffect(() => {
-    if (component.type !== 'cooling_fan' || !energized || !fanRef.current) return;
-    const anim = new Konva.Animation((frame) => {
+    if (component.type !== 'cooling_fan' || !energized) return;
+    const anim = startKonvaLayerAnimation(fanRef.current, (frame) => {
       if (frame && fanRef.current) {
         fanRef.current.rotation(frame.time * 0.35);
       }
-    }, fanRef.current.getLayer());
-    anim.start();
+    });
+    if (!anim) return;
     return () => {
       anim.stop();
     };
   }, [component.type, energized]);
 
   useEffect(() => {
-    if (isLamp && energized && glowRef.current) {
-      const anim = new Konva.Animation((frame) => {
-        if (frame && glowRef.current) {
-          const opacity = 0.25 + 0.1 * Math.sin(frame.time * 0.003);
-          glowRef.current.opacity(opacity);
-        }
-      }, glowRef.current.getLayer());
-      anim.start();
-      return () => { anim.stop(); };
-    }
+    if (!isLamp || !energized) return;
+    const anim = startKonvaLayerAnimation(glowRef.current, (frame) => {
+      if (frame && glowRef.current) {
+        const opacity = 0.25 + 0.1 * Math.sin(frame.time * 0.003);
+        glowRef.current.opacity(opacity);
+      }
+    });
+    if (!anim) return;
+    return () => {
+      anim.stop();
+    };
   }, [isLamp, energized]);
 
   const getFill = () => {

@@ -10,13 +10,14 @@ const ContinuityBuzzer: React.FC = () => {
 
   const continuityActive = useMemo(() => {
     if (!simulationResult) return false;
+    const threshold = circuit.continuityPowerThresholdW ?? 0.5;
     return circuit.components.some((c) => {
       if (c.type !== 'multimeter') return false;
       if ((c.properties.multimeterMode ?? 'voltage') !== 'continuity') return false;
       const node = simulationResult.nodes[c.id];
-      return !!node && (node.powerW ?? 0) > 0.5;
+      return !!node && (node.powerW ?? 0) > threshold;
     });
-  }, [circuit.components, simulationResult]);
+  }, [circuit, simulationResult]);
 
   const ctxRef = useRef<AudioContext | null>(null);
   const gainRef = useRef<GainNode | null>(null);

@@ -24,7 +24,7 @@ Behavior
 
 Potential Issues / Things To Verify
 ----------------------------------
-- No code changes were made.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 - The ComponentCanvasLabel call in the file contains an inline-wrapped line; it's valid but visually dense. Verify label offsets and sizes in your app.
 
 Testing Notes

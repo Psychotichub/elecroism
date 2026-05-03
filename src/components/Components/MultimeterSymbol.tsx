@@ -1,6 +1,7 @@
 import React from 'react';
 import { Group, Rect, Text, Circle, Line } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
+import { useCircuitStore } from '../../store/circuitStore';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 
@@ -30,6 +31,8 @@ const MultimeterSymbol: React.FC<Props> = ({
   showConnectionPoints,
   selected,
 }) => {
+  const continuityThreshold =
+    useCircuitStore((s) => s.circuit.continuityPowerThresholdW) ?? 0.5;
   const mode = component.properties.multimeterMode ?? 'voltage';
   const selectedSignal = component.properties.multimeterSignal ?? 'auto';
   const detectedSignal =
@@ -41,7 +44,7 @@ const MultimeterSymbol: React.FC<Props> = ({
       : selectedSignal;
   const v = Math.abs(nodeResult?.voltageV ?? 0);
   const i = Math.abs(nodeResult?.currentA ?? 0);
-  const continuity = (nodeResult?.powerW ?? 0) > 0.5;
+  const continuity = (nodeResult?.powerW ?? 0) > continuityThreshold;
   const hvEnabled = component.properties.multimeterHighVoltage !== false;
   const hvLimit = Math.max(100, component.properties.multimeterMaxVoltage ?? 1000);
   const hvDetected = hvEnabled && v >= 600;

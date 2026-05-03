@@ -632,6 +632,7 @@ function createEmptyCircuit(): Circuit {
     updatedAt: new Date().toISOString(),
     phaseImbalanceWarningPercent: 15,
     wireLabelsVisible: true,
+    continuityPowerThresholdW: 0.5,
   };
 }
 

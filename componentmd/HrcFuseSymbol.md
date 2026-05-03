@@ -22,11 +22,11 @@ Props
 Behavior
 --------
 - Supports multi-pole rendering. For `control_circuit_fuse` it displays control circuit voltage and tag. For `hrc_fuse` it displays class and breaking capacity.
-- Tripped state flashes via a 450ms interval.
+- Tripped state flashes via `useTripFlash(isTripped, 450)`.
 
 Potential Issues / Things To Verify
 ----------------------------------
-- No code changes were made.
+- Trip flash timing (450 ms) is fixed in the hook call; change `HrcFuseSymbol` if a different cadence is required.
 
 Testing Notes
 -------------
@@ -34,4 +34,4 @@ Testing Notes
 
 Implementation Notes / Required Modifications
 -------------------------------------------
-- Uses setInterval for the tripped flash (450ms) with cleanup in the effect's return. This is correctly implemented. For extra robustness (especially during development with React Strict Mode), consider storing the interval id in a ref and clearing that in cleanup.
+- Tripped flash uses `useTripFlash(isTripped, 450)` from `src/hooks/useTripFlash.ts` (ref-backed interval cleanup).

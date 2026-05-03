@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useTripFlash } from '../../hooks/useTripFlash';
 import { Group, Line, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
@@ -34,10 +35,10 @@ const ThreePhaseMCBSymbol: React.FC<Props> = ({
   showConnectionPoints,
   selected,
 }) => {
-  const [flashVisible, setFlashVisible] = useState(true);
   const isTripped = component.state === 'tripped';
   const isOn = component.state === 'on';
   const energized = nodeResult?.energized || false;
+  const flashVisible = useTripFlash(isTripped, 500);
   const is4P = component.type === 'four_phase_mcb';
   const poleXs = is4P ? [-30, -10, 10, 30] : [-20, 0, 20];
   const minX = Math.min(...poleXs) - 6;
@@ -45,11 +46,6 @@ const ThreePhaseMCBSymbol: React.FC<Props> = ({
   const bodyW = maxX - minX;
   const bodyH = 52;
   const bodyY = -26;
-  useEffect(() => {
-    if (!isTripped) return;
-    const interval = setInterval(() => setFlashVisible((v) => !v), 500);
-    return () => clearInterval(interval);
-  }, [isTripped]);
 
   const handleState = isTripped ? 'tripped' : isOn ? 'on' : 'off';
   const title =

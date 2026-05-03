@@ -25,7 +25,7 @@ Behavior
 Potential Issues / Things To Verify
 ----------------------------------
 - Terminal label colour heuristic checks for prefixes and substrings; adjust if your naming differs.
-- No code changes were made.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 
 Testing Notes
 -------------

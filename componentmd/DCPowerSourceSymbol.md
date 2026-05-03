@@ -25,7 +25,7 @@ Behavior
 Potential Issues / Things To Verify
 ----------------------------------
 - stubFromCenter uses the cp coordinates relative to the component. Ensure connectionPoints are in the same coordinate space.
-- No code changes were made.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 
 Testing Notes
 -------------

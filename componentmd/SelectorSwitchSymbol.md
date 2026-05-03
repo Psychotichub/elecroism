@@ -27,7 +27,7 @@ Behavior
 Potential Issues / Things To Verify
 ----------------------------------
 - Pointer math uses cosine/sine of degrees converted to radians; this is straightforward but verify label alignment if you change sizes.
-- No code changes were made.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 
 Testing Notes
 -------------

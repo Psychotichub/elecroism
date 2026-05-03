@@ -30,6 +30,9 @@ const CircuitValidationPanel: React.FC = () => {
   const setPhaseImbalanceWarningPercent = useCircuitStore(
     (s) => s.setPhaseImbalanceWarningPercent
   );
+  const setContinuityPowerThresholdW = useCircuitStore(
+    (s) => s.setContinuityPowerThresholdW
+  );
 
   const issues = useMemo(
     () => runCircuitDesignValidation(circuit, simulationResult),
@@ -75,6 +78,24 @@ const CircuitValidationPanel: React.FC = () => {
               setPhaseImbalanceWarningPercent(Number(e.target.value) || 0)
             }
             className="input-field w-16 py-1 text-xs"
+          />
+          <label
+            htmlFor="continuity-thresh-w"
+            className={`ml-3 text-[10px] ${tc.textMuted}`}
+          >
+            Continuity “closed” min. (W)
+          </label>
+          <input
+            id="continuity-thresh-w"
+            type="number"
+            min={0.01}
+            max={500}
+            step={0.05}
+            value={circuit.continuityPowerThresholdW ?? 0.5}
+            onChange={(e) =>
+              setContinuityPowerThresholdW(Number(e.target.value) || 0.5)
+            }
+            className="input-field w-20 py-1 text-xs"
           />
         </div>
       </div>

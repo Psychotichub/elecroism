@@ -27,7 +27,7 @@ Behavior
 Potential Issues / Things To Verify
 ----------------------------------
 - Voltage fallback is 400 V when properties are absent; adjust if you need a different default.
-- No code changes were made; this file documents behavior and verifications.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 
 Testing Notes
 -------------

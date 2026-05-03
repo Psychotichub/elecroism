@@ -27,7 +27,7 @@ Behavior
 
 Potential Issues / Things To Verify
 ----------------------------------
-- No code changes were made.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 - The component assumes connectionPoints are present on the `component` model and positions them where expected; verify that the circuit model's `createConnectionPoints` aligns with this symbol's expectations.
 - Ensure onToggle side effects (e.g., updating the store) are implemented where this component is used.
 

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useTripFlash } from '../../hooks/useTripFlash';
 import { Circle, Group, Line, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
@@ -36,22 +37,16 @@ const BreakerSymbol: React.FC<Props> = ({
   showConnectionPoints,
   selected,
 }) => {
-  const [flashVisible, setFlashVisible] = useState(true);
   const isTripped = component.state === 'tripped';
   const isOn = component.state === 'on';
   const energized = nodeResult?.energized || false;
+  const flashVisible = useTripFlash(isTripped, 500);
   const poles = component.properties.poles ?? 2;
   const poleXs = poles >= 4 ? [-30, -10, 10, 30] : [-10, 10];
   const bodyWidth = poles >= 4 ? 68 : 40;
   const bodyX = -bodyWidth / 2;
   const bodyY = -26;
   const bodyH = 52;
-
-  useEffect(() => {
-    if (!isTripped) return;
-    const interval = setInterval(() => setFlashVisible((v) => !v), 500);
-    return () => clearInterval(interval);
-  }, [isTripped]);
 
   const handleState = isTripped ? 'tripped' : isOn ? 'on' : 'off';
   const title =

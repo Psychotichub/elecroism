@@ -26,7 +26,7 @@ Behavior
 Potential Issues / Things To Verify
 ----------------------------------
 - The large conditional chain mapping component.type → title/subtitle/accentColor is verbose but straightforward. If you add new types, update this mapping.
-- No code changes were made.
+- Doc only in this pass; confirm in the running app after nearby code changes.
 
 Testing Notes
 -------------

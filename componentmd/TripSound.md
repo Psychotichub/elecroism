@@ -31,7 +31,7 @@ Potential Issues / Things To Verify
 ----------------------------------
 - No issues found in the code itself.
 - Verify that `public/audio/mcb-trip.wav` exists and is reachable at runtime. If the file is missing, the component will fall back to the procedural synth (which is fine).
-- The component preloads the WAV only after the AudioContext is created (on first pointerdown). If you want the sample available faster you can trigger creation earlier (no code changes are made here as requested).
+- The component preloads the WAV only after the AudioContext is created (on first pointerdown). Earlier preload would require an explicit product decision (e.g. resume context on first canvas interaction).
 - The AudioContext is closed on unmount only if it was started by this component (startedRef). That behavior looks correct.
 - The exponentialGain/exponentialRamp methods use small non-zero start values (0.0001) to avoid ramping to/from zero which is correct.
 
@@ -39,10 +39,6 @@ Testing Notes
 -------------
 - To verify manually: mount the component, trip a protected device in the UI, and ensure audio plays (or no error is thrown if audio is unavailable).
 - Check browser console for any fetch errors when loading the WAV sample.
-
-No Code Changes
----------------
-Per your request, no code was modified. This file documents the component and lists things to verify.
 
 Implementation Notes / Required Modifications
 -------------------------------------------
