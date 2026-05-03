@@ -34,7 +34,7 @@ const GridLayer: React.FC<Props> = ({
   }
 
   return (
-    <Layer listening={false} hitGraphEnabled={false}>
+    <Layer listening={false}>
       {dots.map((dot, i) => (
         <Circle
           key={i}

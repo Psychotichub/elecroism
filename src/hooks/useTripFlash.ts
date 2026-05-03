@@ -14,7 +14,7 @@ export function useTripFlash(isTripped: boolean, intervalMs: number): boolean {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      setFlashVisible(true);
+      queueMicrotask(() => setFlashVisible(true));
       return;
     }
 

@@ -1,1 +1,0 @@
-add no nc 13-14 , 21-22 Terminal to control the contactor with start and stop button
