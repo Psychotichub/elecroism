@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useMemo,
 } from 'react';
-import { Stage, Layer, Circle, Line, Rect, Text } from 'react-konva';
+import { Stage, Layer, Group, Circle, Line, Rect, Text } from 'react-konva';
 import Konva from 'konva';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
@@ -1606,74 +1606,81 @@ const CircuitCanvas: React.FC = () => {
           dotColor={tc.gridDot}
         />
 
-        <WireLayer
-          wires={circuit.wires}
-          selectedId={selectedId}
-          panX={circuit.panX}
-          panY={circuit.panY}
-          zoom={circuit.zoom}
-          onSelectWire={handleSelectWire}
-          wireInProgress={!!wireInProgress}
-          wirePoints={wirePoints}
-          cursorPos={cursorPos}
-          wireOrientation={wireOrientation}
-          wireOrthoEnabled={wireOrthoEnabled}
-          draftWireColor={wireDraftColor}
-          wireSnapHud={wireSnapHud}
-          wireFullPreviewPolyline={wireSmartPreview.fullPolyline}
-          wireTerminalPreview={wireSmartPreview.terminalHud}
-          wireTypeTag={wireSmartPreview.typeTag}
-          wireRuleMessage={wireSmartPreview.ruleMessage}
-          wireLabelsMasterVisible={circuit.wireLabelsVisible !== false}
-        />
-
-        <WireGripLayer phases={['segments']} />
-
+        {/*
+          Single schematic layer (one canvas): z-order is wires → segment grips →
+          components → multimeter → vertex grips → preview → marquee → wire tool.
+          Grid stays a separate static layer beneath (fewer canvases).
+        */}
         <Layer>
-          {circuit.components.map(renderComponent)}
-        </Layer>
-        <Layer>
-          {circuit.components.map(renderMultimeterLeads)}
-        </Layer>
-
-        {/* Vertex grips above components so endpoints can be dragged to other terminals */}
-        <WireGripLayer phases={['vertices']} />
-        {pendingPreviewComponent && (
-          <Layer opacity={0.7} listening={false}>
-            {renderComponent(pendingPreviewComponent)}
-          </Layer>
-        )}
-        {selectionRect && tool === 'select' && (
-          <Layer listening={false}>
-            <Rect
-              x={Math.min(selectionRect.startX, selectionRect.endX)}
-              y={Math.min(selectionRect.startY, selectionRect.endY)}
-              width={Math.abs(selectionRect.endX - selectionRect.startX)}
-              height={Math.abs(selectionRect.endY - selectionRect.startY)}
-              fill={
-                selectionRect.endX >= selectionRect.startX
-                  ? 'rgba(59,130,246,0.12)'
-                  : 'rgba(34,197,94,0.12)'
-              }
-              stroke={selectionRect.endX >= selectionRect.startX ? '#3B82F6' : '#22C55E'}
-              strokeWidth={1}
-              dash={[6, 4]}
-            />
-          </Layer>
-        )}
-
-        {tool === 'wire' && (
-          <WireToolOverlay
-            circuit={circuit}
-            hoveredConnectionPoint={hoveredConnectionPoint}
-            setHoveredConnectionPoint={setHoveredConnectionPoint}
-            wireDockHint={wireDockHint}
-            onConnectionPointClick={handleConnectionPointClick}
-            onFinishWireSpan={finishWireOnWireSpan}
+          <WireLayer
+            wires={circuit.wires}
+            selectedId={selectedId}
+            panX={circuit.panX}
+            panY={circuit.panY}
+            zoom={circuit.zoom}
+            onSelectWire={handleSelectWire}
             wireInProgress={!!wireInProgress}
             wirePoints={wirePoints}
+            cursorPos={cursorPos}
+            wireOrientation={wireOrientation}
+            wireOrthoEnabled={wireOrthoEnabled}
+            draftWireColor={wireDraftColor}
+            wireSnapHud={wireSnapHud}
+            wireFullPreviewPolyline={wireSmartPreview.fullPolyline}
+            wireTerminalPreview={wireSmartPreview.terminalHud}
+            wireTypeTag={wireSmartPreview.typeTag}
+            wireRuleMessage={wireSmartPreview.ruleMessage}
+            wireLabelsMasterVisible={circuit.wireLabelsVisible !== false}
           />
-        )}
+
+          <WireGripLayer phases={['segments']} />
+
+          <Group listening>
+            {circuit.components.map(renderComponent)}
+          </Group>
+          <Group listening>
+            {circuit.components.map(renderMultimeterLeads)}
+          </Group>
+
+          <WireGripLayer phases={['vertices']} />
+
+          {pendingPreviewComponent && (
+            <Group opacity={0.7} listening={false}>
+              {renderComponent(pendingPreviewComponent)}
+            </Group>
+          )}
+          {selectionRect && tool === 'select' && (
+            <Group listening={false}>
+              <Rect
+                x={Math.min(selectionRect.startX, selectionRect.endX)}
+                y={Math.min(selectionRect.startY, selectionRect.endY)}
+                width={Math.abs(selectionRect.endX - selectionRect.startX)}
+                height={Math.abs(selectionRect.endY - selectionRect.startY)}
+                fill={
+                  selectionRect.endX >= selectionRect.startX
+                    ? 'rgba(59,130,246,0.12)'
+                    : 'rgba(34,197,94,0.12)'
+                }
+                stroke={selectionRect.endX >= selectionRect.startX ? '#3B82F6' : '#22C55E'}
+                strokeWidth={1}
+                dash={[6, 4]}
+              />
+            </Group>
+          )}
+
+          {tool === 'wire' && (
+            <WireToolOverlay
+              circuit={circuit}
+              hoveredConnectionPoint={hoveredConnectionPoint}
+              setHoveredConnectionPoint={setHoveredConnectionPoint}
+              wireDockHint={wireDockHint}
+              onConnectionPointClick={handleConnectionPointClick}
+              onFinishWireSpan={finishWireOnWireSpan}
+              wireInProgress={!!wireInProgress}
+              wirePoints={wirePoints}
+            />
+          )}
+        </Layer>
       </Stage>
       {paletteOpen && (
         <div

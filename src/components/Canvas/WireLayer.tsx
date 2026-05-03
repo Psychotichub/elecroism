@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layer, Line, Circle, Text } from 'react-konva';
+import { Group, Line, Circle, Text } from 'react-konva';
 import WireSegment from '../Components/WireSegment';
 import type { Wire } from '../../types';
 import { getWireColor } from '../../utils/geometry';
@@ -133,7 +133,7 @@ const WireLayer: React.FC<Props> = ({
   })();
 
   return (
-    <Layer>
+    <Group listening>
       {wires.map((wire) => (
         <WireSegment
           key={wire.id}
@@ -233,7 +233,7 @@ const WireLayer: React.FC<Props> = ({
           listening={false}
         />
       ) : null}
-    </Layer>
+    </Group>
   );
 };
 

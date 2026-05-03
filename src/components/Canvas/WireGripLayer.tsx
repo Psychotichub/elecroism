@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useCallback } from 'react';
-import { Layer, Rect, Line } from 'react-konva';
+import { Group, Rect, Line } from 'react-konva';
 import Konva from 'konva';
 import { useCircuitStore } from '../../store/circuitStore';
 import { translateWireSegment } from '../../utils/wireGripUtils';
@@ -250,8 +250,8 @@ const WireGripLayer: React.FC<{ phases?: WireGripPhase[] }> = ({
 
   return (
     <>
-      {showSegments && <Layer listening>{segmentNodes}</Layer>}
-      {showVertices && <Layer listening>{vertexNodes}</Layer>}
+      {showSegments && <Group listening>{segmentNodes}</Group>}
+      {showVertices && <Group listening>{vertexNodes}</Group>}
     </>
   );
 };

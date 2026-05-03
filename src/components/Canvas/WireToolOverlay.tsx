@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layer, Circle, Line, Rect } from 'react-konva';
+import { Group, Circle, Line, Rect } from 'react-konva';
 import Konva from 'konva';
 import type { Circuit } from '../../types';
 import { connectionPointWorld } from '../../utils/geometry';
@@ -65,7 +65,7 @@ const WireToolOverlay: React.FC<Props> = ({
   wireInProgress,
   wirePoints,
 }) => (
-  <Layer>
+  <Group listening>
     {onFinishWireSpan &&
       wireInProgress &&
       wirePoints.length >= 2 &&
@@ -215,7 +215,7 @@ const WireToolOverlay: React.FC<Props> = ({
           </>
         );
       })()}
-  </Layer>
+  </Group>
 );
 
 export default WireToolOverlay;
