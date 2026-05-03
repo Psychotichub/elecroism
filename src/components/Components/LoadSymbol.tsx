@@ -3,6 +3,13 @@ import { Group, Circle, Line, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import {
+  ConnectionPointDots,
+  DeviceBody,
+  SelectionFrame,
+  TerminalPocket,
+} from './SymbolPrimitives';
+import { SymbolColors } from './SymbolTokens';
 import Konva from 'konva';
 
 interface Props {
@@ -82,8 +89,16 @@ const LoadSymbol: React.FC<Props> = ({
     if (isLamp) {
       return (
         <>
-          <Line points={[-10, -10, 10, 10]} stroke="#374151" strokeWidth={1.5} />
-          <Line points={[10, -10, -10, 10]} stroke="#374151" strokeWidth={1.5} />
+          <Line
+            points={[-10, -10, 10, 10]}
+            stroke={SymbolColors.bodyStroke}
+            strokeWidth={1.5}
+          />
+          <Line
+            points={[10, -10, -10, 10]}
+            stroke={SymbolColors.bodyStroke}
+            strokeWidth={1.5}
+          />
         </>
       );
     }
@@ -95,7 +110,7 @@ const LoadSymbol: React.FC<Props> = ({
             x={-5}
             y={-6}
             fontSize={12}
-            fill="#374151"
+            fill={SymbolColors.bodyStroke}
             fontStyle="bold"
             listening={false}
           />
@@ -108,7 +123,7 @@ const LoadSymbol: React.FC<Props> = ({
         x={-4}
         y={-6}
         fontSize={12}
-        fill="#374151"
+        fill={SymbolColors.bodyStroke}
         fontStyle="bold"
         listening={false}
       />
@@ -128,77 +143,81 @@ const LoadSymbol: React.FC<Props> = ({
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
     >
       <ScaledSymbolInner component={component}>
-      {selected && (
-        <Circle
-          x={0}
-          y={0}
-          radius={20}
-          stroke="#3B82F6"
-          strokeWidth={2}
-          dash={[4, 4]}
-        />
-      )}
+        {selected && (
+          <SelectionFrame x={-20} y={-26} width={40} height={52} />
+        )}
 
-      {isLamp && energized && (
+        <DeviceBody
+          x={-16}
+          y={-22}
+          width={32}
+          height={44}
+          energized={energized}
+        />
+
+        <TerminalPocket
+          x={0}
+          y={-17}
+          leadToY={-20}
+          label="T1"
+          labelY={-30}
+        />
+        <TerminalPocket
+          x={0}
+          y={17}
+          leadToY={20}
+          label="T2"
+          labelY={24}
+        />
+
+        {isLamp && energized && (
+          <Circle
+            ref={glowRef}
+            x={0}
+            y={0}
+            radius={22}
+            fill="#FCD34D"
+            opacity={0.3}
+            listening={false}
+          />
+        )}
+
         <Circle
-          ref={glowRef}
           x={0}
           y={0}
-          radius={22}
-          fill="#FCD34D"
-          opacity={0.3}
+          radius={16}
+          fill={getFill()}
+          stroke={SymbolColors.bodyStroke}
+          strokeWidth={1.5}
+          shadowColor={energized && isLamp ? '#FCD34D' : undefined}
+          shadowBlur={energized && isLamp ? 6 : 0}
+        />
+
+        {getSymbolContent()}
+
+        <ComponentCanvasLabel
+          componentId={component.id}
+          label={component.label}
+          x={14}
+          y={-8}
+          width={72}
+          fontSize={component.properties.labelFontSize ?? 8}
+          fill={SymbolColors.labelMuted}
+          offsetX={component.properties.labelOffsetX ?? 0}
+          offsetY={component.properties.labelOffsetY ?? 0}
+        />
+        <Text
+          text={`${component.properties.powerWatts || 0}W`}
+          x={18}
+          y={5}
+          fontSize={7}
+          fill={SymbolColors.labelMuted}
           listening={false}
         />
-      )}
 
-      <Circle
-        x={0}
-        y={0}
-        radius={16}
-        fill={getFill()}
-        stroke="#374151"
-        strokeWidth={1.5}
-        shadowColor={energized && isLamp ? '#FCD34D' : undefined}
-        shadowBlur={energized && isLamp ? 12 : 0}
-      />
-
-      {getSymbolContent()}
-
-      <Line points={[0, -16, 0, -20]} stroke="#374151" strokeWidth={2} />
-      <Line points={[0, 16, 0, 20]} stroke="#374151" strokeWidth={2} />
-
-      <ComponentCanvasLabel
-        componentId={component.id}
-        label={component.label}
-        x={14}
-        y={-8}
-        width={72}
-        fontSize={component.properties.labelFontSize ?? 8}
-        offsetX={component.properties.labelOffsetX ?? 0}
-        offsetY={component.properties.labelOffsetY ?? 0}
-      />
-      <Text
-        text={`${component.properties.powerWatts || 0}W`}
-        x={18}
-        y={5}
-        fontSize={7}
-        fill="#9CA3AF"
-        listening={false}
-      />
-
-      {showConnectionPoints &&
-        component.connectionPoints.map((cp) => (
-          <Circle
-            key={cp.id}
-            x={cp.x}
-            y={cp.y}
-            radius={5}
-            fill="#3B82F6"
-            opacity={0.6}
-            stroke="#2563EB"
-            strokeWidth={1}
-          />
-        ))}
+        {showConnectionPoints && (
+          <ConnectionPointDots connectionPoints={component.connectionPoints} />
+        )}
       </ScaledSymbolInner>
     </Group>
   );

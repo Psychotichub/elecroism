@@ -176,7 +176,36 @@ function mccbControlConnectionPoints(componentId: string): ConnectionPoint[] {
   }));
 }
 
-function ensureMccbControlConnectionPoints(
+/** Power poles — same dock geometry as `acbPowerConnectionPoints` (ACB-style frame). */
+function motorizedMccbPowerConnectionPoints(
+  componentId: string,
+  fourP: boolean
+): ConnectionPoint[] {
+  const yTop = -36;
+  const yBottom = 42;
+  if (fourP) {
+    return [
+      { id: uuid(), componentId, x: -30, y: yTop, label: '1' },
+      { id: uuid(), componentId, x: -30, y: yBottom, label: '2' },
+      { id: uuid(), componentId, x: -10, y: yTop, label: '3' },
+      { id: uuid(), componentId, x: -10, y: yBottom, label: '4' },
+      { id: uuid(), componentId, x: 10, y: yTop, label: '5' },
+      { id: uuid(), componentId, x: 10, y: yBottom, label: '6' },
+      { id: uuid(), componentId, x: 30, y: yTop, label: '7' },
+      { id: uuid(), componentId, x: 30, y: yBottom, label: '8' },
+    ];
+  }
+  return [
+    { id: uuid(), componentId, x: -20, y: yTop, label: '1' },
+    { id: uuid(), componentId, x: -20, y: yBottom, label: '2' },
+    { id: uuid(), componentId, x: 0, y: yTop, label: '3' },
+    { id: uuid(), componentId, x: 0, y: yBottom, label: '4' },
+    { id: uuid(), componentId, x: 20, y: yTop, label: '5' },
+    { id: uuid(), componentId, x: 20, y: yBottom, label: '6' },
+  ];
+}
+
+function ensureMotorizedMccbConnectionPoints(
   component: CircuitComponent
 ): CircuitComponent {
   if (
@@ -185,15 +214,36 @@ function ensureMccbControlConnectionPoints(
   ) {
     return component;
   }
-  if (component.connectionPoints.some((p) => p.label === 'MOT_A1')) {
-    return component;
-  }
+  const fourP = component.type === 'four_pole_motorized_mccb';
+  const desired = [
+    ...motorizedMccbPowerConnectionPoints(component.id, fourP),
+    ...mccbControlConnectionPoints(component.id),
+  ];
+  const existingByLabel = new Map(
+    component.connectionPoints.map((cp) => [cp.label, cp] as const)
+  );
+  const normalized = desired.map((cp) => {
+    const old = existingByLabel.get(cp.label);
+    return old
+      ? { ...old, x: cp.x, y: cp.y }
+      : { ...cp, id: uuid(), componentId: component.id };
+  });
+  const unchanged =
+    normalized.length === component.connectionPoints.length &&
+    normalized.every((cp, i) => {
+      const old = component.connectionPoints[i];
+      return (
+        old &&
+        old.id === cp.id &&
+        old.label === cp.label &&
+        old.x === cp.x &&
+        old.y === cp.y
+      );
+    });
+  if (unchanged) return component;
   return {
     ...component,
-    connectionPoints: [
-      ...component.connectionPoints,
-      ...mccbControlConnectionPoints(component.id),
-    ],
+    connectionPoints: normalized,
   };
 }
 
@@ -240,7 +290,7 @@ function ensureBreakerControlTerminals(
   component: CircuitComponent
 ): CircuitComponent {
   return ensureContactorAuxTerminals(
-    ensureMccbControlConnectionPoints(
+    ensureMotorizedMccbConnectionPoints(
       ensureAcbControlConnectionPoints(component)
     )
   );
@@ -593,24 +643,12 @@ function createConnectionPoints(
       ];
     case 'motorized_mccb':
       return [
-        { id: uuid(), componentId, x: -20, y: -25, label: '1' },
-        { id: uuid(), componentId, x: -20, y: 25, label: '2' },
-        { id: uuid(), componentId, x: 0, y: -25, label: '3' },
-        { id: uuid(), componentId, x: 0, y: 25, label: '4' },
-        { id: uuid(), componentId, x: 20, y: -25, label: '5' },
-        { id: uuid(), componentId, x: 20, y: 25, label: '6' },
+        ...motorizedMccbPowerConnectionPoints(componentId, false),
         ...mccbControlConnectionPoints(componentId),
       ];
     case 'four_pole_motorized_mccb':
       return [
-        { id: uuid(), componentId, x: -30, y: -25, label: '1' },
-        { id: uuid(), componentId, x: -30, y: 25, label: '2' },
-        { id: uuid(), componentId, x: -10, y: -25, label: '3' },
-        { id: uuid(), componentId, x: -10, y: 25, label: '4' },
-        { id: uuid(), componentId, x: 10, y: -25, label: '5' },
-        { id: uuid(), componentId, x: 10, y: 25, label: '6' },
-        { id: uuid(), componentId, x: 30, y: -25, label: '7' },
-        { id: uuid(), componentId, x: 30, y: 25, label: '8' },
+        ...motorizedMccbPowerConnectionPoints(componentId, true),
         ...mccbControlConnectionPoints(componentId),
       ];
     case 'four_phase_mcb':

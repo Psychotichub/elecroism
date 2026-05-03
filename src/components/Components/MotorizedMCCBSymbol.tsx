@@ -15,6 +15,7 @@ interface Props {
   selected: boolean;
 }
 
+/** Left column BMS control CPs + on-canvas labels; selection must include them. */
 const selectionMinX = -100;
 
 function isControlTerminal(label: string): boolean {
@@ -49,10 +50,13 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
 
   const is4P = component.type === 'four_pole_motorized_mccb';
   const poleXs = is4P ? [-30, -10, 10, 30] : [-20, 0, 20];
-  const minX = Math.min(...poleXs) - 6;
-  const maxX = Math.max(...poleXs) + 6;
+  const minX = is4P ? -38 : -26;
+  const maxX = is4P ? 38 : 26;
   const bodyW = maxX - minX;
   const selectionW = maxX - selectionMinX + 8;
+
+  const bodyBottomY = 36;
+  const leadEndY = 42;
 
   useEffect(() => {
     if (!isTripped) return;
@@ -91,9 +95,9 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
         {selected && (
           <Rect
             x={selectionMinX}
-            y={-32}
+            y={-36}
             width={selectionW}
-            height={88}
+            height={104}
             stroke="#3B82F6"
             strokeWidth={2}
             dash={[4, 4]}
@@ -103,22 +107,22 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
 
         <Rect
           x={minX}
-          y={-25}
+          y={-30}
           width={bodyW}
-          height={50}
-          fill={energized ? '#ECFDF5' : '#E5E7EB'}
-          stroke="#065F46"
-          strokeWidth={1.5}
-          cornerRadius={4}
+          height={bodyBottomY + 30}
+          fill={energized ? '#EFF6FF' : '#E5E7EB'}
+          stroke="#1E3A5F"
+          strokeWidth={2}
+          cornerRadius={3}
         />
 
         <Text
-          text={is4P ? '4P MCCB' : 'MCCB'}
-          x={minX + 2}
-          y={-22}
-          width={bodyW - 4}
-          fontSize={8}
-          fill="#065F46"
+          text={is4P ? '4P mMCCB' : 'mMCCB'}
+          x={minX + 4}
+          y={-26}
+          width={bodyW - 8}
+          fontSize={9}
+          fill="#1E3A5F"
           fontStyle="bold"
           align="center"
           listening={false}
@@ -132,7 +136,8 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
             width={8}
             height={12}
             fill={handleColor}
-            cornerRadius={2}
+            cornerRadius={1}
+            listening={false}
           />
         ))}
 
@@ -141,13 +146,26 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
             component.properties.tripCurve || 'C'
           }`}
           x={minX + 4}
-          y={2}
+          y={0}
           width={bodyW - 8}
           fontSize={7}
           fill="#4B5563"
           align="center"
           listening={false}
         />
+
+        {!bms && (
+          <Text
+            text="BMS: off"
+            x={minX + 4}
+            y={11}
+            width={bodyW - 8}
+            fontSize={7}
+            fill="#9CA3AF"
+            align="center"
+            listening={false}
+          />
+        )}
 
         {bms && (
           <>
@@ -161,21 +179,21 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
                       ? `BMS · ${proto.replace('modbus_', 'MB ').replace('bacnet_', 'BC ')}`
                       : 'BMS'
               }
-              x={minX + 2}
-              y={12}
-              width={bodyW - 4}
+              x={minX + 4}
+              y={20}
+              width={bodyW - 8}
               fontSize={6}
-              fill={ctrlBad ? '#C2410C' : '#047857'}
+              fill={ctrlBad ? '#C2410C' : '#6B21A8'}
               align="center"
               listening={false}
             />
             <Text
               text={`${kMot}/${kSt} · ${fuseRef} ${fuseA}A`}
-              x={minX + 2}
-              y={20}
-              width={bodyW - 4}
+              x={minX + 4}
+              y={28}
+              width={bodyW - 8}
               fontSize={5}
-              fill="#065F46"
+              fill="#4C1D95"
               align="center"
               listening={false}
             />
@@ -185,12 +203,12 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
         {poleXs.map((dx) => (
           <React.Fragment key={`lead-${dx}`}>
             <Line
-              points={[dx, -25, dx, -30]}
+              points={[dx, -30, dx, -36]}
               stroke="#374151"
               strokeWidth={2}
             />
             <Line
-              points={[dx, 25, dx, 30]}
+              points={[dx, bodyBottomY, dx, leadEndY]}
               stroke="#374151"
               strokeWidth={2}
             />
@@ -200,21 +218,22 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
         {isTripped && (
           <Circle
             x={0}
-            y={-16}
-            radius={3}
+            y={-8}
+            radius={4}
             fill="#EF4444"
-            opacity={flashVisible ? 1 : 0.3}
+            opacity={flashVisible ? 1 : 0.35}
+            listening={false}
           />
         )}
 
         <ComponentCanvasLabel
           componentId={component.id}
           label={component.label}
-          x={minX - 4}
-          y={36}
-          width={bodyW + 8}
+          x={minX - 6}
+          y={52}
+          width={bodyW + 12}
           fontSize={component.properties.labelFontSize ?? 7}
-                  offsetX={component.properties.labelOffsetX ?? 0}
+          offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />
 
@@ -224,7 +243,7 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
             <Line
               key={`cp-stub-${cp.id}`}
               points={[minX, cp.y, cp.x, cp.y]}
-              stroke="#14532D"
+              stroke="#3730A3"
               strokeWidth={1.2}
               lineCap="round"
               listening={false}
@@ -243,7 +262,7 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
               text={cp.label}
               fontSize={5.5}
               fontStyle="italic"
-              fill="#14532D"
+              fill="#3730A3"
               align="right"
               verticalAlign="middle"
               listening={false}

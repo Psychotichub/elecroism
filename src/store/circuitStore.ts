@@ -2075,7 +2075,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       ...base,
       components: base.components.map(ensureBreakerControlTerminals),
     };
-    const clonedCircuit = structuredClone(normalized);
+    const clonedCircuit = structuredClone(syncWireEndpoints(normalized));
     const result = engine.simulate(clonedCircuit, 0, Date.now());
     set({
       circuit: clonedCircuit,
@@ -2201,7 +2201,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       wires,
     };
     set({
-      circuit: refreshAutoWireNumbers(normalized),
+      circuit: refreshAutoWireNumbers(syncWireEndpoints(normalized)),
       selectedId: null,
       wireGripVertexIndex: null,
       bmsSimLog: [],

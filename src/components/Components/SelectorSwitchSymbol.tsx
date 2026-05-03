@@ -1,8 +1,10 @@
 import React from 'react';
-import { Group, Circle, Line, Rect, Text } from 'react-konva';
+import { Group, Circle, Line, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import { ConnectionPointDots, SelectionFrame } from './SymbolPrimitives';
+import { SymbolColors, SymbolMetrics } from './SymbolTokens';
 
 interface Props {
   component: CircuitComponent;
@@ -31,7 +33,6 @@ const SelectorSwitchSymbol: React.FC<Props> = ({
   showConnectionPoints,
   selected,
 }) => {
-  const OUTLINE = 1.6;
   const energized = nodeResult?.energized || false;
   const position = component.properties.selectorPosition ?? 'OFF';
   const pointerAngle =
@@ -61,16 +62,7 @@ const SelectorSwitchSymbol: React.FC<Props> = ({
     >
       <ScaledSymbolInner component={component}>
         {selected && (
-          <Rect
-            x={-24}
-            y={-28}
-            width={48}
-            height={56}
-            stroke="#3B82F6"
-            strokeWidth={2}
-            dash={[4, 4]}
-            cornerRadius={6}
-          />
+          <SelectionFrame x={-24} y={-28} width={48} height={56} />
         )}
 
         <Circle
@@ -87,9 +79,9 @@ const SelectorSwitchSymbol: React.FC<Props> = ({
               : [0, '#F8FAFC', 1, dialFill]
           }
           stroke={dialStroke}
-          strokeWidth={OUTLINE}
-          shadowColor={energized ? '#F59E0B' : undefined}
-          shadowBlur={energized ? 6 : 0}
+          strokeWidth={SymbolMetrics.stroke}
+          shadowColor={energized ? SymbolColors.live : undefined}
+          shadowBlur={energized ? 4 : 0}
         />
         <Circle
           x={0}
@@ -108,7 +100,13 @@ const SelectorSwitchSymbol: React.FC<Props> = ({
           lineCap="round"
         />
         <Circle x={0} y={0} radius={2.2} fill={dialStroke} />
-        <Circle x={0} y={0} radius={1.1} fill="#E5E7EB" listening={false} />
+        <Circle
+          x={0}
+          y={0}
+          radius={1.1}
+          fill={SymbolColors.faceplate}
+          listening={false}
+        />
 
         <Text
           text="OFF"
@@ -118,7 +116,9 @@ const SelectorSwitchSymbol: React.FC<Props> = ({
           align="center"
           fontSize={7}
           fontStyle="bold"
-          fill={position === 'OFF' ? '#111827' : '#6B7280'}
+          fill={
+            position === 'OFF' ? SymbolColors.label : SymbolColors.labelMuted
+          }
           listening={false}
         />
         <Text
@@ -129,7 +129,7 @@ const SelectorSwitchSymbol: React.FC<Props> = ({
           align="left"
           fontSize={7}
           fontStyle="bold"
-          fill={position === 'AUTO' ? '#16A34A' : '#6B7280'}
+          fill={position === 'AUTO' ? SymbolColors.on : SymbolColors.labelMuted}
           listening={false}
         />
         <Text
@@ -140,23 +140,25 @@ const SelectorSwitchSymbol: React.FC<Props> = ({
           align="right"
           fontSize={7}
           fontStyle="bold"
-          fill={position === 'MANUAL' ? '#0EA5E9' : '#6B7280'}
+          fill={
+            position === 'MANUAL' ? SymbolColors.comm : SymbolColors.labelMuted
+          }
           listening={false}
         />
 
         <Line
           points={[0, -16, 0, -22]}
-          stroke="#374151"
+          stroke={SymbolColors.bodyStroke}
           strokeWidth={2}
         />
         <Line
           points={[-16, 22, -16, 14]}
-          stroke="#374151"
+          stroke={SymbolColors.bodyStroke}
           strokeWidth={2}
         />
         <Line
           points={[16, 22, 16, 14]}
-          stroke="#374151"
+          stroke={SymbolColors.bodyStroke}
           strokeWidth={2}
         />
 
@@ -171,32 +173,9 @@ const SelectorSwitchSymbol: React.FC<Props> = ({
           offsetY={component.properties.labelOffsetY ?? 0}
         />
 
-        {showConnectionPoints &&
-          component.connectionPoints.map((cp) => (
-            <Circle
-              key={cp.id}
-              x={cp.x}
-              y={cp.y}
-            radius={4.5}
-              fill="#3B82F6"
-            opacity={0.7}
-              stroke="#2563EB"
-            strokeWidth={1.2}
-            />
-          ))}
-        {component.connectionPoints.map((cp) => (
-          <Text
-            key={`${cp.id}-term-label`}
-            text={cp.label}
-            x={cp.x - 14}
-            y={cp.y + 7}
-            width={28}
-            fontSize={6}
-            fill="#374151"
-            align="center"
-            listening={false}
-          />
-        ))}
+        {showConnectionPoints && (
+          <ConnectionPointDots connectionPoints={component.connectionPoints} />
+        )}
       </ScaledSymbolInner>
     </Group>
   );

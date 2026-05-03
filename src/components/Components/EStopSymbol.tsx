@@ -3,18 +3,20 @@ import { Group, Circle, Line, Rect, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import { ConnectionPointDots, SelectionFrame } from './SymbolPrimitives';
+import { SymbolColors, SymbolMetrics } from './SymbolTokens';
 
 interface Props {
   component: CircuitComponent;
   nodeResult?: NodeResult;
   onSelect: () => void;
   onDragEnd: (x: number, y: number) => void;
-  /** Single click latches/unlatches the mushroom head (state toggles). */
   onToggle?: () => void;
   showConnectionPoints: boolean;
   selected: boolean;
 }
 
+/** IEC-style e-stop: yellow base, red mushroom; `state === 'off'` = latched pressed. */
 const EStopSymbol: React.FC<Props> = ({
   component,
   nodeResult,
@@ -24,12 +26,10 @@ const EStopSymbol: React.FC<Props> = ({
   showConnectionPoints,
   selected,
 }) => {
-  // state === 'on' means the NC contact is closed (head NOT pressed).
-  // state === 'off' means latched / pressed → IN-OUT path is open.
   const pressed = component.state === 'off';
   const energized = nodeResult?.energized || false;
 
-  const headFill = pressed ? '#7F1D1D' : '#DC2626';
+  const headFill = pressed ? SymbolColors.tripDark : SymbolColors.trip;
   const headStroke = pressed ? '#450A0A' : '#7F1D1D';
   const placardFill = '#FACC15';
 
@@ -51,16 +51,7 @@ const EStopSymbol: React.FC<Props> = ({
     >
       <ScaledSymbolInner component={component}>
         {selected && (
-          <Rect
-            x={-22}
-            y={-26}
-            width={44}
-            height={52}
-            stroke="#3B82F6"
-            strokeWidth={2}
-            dash={[4, 4]}
-            cornerRadius={6}
-          />
+          <SelectionFrame x={-22} y={-26} width={44} height={52} />
         )}
 
         <Rect
@@ -70,8 +61,9 @@ const EStopSymbol: React.FC<Props> = ({
           height={44}
           fill={placardFill}
           stroke="#A16207"
-          strokeWidth={1.5}
+          strokeWidth={SymbolMetrics.stroke}
           cornerRadius={6}
+          listening={false}
         />
 
         <Circle
@@ -81,9 +73,9 @@ const EStopSymbol: React.FC<Props> = ({
           fill={headFill}
           stroke={headStroke}
           strokeWidth={2}
-          shadowColor={energized ? '#22C55E' : '#000'}
-          shadowBlur={energized ? 4 : 2}
-          shadowOpacity={pressed ? 0.4 : 0.25}
+          shadowColor={energized ? SymbolColors.on : '#000'}
+          shadowBlur={energized ? 3 : 2}
+          shadowOpacity={pressed ? 0.35 : 0.2}
         />
         <Circle
           x={-4}
@@ -102,20 +94,12 @@ const EStopSymbol: React.FC<Props> = ({
           align="center"
           fontSize={7}
           fontStyle="bold"
-          fill="#7F1D1D"
+          fill={SymbolColors.tripDark}
           listening={false}
         />
 
-        <Line
-          points={[0, -22, 0, -26]}
-          stroke="#374151"
-          strokeWidth={2}
-        />
-        <Line
-          points={[0, 22, 0, 26]}
-          stroke="#374151"
-          strokeWidth={2}
-        />
+        <Line points={[0, -22, 0, -26]} stroke={SymbolColors.bodyStroke} strokeWidth={2} />
+        <Line points={[0, 22, 0, 26]} stroke={SymbolColors.bodyStroke} strokeWidth={2} />
 
         {pressed && (
           <Text
@@ -126,7 +110,7 @@ const EStopSymbol: React.FC<Props> = ({
             align="center"
             fontSize={7}
             fontStyle="bold"
-            fill="#B91C1C"
+            fill={SymbolColors.trip}
             listening={false}
           />
         )}
@@ -138,36 +122,13 @@ const EStopSymbol: React.FC<Props> = ({
           y={30}
           width={60}
           fontSize={component.properties.labelFontSize ?? 8}
-                  offsetX={component.properties.labelOffsetX ?? 0}
+          offsetX={component.properties.labelOffsetX ?? 0}
           offsetY={component.properties.labelOffsetY ?? 0}
         />
 
-        {showConnectionPoints &&
-          component.connectionPoints.map((cp) => (
-            <Circle
-              key={cp.id}
-              x={cp.x}
-              y={cp.y}
-              radius={5}
-              fill="#3B82F6"
-              opacity={0.6}
-              stroke="#2563EB"
-              strokeWidth={1}
-            />
-          ))}
-        {component.connectionPoints.map((cp) => (
-          <Text
-            key={`${cp.id}-term-label`}
-            text={cp.label}
-            x={cp.x - 14}
-            y={cp.y + 7}
-            width={28}
-            fontSize={6}
-            fill="#374151"
-            align="center"
-            listening={false}
-          />
-        ))}
+        {showConnectionPoints && (
+          <ConnectionPointDots connectionPoints={component.connectionPoints} />
+        )}
       </ScaledSymbolInner>
     </Group>
   );

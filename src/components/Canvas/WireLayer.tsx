@@ -174,32 +174,32 @@ const WireLayer: React.FC<Props> = ({
         <>
           <Line
             points={[
-              cursorPos.x - 5,
+              cursorPos.x - 2.5,
               cursorPos.y,
-              cursorPos.x + 5,
+              cursorPos.x + 2.5,
               cursorPos.y,
             ]}
             stroke="#FBBF24"
-            strokeWidth={1.25}
+            strokeWidth={0.65}
             listening={false}
           />
           <Line
             points={[
               cursorPos.x,
-              cursorPos.y - 5,
+              cursorPos.y - 2.5,
               cursorPos.x,
-              cursorPos.y + 5,
+              cursorPos.y + 2.5,
             ]}
             stroke="#FBBF24"
-            strokeWidth={1.25}
+            strokeWidth={0.65}
             listening={false}
           />
           {wireSnapHud.label ? (
             <Text
-              x={cursorPos.x + 8}
-              y={cursorPos.y - 14}
+              x={cursorPos.x + 4}
+              y={cursorPos.y - 7}
               text={wireSnapHud.label}
-              fontSize={9}
+              fontSize={4.5}
               fontStyle="bold"
               fill="#EAB308"
               listening={false}
@@ -209,10 +209,10 @@ const WireLayer: React.FC<Props> = ({
       ) : null}
       {wireTypeTag && cursorPos ? (
         <Text
-          x={cursorPos.x + 8}
-          y={cursorPos.y + 10}
+          x={cursorPos.x + 4}
+          y={cursorPos.y + 5}
           text={wireTypeTag}
-          fontSize={8}
+          fontSize={4}
           fill="#93C5FD"
           fontStyle="bold"
           listening={false}
@@ -220,11 +220,11 @@ const WireLayer: React.FC<Props> = ({
       ) : null}
       {wireRuleMessage && cursorPos ? (
         <Text
-          x={cursorPos.x + 8}
-          y={cursorPos.y + 24}
-          width={220}
+          x={cursorPos.x + 4}
+          y={cursorPos.y + 12}
+          width={110}
           text={wireRuleMessage}
-          fontSize={7}
+          fontSize={3.5}
           fill={
             wireTerminalPreview?.kind === 'invalid'
               ? '#FCA5A5'

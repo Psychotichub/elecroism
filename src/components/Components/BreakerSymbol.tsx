@@ -1,8 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Group, Rect, Text, Line, Circle } from 'react-konva';
+import { Circle, Group, Line, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 import ScaledSymbolInner from './ScaledSymbolInner';
+import {
+  BreakerHandle,
+  ConnectionPointDots,
+  DeviceBody,
+  DinRailClip,
+  RatingStrip,
+  SelectionFrame,
+  TerminalPocket,
+  TripFlag,
+} from './SymbolPrimitives';
+import { SymbolColors, SymbolMetrics } from './SymbolTokens';
 
 interface Props {
   component: CircuitComponent;
@@ -25,22 +36,16 @@ const BreakerSymbol: React.FC<Props> = ({
   showConnectionPoints,
   selected,
 }) => {
-  const OUTLINE = 1.6;
-  const DETAIL = 0.9;
   const [flashVisible, setFlashVisible] = useState(true);
   const isTripped = component.state === 'tripped';
   const isOn = component.state === 'on';
   const energized = nodeResult?.energized || false;
-  const isRcdLike =
-    component.type === 'rcd' ||
-    component.type === 'residual_current_circuit_breaker';
   const poles = component.properties.poles ?? 2;
-  const poleXs =
-    isRcdLike && poles >= 4 ? [-24, -8, 8, 24] : isRcdLike ? [-14, 14] : [0];
-  const bodyWidth = isRcdLike && poles >= 4 ? 76 : 50;
+  const poleXs = poles >= 4 ? [-30, -10, 10, 30] : [-10, 10];
+  const bodyWidth = poles >= 4 ? 68 : 40;
   const bodyX = -bodyWidth / 2;
-  const selWidth = bodyWidth + 8;
-  const selX = -selWidth / 2;
+  const bodyY = -26;
+  const bodyH = 52;
 
   useEffect(() => {
     if (!isTripped) return;
@@ -48,21 +53,12 @@ const BreakerSymbol: React.FC<Props> = ({
     return () => clearInterval(interval);
   }, [isTripped]);
 
-  const handleColor = isTripped
-    ? flashVisible
-      ? '#EF4444'
-      : '#7F1D1D'
-    : isOn
-    ? '#22C55E'
-    : '#9CA3AF';
+  const handleState = isTripped ? 'tripped' : isOn ? 'on' : 'off';
   const title =
-    component.type === 'residual_current_circuit_breaker'
-      ? 'RCCB'
-      : component.type === 'rcd'
-        ? 'RCD'
-        : 'BRK';
+    component.type === 'residual_current_circuit_breaker' ? 'RCCB' : 'RCD';
   const rcdType = component.properties.rcdType ?? 'A';
   const rcdTripMs = component.properties.rcdTripTimeMs ?? 30;
+  const sens = component.properties.rcdSensitivity ?? 30;
 
   return (
     <Group
@@ -85,180 +81,121 @@ const BreakerSymbol: React.FC<Props> = ({
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
     >
       <ScaledSymbolInner component={component}>
-      {selected && (
-        <Rect
-          x={selX}
-          y={-30}
-          width={selWidth}
-          height={60}
-          stroke="#3B82F6"
-          strokeWidth={2}
-          dash={[4, 4]}
-          cornerRadius={4}
+        {selected && (
+          <SelectionFrame
+            x={bodyX - 4}
+            y={-32}
+            width={bodyWidth + 8}
+            height={72}
+          />
+        )}
+
+        <DeviceBody
+          x={bodyX}
+          y={bodyY}
+          width={bodyWidth}
+          height={bodyH}
+          energized={energized}
         />
-      )}
 
-      <Rect
-        x={bodyX}
-        y={-26}
-        width={bodyWidth}
-        height={52}
-        fillLinearGradientStartPoint={{ x: 0, y: -26 }}
-        fillLinearGradientEndPoint={{ x: 0, y: 26 }}
-        fillLinearGradientColorStops={
-          energized
-            ? [0, '#F8FAFC', 0.55, '#E5E7EB', 1, '#CBD5E1']
-            : [0, '#E5E7EB', 1, '#CBD5E1']
-        }
-        stroke="#374151"
-        strokeWidth={OUTLINE}
-        cornerRadius={3}
-        shadowColor="#0F172A"
-        shadowBlur={4}
-        shadowOpacity={0.22}
-        shadowOffsetY={1.2}
-      />
-      <Rect
-        x={bodyX + 2}
-        y={-24}
-        width={bodyWidth - 4}
-        height={48}
-        fill="#FFFFFF"
-        opacity={0.14}
-        cornerRadius={2}
-        listening={false}
-      />
+        {poleXs.map((x, i) => (
+          <React.Fragment key={`rcd-${x}`}>
+            <TerminalPocket
+              x={x}
+              y={-27}
+              leadToY={-25}
+              label={String(i * 2 + 1)}
+              labelY={-46}
+            />
+            <TerminalPocket
+              x={x}
+              y={27}
+              leadToY={25}
+              label={String(i * 2 + 2)}
+              labelY={36}
+            />
+            <BreakerHandle
+              x={x}
+              y={-16}
+              width={7}
+              height={13}
+              state={handleState}
+              flashVisible={flashVisible}
+            />
+          </React.Fragment>
+        ))}
 
-      {poleXs.map((x) => (
-        <React.Fragment key={`term-${x}`}>
-          <Rect
-            x={x - 3}
-            y={-30}
-            width={6}
-            height={6}
-            fill="#D1D5DB"
-            stroke="#6B7280"
-            strokeWidth={DETAIL}
-            cornerRadius={1.2}
+        {poleXs.length > 1 && (
+          <Line
+            points={[poleXs[0], -14, poleXs[poleXs.length - 1], -14]}
+            stroke="#475569"
+            strokeWidth={1}
+            opacity={0.4}
+            lineCap="round"
             listening={false}
           />
-          <Rect
-            x={x - 3}
-            y={24}
-            width={6}
-            height={6}
-            fill="#D1D5DB"
-            stroke="#6B7280"
-            strokeWidth={DETAIL}
-            cornerRadius={1.2}
+        )}
+
+        <RatingStrip
+          x={bodyX + 5}
+          y={6}
+          width={bodyWidth - 10}
+          title={title}
+          rating={`${sens} mA`}
+          detail={`Type ${rcdType} · ${rcdTripMs} ms`}
+        />
+
+        <DinRailClip x={bodyX + 8} y={27} width={bodyWidth - 16} />
+
+        {energized && (
+          <Line
+            points={[bodyX + 4, -22, bodyX + bodyWidth - 4, -22]}
+            stroke={SymbolColors.live}
+            strokeWidth={2}
+            opacity={0.32}
+            lineCap="round"
             listening={false}
           />
-          <Circle x={x} y={-27} radius={1.15} fill="#6B7280" listening={false} />
-          <Circle x={x} y={27} radius={1.15} fill="#6B7280" listening={false} />
-          <Line points={[x, -26, x, -30]} stroke="#374151" strokeWidth={1.7} />
-          <Line points={[x, 26, x, 30]} stroke="#374151" strokeWidth={1.7} />
-        </React.Fragment>
-      ))}
+        )}
 
-      <Rect
-        x={-5}
-        y={-23}
-        width={10}
-        height={14}
-        fill={handleColor}
-        cornerRadius={2}
-      />
-      <Rect
-        x={-4}
-        y={-22}
-        width={8}
-        height={3}
-        fill="#F8FAFC"
-        opacity={0.28}
-        cornerRadius={1}
-        listening={false}
-      />
-      <Line
-        points={[-3, -16, 3, -16]}
-        stroke="#111827"
-        opacity={0.35}
-        strokeWidth={1}
-        listening={false}
-      />
+        <TripFlag
+          x={bodyX + 10}
+          y={-22}
+          visible={isTripped}
+          flashVisible={flashVisible}
+        />
 
-      <Text
-        text={title}
-        x={-10}
-        y={-5}
-        fontSize={9}
-        fill="#374151"
-        fontStyle="bold"
-        listening={false}
-      />
-
-      <Text
-        text={`${component.properties.rcdSensitivity || 30}mA`}
-        x={-12}
-        y={6}
-        fontSize={7}
-        fill="#6B7280"
-        listening={false}
-      />
-      {(component.type === 'rcd' ||
-        component.type === 'residual_current_circuit_breaker') && (
+        <Circle
+          x={0}
+          y={18}
+          radius={4}
+          fill={SymbolColors.recess}
+          stroke={SymbolColors.terminalDark}
+          strokeWidth={SymbolMetrics.detailStroke}
+        />
         <Text
-          text={`T${rcdType} ${rcdTripMs}ms`}
-          x={-15}
-          y={13}
-          width={30}
-          align="center"
+          text="T"
+          x={-3}
+          y={14}
           fontSize={6}
-          fill="#4B5563"
+          fill={SymbolColors.labelMuted}
           listening={false}
         />
-      )}
 
-      <Circle
-        x={0}
-        y={18}
-        radius={4}
-        fill="#D1D5DB"
-        stroke="#9CA3AF"
-        strokeWidth={1}
-      />
-      <Text
-        text="T"
-        x={-3}
-        y={14}
-        fontSize={6}
-        fill="#6B7280"
-        listening={false}
-      />
-
-      <ComponentCanvasLabel
+        <ComponentCanvasLabel
           componentId={component.id}
-        label={component.label}
-        x={-26}
-        y={34}
-        width={52}
-        fontSize={component.properties.labelFontSize ?? 7}
-        offsetX={component.properties.labelOffsetX ?? 0}
-        offsetY={component.properties.labelOffsetY ?? 0}
-      />
+          label={component.label}
+          x={bodyX - 6}
+          y={34}
+          width={bodyWidth + 12}
+          fontSize={component.properties.labelFontSize ?? 7}
+          offsetX={component.properties.labelOffsetX ?? 0}
+          offsetY={component.properties.labelOffsetY ?? 0}
+        />
 
-      {showConnectionPoints &&
-        component.connectionPoints.map((cp) => (
-          <Circle
-            key={cp.id}
-            x={cp.x}
-            y={cp.y}
-            radius={4.5}
-            fill="#3B82F6"
-            opacity={0.7}
-            stroke="#2563EB"
-            strokeWidth={1.2}
-          />
-        ))}
+        {showConnectionPoints && (
+          <ConnectionPointDots connectionPoints={component.connectionPoints} />
+        )}
       </ScaledSymbolInner>
     </Group>
   );

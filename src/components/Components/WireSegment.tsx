@@ -37,7 +37,7 @@ const WireSegment: React.FC<Props> = ({
     wire.labelVisible !== false &&
     labelText.length > 0 &&
     labelLayout !== null &&
-    labelLayout.length > 8;
+    labelLayout.length > 4;
 
   const pickWorld = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
@@ -168,21 +168,21 @@ const WireSegment: React.FC<Props> = ({
           listening={false}
         >
           <Rect
-            x={-Math.min(52, 6 + labelText.length * 5.5) / 2}
-            y={-8}
-            width={Math.min(52, 6 + labelText.length * 5.5)}
-            height={16}
-            cornerRadius={3}
+            x={-Math.min(26, 3 + labelText.length * 2.75) / 2}
+            y={-4}
+            width={Math.min(26, 3 + labelText.length * 2.75)}
+            height={8}
+            cornerRadius={1.5}
             fill="rgba(15,23,42,0.78)"
             stroke="rgba(148,163,184,0.5)"
             strokeWidth={0.35}
           />
           <Text
-            x={-Math.min(48, 4 + labelText.length * 5.5) / 2}
-            y={-6}
-            width={Math.min(48, 4 + labelText.length * 5.5)}
+            x={-Math.min(24, 2 + labelText.length * 2.75) / 2}
+            y={-3}
+            width={Math.min(24, 2 + labelText.length * 2.75)}
             text={labelText}
-            fontSize={8}
+            fontSize={4}
             fontStyle="bold"
             fill="#F8FAFC"
             align="center"

@@ -409,6 +409,7 @@ const ControlSymbol: React.FC<Props> = ({
       })}
 
       {component.connectionPoints.map((cp) => {
+        if (coilTerminalTag(cp.label)) return null;
         const upper = cp.label.toUpperCase();
         // Timer face already renders dedicated IEC+functional labels for these.
         if (isTimer && (upper === 'COM' || upper === 'NO' || upper === 'NC')) {

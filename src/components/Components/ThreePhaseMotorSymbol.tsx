@@ -1,8 +1,16 @@
 import React, { useEffect, useRef } from 'react';
-import { Group, Circle, Line, Text } from 'react-konva';
+import { Group, Circle, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import Konva from 'konva';
 import ScaledSymbolInner from './ScaledSymbolInner';
+import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import {
+  ConnectionPointDots,
+  DeviceBody,
+  SelectionFrame,
+  TerminalPocket,
+} from './SymbolPrimitives';
+import { SymbolColors } from './SymbolTokens';
 
 interface Props {
   component: CircuitComponent;
@@ -39,7 +47,7 @@ const ThreePhaseMotorSymbol: React.FC<Props> = ({
   }, [energized, isFault]);
 
   const fill = isFault ? '#FECACA' : energized ? '#4ADE80' : '#E5E7EB';
-  const stroke = isFault ? '#DC2626' : '#374151';
+  const stroke = isFault ? SymbolColors.trip : SymbolColors.bodyStroke;
 
   return (
     <Group
@@ -54,87 +62,106 @@ const ThreePhaseMotorSymbol: React.FC<Props> = ({
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
     >
       <ScaledSymbolInner component={component}>
-      {selected && (
+        {selected && (
+          <SelectionFrame x={-26} y={-28} width={56} height={58} />
+        )}
+
+        <DeviceBody
+          x={-22}
+          y={-24}
+          width={44}
+          height={48}
+          cornerRadius={18}
+          energized={energized && !isFault}
+        />
+
+        <TerminalPocket
+          x={-20}
+          y={-19}
+          leadToY={-22}
+          label="L1"
+          labelY={-28}
+        />
+        <TerminalPocket
+          x={0}
+          y={-19}
+          leadToY={-22}
+          label="L2"
+          labelY={-28}
+        />
+        <TerminalPocket
+          x={20}
+          y={-19}
+          leadToY={-22}
+          label="L3"
+          labelY={-28}
+        />
+        <TerminalPocket
+          x={0}
+          y={19}
+          leadToY={22}
+          label="N"
+          labelY={28}
+        />
+
         <Circle
           x={0}
           y={0}
-          radius={26}
-          stroke="#3B82F6"
-          strokeWidth={2}
-          dash={[4, 4]}
+          radius={18}
+          fill={fill}
+          stroke={stroke}
+          strokeWidth={isFault ? 2 : 1.5}
+          shadowColor={energized && !isFault ? '#22C55E' : undefined}
+          shadowBlur={energized && !isFault ? 6 : 0}
         />
-      )}
 
-      <Circle
-        x={0}
-        y={0}
-        radius={18}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth={isFault ? 2 : 1.5}
-        shadowColor={energized && !isFault ? '#22C55E' : undefined}
-        shadowBlur={energized && !isFault ? 8 : 0}
-      />
-
-      <Group ref={rotorRef}>
-        <Text
-          text="M3"
-          x={-10}
-          y={-7}
-          fontSize={12}
-          fill="#374151"
-          fontStyle="bold"
-          listening={false}
-        />
-      </Group>
-
-      <Line points={[-20, -12, -20, -22]} stroke="#7C3F19" strokeWidth={1.5} />
-      <Line points={[0, -18, 0, -22]} stroke="#111827" strokeWidth={1.5} />
-      <Line points={[20, -12, 20, -22]} stroke="#4B5563" strokeWidth={1.5} />
-      <Line points={[0, 18, 0, 22]} stroke="#2563EB" strokeWidth={1.5} />
-
-      <Text
-        text={component.label}
-        x={22}
-        y={-8}
-        fontSize={9}
-        fill="#6B7280"
-        listening={false}
-      />
-      <Text
-        text={`${component.properties.powerWatts || 0}W`}
-        x={22}
-        y={4}
-        fontSize={8}
-        fill="#9CA3AF"
-        listening={false}
-      />
-
-      {isFault && (
-        <Text
-          text="OL"
-          x={-8}
-          y={8}
-          fontSize={8}
-          fill="#B91C1C"
-          fontStyle="bold"
-          listening={false}
-        />
-      )}
-
-      {showConnectionPoints &&
-        component.connectionPoints.map((cp) => (
-          <Circle
-            key={cp.id}
-            x={cp.x}
-            y={cp.y}
-            radius={5}
-            fill="#3B82F6"
-            opacity={0.6}
-            stroke="#2563EB"
-            strokeWidth={1}
+        <Group ref={rotorRef}>
+          <Text
+            text="M3"
+            x={-10}
+            y={-7}
+            fontSize={12}
+            fill={SymbolColors.bodyStroke}
+            fontStyle="bold"
+            listening={false}
           />
-        ))}
+        </Group>
+
+        <ComponentCanvasLabel
+          componentId={component.id}
+          label={component.label}
+          x={22}
+          y={-8}
+          width={96}
+          fontSize={component.properties.labelFontSize ?? 9}
+          fill={SymbolColors.labelMuted}
+          offsetX={component.properties.labelOffsetX ?? 0}
+          offsetY={component.properties.labelOffsetY ?? 0}
+        />
+        <Text
+          text={`${component.properties.powerWatts || 0}W`}
+          x={22}
+          y={4}
+          fontSize={8}
+          fill={SymbolColors.labelMuted}
+          listening={false}
+        />
+
+        {isFault && (
+          <Text
+            text="OL"
+            x={-8}
+            y={8}
+            fontSize={8}
+            fill={SymbolColors.tripDark}
+            fontStyle="bold"
+            listening={false}
+          />
+        )}
+
+        {showConnectionPoints && (
+          <ConnectionPointDots connectionPoints={component.connectionPoints} />
+        )}
       </ScaledSymbolInner>
     </Group>
   );

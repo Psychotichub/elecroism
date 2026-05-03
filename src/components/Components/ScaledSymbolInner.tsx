@@ -16,10 +16,10 @@ const ScaledSymbolInner: React.FC<Props> = ({ component, children }) => {
       scaleX={s}
       scaleY={s}
       shadowColor="#0B1220"
-      shadowBlur={6}
-      shadowOpacity={0.22}
+      shadowBlur={4}
+      shadowOpacity={0.14}
       shadowOffsetX={0}
-      shadowOffsetY={2}
+      shadowOffsetY={1}
     >
       {children}
     </Group>

@@ -107,19 +107,6 @@ const AuxContactBlockSymbol: React.FC<Props> = ({
               strokeWidth={1}
             />
           ))}
-        {component.connectionPoints.map((cp) => (
-          <Text
-            key={`${cp.id}-term-label`}
-            text={cp.label}
-            x={cp.x - 14}
-            y={cp.y + 7}
-            width={28}
-            fontSize={6}
-            fill="#374151"
-            align="center"
-            listening={false}
-          />
-        ))}
       </ScaledSymbolInner>
     </Group>
   );
