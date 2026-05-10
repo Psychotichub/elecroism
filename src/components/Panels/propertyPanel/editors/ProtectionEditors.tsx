@@ -1,4 +1,3 @@
-﻿import React from 'react';
 import { usePPCtx } from '../PropertyPanelContext';
 import { Label } from '../PropertyPanelLabel';
 

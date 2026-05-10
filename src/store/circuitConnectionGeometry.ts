@@ -26,6 +26,9 @@ export type CreateConnectionPointsOptions = {
   mcbPoles?: 1 | 2;
   /** RCD / RCCB: 2P (1–4) or 4P (1–8). */
   rcdPoles?: 2 | 4;
+  /** Busbar taps split around center (left + right). */
+  busbarLeftCount?: number;
+  busbarRightCount?: number;
 };
 
 function createMcbConnectionPoints(
@@ -44,6 +47,31 @@ function createMcbConnectionPoints(
     { id: uuid(), componentId, x: 0, y: -25, label: '1' },
     { id: uuid(), componentId, x: 0, y: 25, label: '2' },
   ];
+}
+
+function createBusbarConnectionPoints(
+  componentId: string,
+  leftCount: number,
+  rightCount: number
+): ConnectionPoint[] {
+  const l = Math.max(1, Math.min(40, Math.floor(leftCount)));
+  const r = Math.max(1, Math.min(40, Math.floor(rightCount)));
+  const pitch = 20;
+  const left = Array.from({ length: l }, (_, i) => ({
+    id: uuid(),
+    componentId,
+    x: -(i + 0.5) * pitch,
+    y: 0,
+    label: `TAP_L${i + 1}`,
+  }));
+  const right = Array.from({ length: r }, (_, i) => ({
+    id: uuid(),
+    componentId,
+    x: (i + 0.5) * pitch,
+    y: 0,
+    label: `TAP_R${i + 1}`,
+  }));
+  return [...left.reverse(), ...right];
 }
 
 function syncWireEndpoints(circuit: Circuit): Circuit {
@@ -737,13 +765,11 @@ function createConnectionPoints(
     case 'busbar_system':
     case 'neutral_bar_system':
     case 'earth_bar_grounding_system':
-      return Array.from({ length: 6 }, (_, i) => ({
-        id: uuid(),
+      return createBusbarConnectionPoints(
         componentId,
-        x: -50 + i * 20,
-        y: 0,
-        label: `TAP_${i + 1}`,
-      }));
+        options?.busbarLeftCount ?? 3,
+        options?.busbarRightCount ?? 3
+      );
     case 'terminal_block':
       return [
         { id: uuid(), componentId, x: 0, y: -20, label: '1' },

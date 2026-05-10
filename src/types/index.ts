@@ -281,6 +281,8 @@ export interface ComponentProperties {
   /** Optional conductor size hint on some devices (mm²). */
   crossSection?: number;
   wireColor?: WireColor;
+  busbarLeftCount?: number;
+  busbarRightCount?: number;
 
   phaseSystem?: PhaseSystem;
   phaseVoltage?: number;

@@ -78,7 +78,11 @@ export const TypeSpecificProps: React.FC = () => {
     case 'ms_gi_sheet_enclosure':
     case 'ip_rated_enclosure':
     case 'power_quality_analyzer': return <MeteringEditors.renderPowerAuxProps />;
-    case 'terminal_block': return <TerminalBlockEditors.renderTerminalBlockProps />;
+    case 'terminal_block': return <TerminalBlockEditors.RenderTerminalBlockProps />;
+    case 'busbar':
+    case 'busbar_system':
+    case 'neutral_bar_system':
+    case 'earth_bar_grounding_system': return <TerminalBlockEditors.RenderBusbarProps />;
     case 'three_phase_source': return <SourceEditors.renderThreePhaseSourceProps />;
     case 'three_phase_motor': return <ThreePhaseEditors.renderThreePhaseMotorProps />;
     case 'three_phase_contactor':

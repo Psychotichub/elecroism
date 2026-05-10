@@ -23,6 +23,7 @@ import {
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import type { ToolMode } from '../../types';
+import ExamplesDropdown from './ExamplesDropdown';
 
 interface ToolbarToolBtnProps {
   icon: React.ReactNode;
@@ -299,6 +300,7 @@ const Toolbar: React.FC = () => {
         shortcut="Ctrl+O"
         inactiveClassName={toolBtnInactive}
       />
+      <ExamplesDropdown inactiveClassName={toolBtnInactive} />
       <ToolbarToolBtn
         icon={<FiSave />}
         label="Save"

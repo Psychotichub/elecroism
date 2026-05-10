@@ -81,6 +81,12 @@ import {
 import { createComponentActions } from './slices/componentActions';
 import { createBmsActions } from './slices/bmsActions';
 
+/**
+ * Maximum number of undo/redo snapshots retained. Each entry stores a
+ * structuredClone of the full circuit + BMS log, so this bounds peak memory.
+ */
+const MAX_HISTORY_SIZE = 50;
+
 /** Merge label-inferred stroke metadata with sticky wire-tool defaults. */
 function resolvedWireStrokeForNewConnection(
   draft: {
@@ -1663,10 +1669,8 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const newIndex = historyIndex - 1;
     const entry = history[newIndex];
     set({
-      circuit: JSON.parse(JSON.stringify(entry.circuit)),
-      bmsSimLog: JSON.parse(
-        JSON.stringify(entry.bmsSimLog ?? [])
-      ),
+      circuit: structuredClone(entry.circuit),
+      bmsSimLog: structuredClone(entry.bmsSimLog ?? []),
       historyIndex: newIndex,
       wireGripVertexIndex: null,
     });
@@ -1679,34 +1683,49 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const newIndex = historyIndex + 1;
     const entry = history[newIndex];
     set({
-      circuit: JSON.parse(JSON.stringify(entry.circuit)),
-      bmsSimLog: JSON.parse(
-        JSON.stringify(entry.bmsSimLog ?? [])
-      ),
+      circuit: structuredClone(entry.circuit),
+      bmsSimLog: structuredClone(entry.bmsSimLog ?? []),
       historyIndex: newIndex,
       wireGripVertexIndex: null,
     });
     get().runSimulation();
   },
 
-  pushHistory: (description) => {
-    const circuit = JSON.parse(JSON.stringify(get().circuit));
-    const bmsSimLog = JSON.parse(JSON.stringify(get().bmsSimLog));
-    set((state) => {
-      const trimmed = state.history.slice(
-        0,
-        state.historyIndex + 1
-      );
-      const newHistory = [
-        ...trimmed,
-        { circuit, description, bmsSimLog },
-      ].slice(-50);
-      return {
-        history: newHistory,
-        historyIndex: newHistory.length - 1,
-      };
-    });
-  },
+  pushHistory: (() => {
+    /**
+     * Debounce guard: skip duplicate pushes of the same description within
+     * 80 ms. This prevents rapid-fire duplicate entries from mouse operations
+     * (e.g. drag-move calls pushHistory on every pointer-up, and double-clicks
+     * can fire two "Toggled X" pushes within a single animation frame).
+     */
+    let lastDesc = '';
+    let lastTs = 0;
+
+    return (description: string) => {
+      const now = Date.now();
+      if (description === lastDesc && now - lastTs < 80) return;
+      lastDesc = description;
+      lastTs = now;
+
+      const circuit = structuredClone(get().circuit);
+      const bmsSimLog = structuredClone(get().bmsSimLog);
+
+      set((state) => {
+        const trimmed = state.history.slice(
+          0,
+          state.historyIndex + 1
+        );
+        const newHistory = [
+          ...trimmed,
+          { circuit, description, bmsSimLog },
+        ].slice(-MAX_HISTORY_SIZE);
+        return {
+          history: newHistory,
+          historyIndex: newHistory.length - 1,
+        };
+      });
+    };
+  })(),
 
   dismissFault: () => set({ faultDialogEvent: null }),
 

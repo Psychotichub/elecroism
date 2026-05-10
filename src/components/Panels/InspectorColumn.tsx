@@ -3,13 +3,14 @@ import PropertyPanel from './PropertyPanel';
 import CircuitValidationPanel from './CircuitValidationPanel';
 import BmsSimulatorPanel from './BmsSimulatorPanel';
 import CableSizingWizardPanel from './CableSizingWizardPanel';
+import TccPlotterPanel from './TccPlotterPanel';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import { runCircuitDesignValidation } from '../../utils/circuitDesignValidation';
 
 const TAB_KEY = 'electroism.inspectorTab.v1';
 
-type TabId = 'properties' | 'validation' | 'bms' | 'cable';
+type TabId = 'properties' | 'validation' | 'tcc' | 'bms' | 'cable';
 
 const InspectorColumn: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
@@ -20,7 +21,7 @@ const InspectorColumn: React.FC = () => {
   const [tab, setTab] = useState<TabId>(() => {
     try {
       const v = window.localStorage.getItem(TAB_KEY);
-      if (v === 'validation' || v === 'bms' || v === 'cable') return v;
+      if (v === 'validation' || v === 'tcc' || v === 'bms' || v === 'cable') return v;
       return 'properties';
     } catch {
       return 'properties';
@@ -70,6 +71,7 @@ const InspectorColumn: React.FC = () => {
       <div className={`flex shrink-0 border-b ${tc.border}`}>
         {tabBtn('properties', 'Properties')}
         {tabBtn('validation', 'Validation', warnCount)}
+        {tabBtn('tcc', 'TCC')}
         {tabBtn('bms', 'BMS sim')}
         {tabBtn('cable', 'Cable')}
       </div>
@@ -78,6 +80,8 @@ const InspectorColumn: React.FC = () => {
           <PropertyPanel />
         ) : tab === 'validation' ? (
           <CircuitValidationPanel />
+        ) : tab === 'tcc' ? (
+          <TccPlotterPanel />
         ) : tab === 'cable' ? (
           <CableSizingWizardPanel />
         ) : (

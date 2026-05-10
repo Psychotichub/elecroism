@@ -404,11 +404,26 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
       };
     case 'busbar':
     case 'busbar_system':
-      return { wireColor: 'brown', phaseSystem: 'single_phase' };
+      return {
+        wireColor: 'brown',
+        phaseSystem: 'single_phase',
+        busbarLeftCount: 3,
+        busbarRightCount: 3,
+      };
     case 'neutral_bar_system':
-      return { wireColor: 'blue', phaseSystem: 'single_phase' };
+      return {
+        wireColor: 'blue',
+        phaseSystem: 'single_phase',
+        busbarLeftCount: 3,
+        busbarRightCount: 3,
+      };
     case 'earth_bar_grounding_system':
-      return { wireColor: 'green_yellow', phaseSystem: 'single_phase' };
+      return {
+        wireColor: 'green_yellow',
+        phaseSystem: 'single_phase',
+        busbarLeftCount: 3,
+        busbarRightCount: 3,
+      };
     case 'terminal_block':
       return { phaseSystem: 'single_phase' };
     case 'contactor':

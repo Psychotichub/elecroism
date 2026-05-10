@@ -9,6 +9,7 @@ import type {
   CircuitComponent,
   ComponentType,
   PhaseSystem,
+  Wire,
 } from '../../types';
 import { v4 as uuid } from 'uuid';
 import { clampComponentScale } from '../../utils/geometry';
@@ -64,6 +65,20 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
             ? 4
             : 2
           : undefined;
+      const busbarLeftCountForCp =
+        type === 'busbar' ||
+        type === 'busbar_system' ||
+        type === 'neutral_bar_system' ||
+        type === 'earth_bar_grounding_system'
+          ? Math.max(1, Number(properties.busbarLeftCount ?? 3) || 3)
+          : undefined;
+      const busbarRightCountForCp =
+        type === 'busbar' ||
+        type === 'busbar_system' ||
+        type === 'neutral_bar_system' ||
+        type === 'earth_bar_grounding_system'
+          ? Math.max(1, Number(properties.busbarRightCount ?? 3) || 3)
+          : undefined;
       const newComp: CircuitComponent = {
         id,
         type,
@@ -78,6 +93,8 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
         connectionPoints: createConnectionPoints(id, type, {
           mcbPoles: mcbPolesForCp,
           rcdPoles: rcdPolesForCp,
+          busbarLeftCount: busbarLeftCountForCp,
+          busbarRightCount: busbarRightCountForCp,
         }),
         properties,
       };
@@ -94,7 +111,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
 
     setMcbPoleLayout: (id: string, poles: 1 | 2) => {
       const circuit = get().circuit;
-      const comp = circuit.components.find((c) => c.id === id);
+      const comp = circuit.components.find((c: CircuitComponent) => c.id === id);
       if (!comp || comp.type !== 'mcb') return;
       const clamped: 1 | 2 = poles === 2 ? 2 : 1;
       const prevLayout = mcbLayoutPoles(comp);
@@ -121,7 +138,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       };
       const updatedCircuit = syncWireEndpoints({
         ...circuit,
-        components: circuit.components.map((c) => (c.id === id ? newComp : c)),
+        components: circuit.components.map((c: CircuitComponent) => (c.id === id ? newComp : c)),
         wires: newWires,
         updatedAt: new Date().toISOString(),
       });
@@ -134,7 +151,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       set((state) => ({
         circuit: {
           ...state.circuit,
-          components: state.circuit.components.map((c) =>
+          components: state.circuit.components.map((c: CircuitComponent) =>
             c.id === id && c.type === 'push_button' ? { ...c, pressed } : c
           ),
           updatedAt: new Date().toISOString(),
@@ -151,7 +168,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       set((state) => {
         let circuit = syncWireEndpoints({
           ...state.circuit,
-          components: state.circuit.components.map((c) =>
+          components: state.circuit.components.map((c: CircuitComponent) =>
             c.id === id ? { ...c, ...next } : c
           ),
           updatedAt: new Date().toISOString(),
@@ -166,7 +183,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
 
     setComponentPhaseSystem: (id: string, phase: PhaseSystem) => {
       const circuit = get().circuit;
-      const comp = circuit.components.find((c) => c.id === id);
+      const comp = circuit.components.find((c: CircuitComponent) => c.id === id);
       if (!comp) return;
       const nextType = resolveTypeFromPhasePreference(comp.type, phase);
       if (nextType === comp.type) {
@@ -200,7 +217,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       const updatedCircuit = refreshAutoWireNumbers(
         syncWireEndpoints({
           ...circuit,
-          components: circuit.components.map((c) => (c.id === id ? newComp : c)),
+          components: circuit.components.map((c: CircuitComponent) => (c.id === id ? newComp : c)),
           wires: newWires,
           updatedAt: new Date().toISOString(),
         })
@@ -211,7 +228,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
     },
 
     toggleComponent: (id: string) => {
-      const comp = get().circuit.components.find((c) => c.id === id);
+      const comp = get().circuit.components.find((c: CircuitComponent) => c.id === id);
       if (!comp) return;
       const toggleable = [
         'switch', 'two_way_switch', 'mcb', 'hrc_fuse', 'control_circuit_fuse',
@@ -230,7 +247,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
     },
 
     resetTripped: (id: string) => {
-      const comp = get().circuit.components.find((c) => c.id === id);
+      const comp = get().circuit.components.find((c: CircuitComponent) => c.id === id);
       const nextState = comp?.type === 'three_phase_motor' ? 'on' : 'off';
       const updates: Partial<CircuitComponent> = { state: nextState };
       if (comp?.type === 'air_circuit_breaker') updates.acbSimState = undefined;
@@ -242,8 +259,8 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       set((state) => ({
         circuit: {
           ...state.circuit,
-          components: state.circuit.components.filter((c) => c.id !== id),
-          wires: state.circuit.wires.filter((w) => w.fromComponentId !== id && w.toComponentId !== id),
+          components: state.circuit.components.filter((c: CircuitComponent) => c.id !== id),
+          wires: state.circuit.wires.filter((w: Wire) => w.fromComponentId !== id && w.toComponentId !== id),
           updatedAt: new Date().toISOString(),
         },
         selectedId: state.selectedId === id ? null : state.selectedId,
@@ -257,13 +274,13 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       const snappedX = Math.round(x / gridSize) * gridSize;
       const snappedY = Math.round(y / gridSize) * gridSize;
       const circuit = get().circuit;
-      const prev = circuit.components.find((c) => c.id === id);
+      const prev = circuit.components.find((c: CircuitComponent) => c.id === id);
       if (!prev) return;
       const dx = snappedX - prev.x;
       const dy = snappedY - prev.y;
       let wires = circuit.wires;
       if (dx !== 0 || dy !== 0) {
-        wires = circuit.wires.map((w) => {
+        wires = circuit.wires.map((w: Wire) => {
           const touches = w.fromComponentId === id || w.toComponentId === id;
           if (!touches || w.points.length <= 4) return w;
           const pts = [...w.points];
@@ -274,20 +291,20 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       set({
         circuit: syncWireEndpoints({
           ...circuit,
-          components: circuit.components.map((c) => (c.id === id ? { ...c, x: snappedX, y: snappedY } : c)),
+          components: circuit.components.map((c: CircuitComponent) => (c.id === id ? { ...c, x: snappedX, y: snappedY } : c)),
           wires,
         }),
       });
     },
 
     rotateComponent: (id: string) => {
-      const comp = get().circuit.components.find((c) => c.id === id);
+      const comp = get().circuit.components.find((c: CircuitComponent) => c.id === id);
       if (!comp) return;
       const nextRot = (comp.rotation + 90) % 360;
       set((state) => ({
         circuit: syncWireEndpoints({
           ...state.circuit,
-          components: state.circuit.components.map((c) => (c.id === id ? { ...c, rotation: nextRot } : c)),
+          components: state.circuit.components.map((c: CircuitComponent) => (c.id === id ? { ...c, rotation: nextRot } : c)),
           updatedAt: new Date().toISOString(),
         }),
       }));
@@ -296,7 +313,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
     },
 
     duplicateComponent: (id: string) => {
-      const comp = get().circuit.components.find((c) => c.id === id);
+      const comp = get().circuit.components.find((c: CircuitComponent) => c.id === id);
       if (!comp) return;
       const baseScale = { initialScale: comp.scale ?? 1 };
       get().addComponent(

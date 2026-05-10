@@ -52,6 +52,7 @@ import SignalIsolationSymbol from '../Components/SignalIsolationSymbol';
 import PowerAuxSymbol from '../Components/PowerAuxSymbol';
 import TerminalBlockSymbol from '../Components/TerminalBlockSymbol';
 import type { CircuitComponent, ComponentType, WireColor } from '../../types';
+import { createConnectionPoints } from '../../store/circuitConnectionGeometry';
 import {
   snapToGrid,
   connectionPointWorld,
@@ -1123,11 +1124,55 @@ const CircuitCanvas: React.FC = () => {
       case 'busbar':
       case 'busbar_system':
       case 'neutral_bar_system':
-      case 'earth_bar_grounding_system':
+      case 'earth_bar_grounding_system': {
+        const adjustBusbarSide = (side: 'left' | 'right', delta: number) => {
+          const currentLeft = Math.max(
+            1,
+            Number(comp.properties.busbarLeftCount ?? 3) || 3
+          );
+          const currentRight = Math.max(
+            1,
+            Number(comp.properties.busbarRightCount ?? 3) || 3
+          );
+          const nextLeft =
+            side === 'left'
+              ? Math.max(1, Math.min(40, currentLeft + delta))
+              : currentLeft;
+          const nextRight =
+            side === 'right'
+              ? Math.max(1, Math.min(40, currentRight + delta))
+              : currentRight;
+          if (nextLeft === currentLeft && nextRight === currentRight) return;
+
+          const generated = createConnectionPoints(comp.id, comp.type, {
+            busbarLeftCount: nextLeft,
+            busbarRightCount: nextRight,
+          });
+          const byPos = new Map(
+            comp.connectionPoints.map((cp) => [`${cp.x},${cp.y}`, cp.id])
+          );
+          const connectionPoints = generated.map((cp) => {
+            const hit = byPos.get(`${cp.x},${cp.y}`);
+            return hit ? { ...cp, id: hit } : cp;
+          });
+
+          updateComponent(comp.id, {
+            properties: {
+              ...comp.properties,
+              busbarLeftCount: nextLeft,
+              busbarRightCount: nextRight,
+            },
+            connectionPoints,
+          });
+        };
         return (
           <BusbarSymbol
             key={comp.id}
             {...commonProps}
+            onExtendLeft={() => adjustBusbarSide('left', 1)}
+            onExtendRight={() => adjustBusbarSide('right', 1)}
+            onShrinkLeft={() => adjustBusbarSide('left', -1)}
+            onShrinkRight={() => adjustBusbarSide('right', -1)}
             effectiveWireColor={(() => {
               const connected = circuit.wires.filter(
                 (w) =>
@@ -1140,6 +1185,7 @@ const CircuitCanvas: React.FC = () => {
             })()}
           />
         );
+      }
       case 'terminal_block':
         return <TerminalBlockSymbol key={comp.id} {...commonProps} />;
       case 'power_source':
