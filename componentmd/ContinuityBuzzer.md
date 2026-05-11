@@ -33,3 +33,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Autoplay: first **pointerdown** unlocks the AudioContext (same pattern as TripSound).
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A continuity buzzer is a diagnostic tool used to test if an electrical path exists between two points. It works by applying a low voltage across probes; if the circuit is closed (low resistance), a current flows and activates an audible piezoelectric buzzer.

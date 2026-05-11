@@ -32,3 +32,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Update component.properties.selectorPosition and verify the pointer rotates and label colours update appropriately.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A selector switch is a rotary mechanical switch used to choose between multiple control states (e.g., Auto/Off/Manual). It routes control voltage to different logic paths depending on the cam position.

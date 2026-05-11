@@ -36,3 +36,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Shared helper: `import { coilTerminalTag } from '../../utils/coilTerminalTag'` (also used by `ControlSymbol`, `InterposingRelaySymbol`).
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A three-phase contactor is a heavy-duty electromechanical switch driven by a control coil. When the coil is energized, an electromagnet pulls an armature that simultaneously closes all three main power contacts, starting a 3-phase motor.

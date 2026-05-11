@@ -30,3 +30,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Verify that onToggle or double-click behavior is wired up in the parent and that the pressed visual state matches component.state.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+An Emergency Stop (E-Stop) is a fail-safe control switch. It uses normally closed (NC) contacts that open the circuit when the mushroom head is pressed, instantly removing power from hazardous machinery. It mechanically latches and must be manually twisted or pulled to reset.

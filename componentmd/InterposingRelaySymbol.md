@@ -33,3 +33,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Uses `coilTerminalTag` from `src/utils/coilTerminalTag.ts` (shared with `ThreePhaseContactorSymbol` and `ControlSymbol`).
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+An interposing relay acts as a buffer between sensitive control devices (like PLCs) and high-power loads. It uses a low-power coil driven by the PLC to close robust contacts that can handle the higher current required to energize a large contactor or motor.

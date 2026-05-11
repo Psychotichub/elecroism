@@ -35,3 +35,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Keep tag logic in one function next to the symbol so geometry and abbreviations stay aligned.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A signal isolator provides galvanic isolation between input and output signals (typically 4-20mA or 0-10V). It uses optical or magnetic coupling to prevent ground loops and protect sensitive control systems from high-voltage transients.

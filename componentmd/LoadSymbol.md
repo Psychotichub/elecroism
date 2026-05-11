@@ -37,3 +37,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Motor, fan, and lamp effects use `startKonvaLayerAnimation` from `src/utils/konvaLayerAnimation.ts` (layer guard). Reuse that helper for any new animated sub-symbols.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A generic electrical load represents any device that consumes electrical power and converts it into work, heat, or light. It inherently has impedance (resistance and reactance) which determines the current drawn from the source.

@@ -29,3 +29,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Verify connection points are positioned correctly and the energized state toggles the colours as expected.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A Phase Indicator Bank consists of three indicator lights (RYB or L1/L2/L3) connected across the three phases of a power supply. They visually confirm the presence of all three phases, warning operators if a phase is lost.

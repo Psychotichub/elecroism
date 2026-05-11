@@ -31,3 +31,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Verify that connection points show proper tags and colours for AC and DC connections and that the displayed voltage reflects component.properties.voltage.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A Switched-Mode Power Supply (SMPS) converts AC mains to a regulated DC voltage. It rectifies the AC to DC, chops it at a high frequency, passes it through a tiny high-frequency transformer, and rectifies it again, offering high efficiency and compact size.

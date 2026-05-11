@@ -30,3 +30,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Verify ELR trip threshold and delay display, and that the energized LED reflects nodeResult.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+An Earth Leakage Relay (ELR) paired with a Core Balance Current Transformer (CBCT) detects low-level leakage currents to ground. The CBCT measures the vectorial sum of phase and neutral currents; if non-zero (indicating leakage), the ELR trips the main breaker to prevent shock or fire.

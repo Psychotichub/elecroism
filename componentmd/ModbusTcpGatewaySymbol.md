@@ -30,3 +30,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Verify terminal indices and colours for your gateway components and that IP/port properties render as expected.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A Modbus TCP Gateway converts Modbus RTU (serial RS-485) signals into Modbus TCP/IP (Ethernet). It acts as a bridge, allowing modern networked SCADA or BMS systems to communicate with legacy serial field devices.

@@ -265,8 +265,7 @@ function defaultConnectionPoints(
       ];
     case 'junction':
       return [
-        cp(0, -8, 'T1'), cp(8, 0, 'T2'),
-        cp(0, 8, 'T3'), cp(-8, 0, 'T4'),
+        cp(0, 0, 'T1'),
       ];
     default:
       return [cp(0, -20, 'T1'), cp(0, 20, 'T2')];

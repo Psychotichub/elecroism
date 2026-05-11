@@ -36,3 +36,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Relies on `nodeResult.voltageV`, `currentA`, and optionally `meterSignal` (engine populates when available). Continuity compares `powerW` to **`circuit.continuityPowerThresholdW`** (same field as **ContinuityBuzzer**; default 0.5 W).
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A multimeter measures voltage, current, and resistance. It works by using high internal impedance to measure potential difference (voltage) or a low-resistance shunt to measure current flow, displaying the converted digital values on an LCD.

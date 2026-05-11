@@ -33,3 +33,8 @@ Testing Notes
 -------------
 - Verify the displayed voltage updates when component properties change.
 - Toggle energised state in the simulation to observe visual changes.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A three-phase source supplies three alternating voltages separated by 120 electrical degrees. This design provides constant power transfer and allows for the creation of rotating magnetic fields in induction motors.

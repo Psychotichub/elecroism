@@ -30,3 +30,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Verify caption changes for mechanical_interlock and door types, and that onToggle is wired by the parent.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A door interlock is a safety mechanism that prevents an electrical panel from being opened while the power is on, or automatically disconnects power when the door is opened. It ensures operator safety by mechanically linking the main switch to the enclosure door.

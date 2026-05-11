@@ -30,3 +30,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Confirm connection points align with the model and energized indicator appears when nodeResult.energized is true.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+Terminal blocks are modular, insulated blocks that secure two or more wires together. They provide a safe, organized, and easily accessible way to connect internal panel wiring to external field cables.

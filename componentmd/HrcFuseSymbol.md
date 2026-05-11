@@ -35,3 +35,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Tripped flash uses `useTripFlash(isTripped, 450)` from `src/hooks/useTripFlash.ts` (ref-backed interval cleanup).
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+High Rupturing Capacity (HRC) fuses contain a silver or copper element surrounded by arc-extinguishing powder (like quartz sand). When a short circuit occurs, the element melts and vaporizes instantly; the powder absorbs the arc energy, safely interrupting massive fault currents.

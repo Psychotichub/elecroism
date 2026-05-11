@@ -29,3 +29,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Confirm junction fill changes with node energization and that connection point markers are correctly placed.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A electrical junction represents a physical connection point where multiple wires meet, such as a wire nut or terminal splice. It ensures electrical continuity between branching circuits.

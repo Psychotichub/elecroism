@@ -35,3 +35,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Trip flash uses `useTripFlash(isTripped, 500)` from `src/hooks/useTripFlash.ts`.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A Miniature Circuit Breaker (MCB) protects circuits against overload and short circuits. It uses a bimetallic strip for delayed thermal tripping (overload) and a magnetic solenoid for instantaneous tripping during short circuits.

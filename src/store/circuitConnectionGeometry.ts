@@ -777,10 +777,7 @@ function createConnectionPoints(
       ];
     case 'junction':
       return [
-        { id: uuid(), componentId, x: 0, y: -8, label: 'T1' },
-        { id: uuid(), componentId, x: 8, y: 0, label: 'T2' },
-        { id: uuid(), componentId, x: 0, y: 8, label: 'T3' },
-        { id: uuid(), componentId, x: -8, y: 0, label: 'T4' },
+        { id: uuid(), componentId, x: 0, y: 0, label: 'T1' },
       ];
     case 'contactor':
     case 'relay':

@@ -29,3 +29,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Verify that the voltage text matches component.properties.voltage and that connection point stubs line up correctly.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A control transformer is an isolation transformer designed to provide a stable, reduced voltage (often 24V or 110V) for control circuits. It steps down the main line voltage to a safer level for relays, contactors, and PLCs, while isolating the control circuit from main power disturbances.

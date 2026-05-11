@@ -44,3 +44,8 @@ Implementation Notes / Required Modifications
 -------------------------------------------
 - The WAV sample path is resolved using `import.meta.env.BASE_URL + 'audio/mcb-trip.wav'`. I confirmed `public/audio/mcb-trip.wav` exists in the repo. Runtime servers typically serve this at `/audio/mcb-trip.wav` — verify your build/deploy base URL (BASE_URL) doesn't change at runtime. If BASE_URL is non-empty, the resulting URL will be `${BASE_URL}/audio/mcb-trip.wav` and must be reachable.
 - The component checks `ctx.state === 'running'` before playing; if the AudioContext is suspended (for example because no unlock gesture occurred) the sound won't play. This is deliberate (unlock on pointerdown) but if audio doesn't play during tests, ensure a user pointerdown occurred or explicitly resume the context earlier.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+Trip sound refers to the audible feedback or physical 'clack' of a breaker tripping. In real life, it is the sound of the spring-loaded mechanism violently releasing stored energy to separate contacts quickly and extinguish the arc.

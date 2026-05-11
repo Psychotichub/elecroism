@@ -34,3 +34,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Share the same Konva layer guard as `LoadSymbol` / `ThreePhaseMotorSymbol` via `startKonvaLayerAnimation`.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+Indicator lamps (often LED or neon) provide visual status of a circuit (e.g., Red for Running/Fault, Green for Stopped/Safe). They are wired in parallel with the load or controlled by auxiliary contacts of contactors and relays.

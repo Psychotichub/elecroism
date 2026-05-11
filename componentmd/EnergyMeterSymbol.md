@@ -34,3 +34,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Prefer aligning simulator output with `lineVoltageRmsV` / `lineCurrentRmsA`; partial fallbacks exist in `EnergyMeterSymbol.tsx` for current and rated voltage.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+An energy meter measures electrical energy consumption (kWh) by continuously integrating voltage and current over time. Modern digital meters use current transformers (CTs) and voltage sensing circuits, often providing communication protocols like Modbus for remote monitoring.

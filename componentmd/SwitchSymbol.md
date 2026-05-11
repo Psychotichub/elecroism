@@ -35,3 +35,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Test both variants (switch and push_button) with the select tool. Confirm that onPushChange true/false are emitted properly on pointerdown/up and that double-click toggles latching switches.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A basic electrical switch mechanically makes or breaks the continuity of a circuit. When the contacts are closed, current flows with minimal resistance; when open, the air gap provides infinite resistance, stopping the flow.

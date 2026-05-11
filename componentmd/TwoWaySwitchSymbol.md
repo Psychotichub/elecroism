@@ -35,3 +35,8 @@ Testing Notes
 -------------
 - Verify visual states by toggling component.state between 'on' and 'off' and by energizing the node in the simulation.
 - Confirm double-click triggers onToggle and that dragging works as expected.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A two-way switch (SPDT) has one common terminal and two traveler terminals. It allows a circuit to be routed to one of two paths, commonly used in pairs to control a single load from two different locations.

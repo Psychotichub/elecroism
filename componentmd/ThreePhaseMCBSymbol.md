@@ -38,3 +38,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - Trip flash uses `useTripFlash(isTripped, 500)` from `src/hooks/useTripFlash.ts`.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A 3-Pole MCB provides simultaneous protection for all three phases of a circuit. If a fault occurs on any single phase, an internal trip bar forces all three poles to open simultaneously, preventing single-phasing of motors.

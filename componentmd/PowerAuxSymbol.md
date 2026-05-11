@@ -31,3 +31,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Inspect each relevant component type (ups_module, shunt_trip_coil, current_transformer, power_quality_analyzer, etc.) to confirm correct title/subtitle and accent colours.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+Auxiliary contacts are mechanically linked to the main poles of a switch or contactor. They open or close simultaneously with the main contacts and are used for control logic, interlocking, or status indication without carrying the main load current.

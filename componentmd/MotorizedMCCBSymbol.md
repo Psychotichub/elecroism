@@ -44,3 +44,8 @@ Testing Notes
 Implementation Notes / Required Modifications
 -------------------------------------------
 - To add new control terminals, extend both `mccbControlConnectionPoints` and the `isControlTerminal` regex (or derive the regex from a shared list of prefixes).
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A Motorized Molded Case Circuit Breaker (MCCB) combines the high current protection of an MCCB with an external motor operator. This allows the breaker to be closed, opened, or reset remotely via electrical signals from a control room or BMS.

@@ -32,3 +32,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Test with multiple connection point placements to ensure the maxReach computed for selection outlines is correct.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+An AC power source represents the grid or a generator supplying alternating current. It provides the electromotive force (voltage) necessary to drive current through the entire electrical network.

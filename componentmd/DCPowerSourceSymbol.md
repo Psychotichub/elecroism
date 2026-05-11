@@ -30,3 +30,8 @@ Potential Issues / Things To Verify
 Testing Notes
 -------------
 - Confirm label rendering for plus/minus terminals and that the DC voltage text reflects component.properties.voltage.
+
+
+Real Life Feature, Working Principle, and Design
+------------------------------------------------
+A DC power source provides direct current at a steady voltage. In industrial panels, this is typically a rectified and filtered supply or a battery bank, used to power DC control logic, sensors, and electronic relays.

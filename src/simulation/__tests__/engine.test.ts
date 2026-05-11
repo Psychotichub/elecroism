@@ -41,11 +41,11 @@ describe('Basic single-phase energization', () => {
       [
         // L path:  source L_OUT → junction → MCB → lamp T1
         wire(src, 'L_OUT', j1, 'T1'),
-        wire(j1, 'T2', mcb, '1'),
+        wire(j1, 'T1', mcb, '1'),
         wire(mcb, '2', lamp, 'T1'),
         // N path:  lamp T2 → junction → source N_OUT
         wire(lamp, 'T2', j2, 'T1'),
-        wire(j2, 'T2', src, 'N_OUT'),
+        wire(j2, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -73,10 +73,10 @@ describe('Basic single-phase energization', () => {
       [src, mcb, lamp, j1, j2],
       [
         wire(src, 'L_OUT', j1, 'T1'),
-        wire(j1, 'T2', mcb, '1'),
+        wire(j1, 'T1', mcb, '1'),
         wire(mcb, '2', lamp, 'T1'),
         wire(lamp, 'T2', j2, 'T1'),
-        wire(j2, 'T2', src, 'N_OUT'),
+        wire(j2, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -98,10 +98,10 @@ describe('Basic single-phase energization', () => {
       [src, sw, lamp, j1, j2],
       [
         wire(src, 'L_OUT', j1, 'T1'),
-        wire(j1, 'T2', sw, '1'),
+        wire(j1, 'T1', sw, '1'),
         wire(sw, '2', lamp, 'T1'),
         wire(lamp, 'T2', j2, 'T1'),
-        wire(j2, 'T2', src, 'N_OUT'),
+        wire(j2, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -138,10 +138,10 @@ describe('MCB overload trip', () => {
       [src, mcb, load, j1, j2],
       [
         wire(src, 'L_OUT', j1, 'T1'),
-        wire(j1, 'T2', mcb, '1'),
+        wire(j1, 'T1', mcb, '1'),
         wire(mcb, '2', load, 'T1'),
         wire(load, 'T2', j2, 'T1'),
-        wire(j2, 'T2', src, 'N_OUT'),
+        wire(j2, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -175,10 +175,10 @@ describe('MCB overload trip', () => {
       [src, mcb, load, j1, j2],
       [
         wire(src, 'L_OUT', j1, 'T1'),
-        wire(j1, 'T2', mcb, '1'),
+        wire(j1, 'T1', mcb, '1'),
         wire(mcb, '2', load, 'T1'),
         wire(load, 'T2', j2, 'T1'),
-        wire(j2, 'T2', src, 'N_OUT'),
+        wire(j2, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -217,14 +217,14 @@ describe('Multiple loads', () => {
       [src, mcb, lamp1, lamp2, j1, j2, j3, j4],
       [
         wire(src, 'L_OUT', j1, 'T1'),
-        wire(j1, 'T2', mcb, '1'),
+        wire(j1, 'T1', mcb, '1'),
         wire(mcb, '2', j3, 'T1'),
-        wire(j3, 'T2', lamp1, 'T1'),
-        wire(j3, 'T3', lamp2, 'T1'),
+        wire(j3, 'T1', lamp1, 'T1'),
+        wire(j3, 'T1', lamp2, 'T1'),
         wire(lamp1, 'T2', j4, 'T1'),
-        wire(lamp2, 'T2', j4, 'T2'),
-        wire(j4, 'T3', j2, 'T1'),
-        wire(j2, 'T2', src, 'N_OUT'),
+        wire(lamp2, 'T2', j4, 'T1'),
+        wire(j4, 'T1', j2, 'T1'),
+        wire(j2, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -257,8 +257,8 @@ describe('Three-phase short circuit', () => {
         wire(src, 'L3_OUT', mcb, '5'),
         // MCB output all to same junction = short
         wire(mcb, '2', jShort, 'T1'),
-        wire(mcb, '4', jShort, 'T2'),
-        wire(mcb, '6', jShort, 'T3'),
+        wire(mcb, '4', jShort, 'T1'),
+        wire(mcb, '6', jShort, 'T1'),
       ]
     );
 
@@ -305,7 +305,7 @@ describe('Three-phase motor', () => {
         wire(mcb, '6', motor, 'L3'),
         // Neutral
         wire(motor, 'N', jN, 'T1'),
-        wire(jN, 'T2', src, 'N_OUT'),
+        wire(jN, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -352,7 +352,7 @@ describe('BMS ACB close blocked by UVR', () => {
         wire(acb, '4', motor, 'L2'),
         wire(acb, '6', motor, 'L3'),
         wire(motor, 'N', jN, 'T1'),
-        wire(jN, 'T2', src, 'N_OUT'),
+        wire(jN, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -389,7 +389,7 @@ describe('BMS ACB close blocked by UVR', () => {
         wire(acb, '4', motor, 'L2'),
         wire(acb, '6', motor, 'L3'),
         wire(motor, 'N', jN, 'T1'),
-        wire(jN, 'T2', src, 'N_OUT'),
+        wire(jN, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -430,7 +430,7 @@ describe('Motorized MCCB blocked by missing control voltage', () => {
         wire(mccb, '4', motor, 'L2'),
         wire(mccb, '6', motor, 'L3'),
         wire(motor, 'N', jN, 'T1'),
-        wire(jN, 'T2', src, 'N_OUT'),
+        wire(jN, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -465,7 +465,7 @@ describe('Motorized MCCB blocked by missing control voltage', () => {
         wire(mccb, '4', motor, 'L2'),
         wire(mccb, '6', motor, 'L3'),
         wire(motor, 'N', jN, 'T1'),
-        wire(jN, 'T2', src, 'N_OUT'),
+        wire(jN, 'T1', src, 'N_OUT'),
       ]
     );
 
@@ -511,10 +511,10 @@ describe('Edge cases', () => {
       [src, mcb, lamp, j1, j2],
       [
         wire(src, 'L_OUT', j1, 'T1'),
-        wire(j1, 'T2', mcb, '1'),
+        wire(j1, 'T1', mcb, '1'),
         wire(mcb, '2', lamp, 'T1'),
         wire(lamp, 'T2', j2, 'T1'),
-        wire(j2, 'T2', src, 'N_OUT'),
+        wire(j2, 'T1', src, 'N_OUT'),
       ]
     );
 
