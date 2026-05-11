@@ -35,6 +35,7 @@ import {
 } from '../../utils/wireEndpointNumbering';
 
 import type { CircuitStoreSet, CircuitStoreGet } from './sliceTypes';
+import { globalMouseContext } from '../circuitStore';
 
 export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGet) {
   return {
@@ -278,23 +279,173 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       if (!prev) return;
       const dx = snappedX - prev.x;
       const dy = snappedY - prev.y;
-      let wires = circuit.wires;
-      if (dx !== 0 || dy !== 0) {
-        wires = circuit.wires.map((w: Wire) => {
-          const touches = w.fromComponentId === id || w.toComponentId === id;
-          if (!touches || w.points.length <= 4) return w;
-          const pts = [...w.points];
-          for (let i = 2; i < pts.length - 2; i += 2) { pts[i] += dx; pts[i + 1] += dy; }
-          return { ...w, points: pts };
+      if (dx === 0 && dy === 0) return;
+
+      const isDraggedSelected = prev.selected || get().selectedId === id;
+      const movingIds = new Set<string>();
+      if (isDraggedSelected) {
+        circuit.components.forEach((c) => {
+          if (c.selected || c.id === get().selectedId) movingIds.add(c.id);
         });
+      } else {
+        movingIds.add(id);
       }
+
+      const wires = circuit.wires.map((w: Wire) => {
+        const touches = movingIds.has(w.fromComponentId) || movingIds.has(w.toComponentId);
+        if (!touches || w.points.length <= 4) return w;
+        const pts = [...w.points];
+        for (let i = 2; i < pts.length - 2; i += 2) { pts[i] += dx; pts[i + 1] += dy; }
+        return { ...w, points: pts };
+      });
       set({
         circuit: syncWireEndpoints({
           ...circuit,
-          components: circuit.components.map((c: CircuitComponent) => (c.id === id ? { ...c, x: snappedX, y: snappedY } : c)),
+          components: circuit.components.map((c: CircuitComponent) => 
+            movingIds.has(c.id) ? { ...c, x: c.x + dx, y: c.y + dy } : c
+          ),
           wires,
         }),
       });
+    },
+
+    /**
+     * Called every pointer-move tick while a component is being Konva-dragged.
+     * Sets peer selected components to their INITIAL position + the total drag offset
+     * so there is zero accumulation error and distances are always exact.
+     *
+     * @param draggedId    - the component being physically dragged by the user
+     * @param initialPositions - { [id]: {x, y} } captured at dragStart for every selected component
+     * @param totalDx / totalDy - total world-space displacement of the dragged node from its initial position
+     */
+    dragMoveSelection: (
+      draggedId: string,
+      initialPositions: Record<string, { x: number; y: number }>,
+      totalDx: number,
+      totalDy: number
+    ) => {
+      const circuit = get().circuit;
+      const peers = circuit.components.filter(
+        (c) => c.id !== draggedId && !!initialPositions[c.id]
+      );
+      if (peers.length === 0) return;
+      const peerIds = new Set(peers.map((c) => c.id));
+      // Wire intermediate vertices: shift by total offset from their initial positions too.
+      // We don't store per-vertex initial positions so we just sync endpoints via syncWireEndpoints.
+      set({
+        circuit: syncWireEndpoints({
+          ...circuit,
+          components: circuit.components.map((c: CircuitComponent) => {
+            if (!peerIds.has(c.id)) return c;
+            const init = initialPositions[c.id];
+            return { ...c, x: init.x + totalDx, y: init.y + totalDy };
+          }),
+          wires: circuit.wires,
+        }),
+      });
+    },
+
+    copySelection: () => {
+      const circuit = get().circuit;
+      const selectedComponents = circuit.components.filter((c) => c.selected || c.id === get().selectedId);
+      if (selectedComponents.length === 0) return;
+      const selectedIds = new Set(selectedComponents.map((c) => c.id));
+      const selectedWires = circuit.wires.filter(
+        (w) => selectedIds.has(w.fromComponentId) && selectedIds.has(w.toComponentId)
+      );
+      set({ clipboard: { components: structuredClone(selectedComponents), wires: structuredClone(selectedWires) } });
+    },
+
+    cutSelection: () => {
+      const circuit = get().circuit;
+      const selectedComponents = circuit.components.filter((c) => c.selected || c.id === get().selectedId);
+      if (selectedComponents.length === 0) return;
+      const selectedIds = new Set(selectedComponents.map((c) => c.id));
+      const selectedWires = circuit.wires.filter(
+        (w) => selectedIds.has(w.fromComponentId) && selectedIds.has(w.toComponentId)
+      );
+      // Copy to clipboard first, then delete.
+      set((state) => ({
+        clipboard: { components: structuredClone(selectedComponents), wires: structuredClone(selectedWires) },
+        selectedId: null,
+        circuit: {
+          ...state.circuit,
+          components: state.circuit.components.filter((c) => !selectedIds.has(c.id)),
+          wires: state.circuit.wires.filter(
+            (w) => !selectedIds.has(w.fromComponentId) && !selectedIds.has(w.toComponentId)
+          ),
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+      get().pushHistory('Cut components');
+      get().runSimulation();
+    },
+
+    pasteSelection: () => {
+      const clipboard = get().clipboard;
+      if (!clipboard || clipboard.components.length === 0) return;
+      const circuit = get().circuit;
+      const idMap = new Map<string, string>();
+      const pointIdMap = new Map<string, string>();
+      
+      let offsetX = circuit.gridSize * 2;
+      let offsetY = circuit.gridSize * 2;
+
+      if (globalMouseContext.isOverCanvas) {
+        let minX = Infinity;
+        let minY = Infinity;
+        clipboard.components.forEach((c) => {
+          if (c.x < minX) minX = c.x;
+          if (c.y < minY) minY = c.y;
+        });
+        const targetX = Math.round(globalMouseContext.worldX / circuit.gridSize) * circuit.gridSize;
+        const targetY = Math.round(globalMouseContext.worldY / circuit.gridSize) * circuit.gridSize;
+        offsetX = targetX - minX;
+        offsetY = targetY - minY;
+      }
+
+      const newComponents = clipboard.components.map((c) => {
+        const newId = uuid();
+        idMap.set(c.id, newId);
+        const newConnectionPoints = c.connectionPoints.map((cp) => {
+          const newCpId = uuid();
+          pointIdMap.set(cp.id, newCpId);
+          return { ...cp, id: newCpId, componentId: newId };
+        });
+        return {
+          ...c,
+          id: newId,
+          x: c.x + offsetX,
+          y: c.y + offsetY,
+          connectionPoints: newConnectionPoints,
+          selected: true,
+        };
+      });
+
+      const newWires = clipboard.wires.map((w) => ({
+        ...w,
+        id: uuid(),
+        fromComponentId: idMap.get(w.fromComponentId)!,
+        fromPointId: pointIdMap.get(w.fromPointId)!,
+        toComponentId: idMap.get(w.toComponentId)!,
+        toPointId: pointIdMap.get(w.toPointId)!,
+        points: w.points.map((p, i) => p + (i % 2 === 0 ? offsetX : offsetY)),
+      }));
+
+      const nextClipboard = { components: structuredClone(newComponents), wires: structuredClone(newWires) };
+      set((state) => ({
+        clipboard: nextClipboard,
+        selectedId: null,
+        circuit: syncWireEndpoints({
+          ...state.circuit,
+          components: [
+            ...state.circuit.components.map((c) => ({ ...c, selected: false })),
+            ...newComponents,
+          ],
+          wires: [...state.circuit.wires, ...newWires],
+        }),
+      }));
+      get().pushHistory('Pasted components');
     },
 
     rotateComponent: (id: string) => {

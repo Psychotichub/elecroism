@@ -32,6 +32,7 @@ const ThreePhaseSourceSymbol: React.FC<Props> = ({
       x={component.x}
       y={component.y}
       rotation={component.rotation}
+      data-component-id={component.id}
       draggable
       onClick={(e) => {
         e.cancelBubble = true;

@@ -76,6 +76,7 @@ const SwitchSymbol: React.FC<Props> = ({
       x={component.x}
       y={component.y}
       rotation={component.rotation}
+      data-component-id={component.id}
       draggable
       dragDistance={isPush ? 10 : undefined}
       onPointerDown={(e) => {

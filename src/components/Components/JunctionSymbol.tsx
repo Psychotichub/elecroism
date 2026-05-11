@@ -27,6 +27,7 @@ const JunctionSymbol: React.FC<Props> = ({
     <Group
       x={component.x}
       y={component.y}
+      data-component-id={component.id}
       draggable
       onClick={(e) => {
         e.cancelBubble = true;

@@ -171,6 +171,15 @@ const Toolbar: React.FC = () => {
       } else if (ctrl && e.key === 'n') {
         e.preventDefault();
         clearCircuit();
+      } else if (ctrl && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        useCircuitStore.getState().copySelection();
+      } else if (ctrl && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        useCircuitStore.getState().pasteSelection();
+      } else if (ctrl && e.key.toLowerCase() === 'x') {
+        e.preventDefault();
+        useCircuitStore.getState().cutSelection();
       } else if (ctrl && e.key.toLowerCase() === 'a') {
         e.preventDefault();
         const { circuit: liveCircuit } = useCircuitStore.getState();

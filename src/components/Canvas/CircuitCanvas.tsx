@@ -7,7 +7,7 @@ import React, {
 } from 'react';
 import { Stage, Layer, Group, Circle, Line, Rect, Text } from 'react-konva';
 import Konva from 'konva';
-import { useCircuitStore } from '../../store/circuitStore';
+import { useCircuitStore, globalMouseContext } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import GridLayer from './GridLayer';
 import WireLayer from './WireLayer';
@@ -677,6 +677,105 @@ const CircuitCanvas: React.FC = () => {
       window.removeEventListener('pointercancel', onPointerCancel);
     };
   }, []);
+
+  // Multi-selection live drag: capture initial positions at dragStart, then each
+  // dragmove tick sets peers to initialPos + totalDelta (no accumulation drift).
+  const multiDragRef = useRef<{
+    draggedId: string;
+    initialDraggedX: number;
+    initialDraggedY: number;
+    /** Snapshot of all selected component positions taken at drag start. */
+    initialPositions: Record<string, { x: number; y: number }>;
+  } | null>(null);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const onDragStart = (e: Konva.KonvaEventObject<DragEvent>) => {
+      const node = e.target as Konva.Group;
+      const id = node.getAttr('data-component-id') as string | undefined;
+      if (!id) return;
+
+      // Snapshot positions of the dragged component AND all selected peers.
+      const { circuit: c, selectedId: selId } = useCircuitStore.getState();
+      const initialPositions: Record<string, { x: number; y: number }> = {};
+      c.components.forEach((comp) => {
+        if (comp.id === id || comp.selected || comp.id === selId) {
+          initialPositions[comp.id] = { x: comp.x, y: comp.y };
+        }
+      });
+
+      multiDragRef.current = {
+        draggedId: id,
+        initialDraggedX: node.x(),
+        initialDraggedY: node.y(),
+        initialPositions,
+      };
+    };
+
+    const onDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+      if (!multiDragRef.current) return;
+      const node = e.target as Konva.Group;
+      if ((node.getAttr('data-component-id') as string) !== multiDragRef.current.draggedId) return;
+
+      // Total world-space displacement from where the drag started (no accumulation).
+      const totalDx = node.x() - multiDragRef.current.initialDraggedX;
+      const totalDy = node.y() - multiDragRef.current.initialDraggedY;
+
+      useCircuitStore.getState().dragMoveSelection(
+        multiDragRef.current.draggedId,
+        multiDragRef.current.initialPositions,
+        totalDx,
+        totalDy,
+      );
+    };
+
+    const onDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+      if (!multiDragRef.current) return;
+      const node = e.target as Konva.Group;
+      if ((node.getAttr('data-component-id') as string) !== multiDragRef.current.draggedId) {
+        multiDragRef.current = null;
+        return;
+      }
+
+      // The dragged component is snapped to grid inside moveComponent.
+      // We need the snapped total delta so peers end up at consistent positions.
+      const { circuit: c } = useCircuitStore.getState();
+      const gridSize = c.gridSize;
+      const rawDx = node.x() - multiDragRef.current.initialDraggedX;
+      const rawDy = node.y() - multiDragRef.current.initialDraggedY;
+      const initDragged = multiDragRef.current.initialPositions[multiDragRef.current.draggedId];
+      if (initDragged) {
+        const snappedX = Math.round((initDragged.x + rawDx) / gridSize) * gridSize;
+        const snappedY = Math.round((initDragged.y + rawDy) / gridSize) * gridSize;
+        const snappedDx = snappedX - initDragged.x;
+        const snappedDy = snappedY - initDragged.y;
+
+        // Apply the snapped delta to all peers from their initial positions.
+        const initialPositions = multiDragRef.current.initialPositions;
+        useCircuitStore.getState().dragMoveSelection(
+          multiDragRef.current.draggedId,
+          // Build a map with snapped targets for peers
+          initialPositions,
+          snappedDx,
+          snappedDy,
+        );
+      }
+
+      multiDragRef.current = null;
+    };
+
+    stage.on('dragstart', onDragStart);
+    stage.on('dragmove', onDragMove);
+    stage.on('dragend', onDragEnd);
+    return () => {
+      stage.off('dragstart', onDragStart);
+      stage.off('dragmove', onDragMove);
+      stage.off('dragend', onDragEnd);
+    };
+  }, []);
+
 
   const getStagePointerPosition = useCallback(() => {
     if (!stageRef.current) return null;
@@ -1577,13 +1676,22 @@ const CircuitCanvas: React.FC = () => {
       className={`circuit-canvas-container flex-1 overflow-hidden`}
       style={{ backgroundColor: tc.canvasHex }}
       onMouseEnter={() => setIsPointerInsideCanvas(true)}
-      onMouseLeave={() => setIsPointerInsideCanvas(false)}
+      onMouseLeave={() => {
+        setIsPointerInsideCanvas(false);
+        globalMouseContext.isOverCanvas = false;
+      }}
       onMouseMove={(e) => {
         const rect = containerRef.current?.getBoundingClientRect();
         if (!rect) return;
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         lastPointerCanvasRef.current = { x, y };
+
+        const { circuit } = useCircuitStore.getState();
+        globalMouseContext.worldX = (x - circuit.panX) / circuit.zoom;
+        globalMouseContext.worldY = (y - circuit.panY) / circuit.zoom;
+        globalMouseContext.isOverCanvas = true;
+
         if (!paletteOpen) {
           setPalettePos({
             x: Math.max(8, Math.min(x + 10, rect.width - 280)),

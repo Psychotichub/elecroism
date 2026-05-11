@@ -181,8 +181,13 @@ interface CircuitStore {
   mccbBmsMotorClosePulse: (id: string) => void;
   mccbBmsShuntOpen: (id: string) => void;
   moveComponent: (id: string, x: number, y: number) => void;
+  dragMoveSelection: (draggedId: string, initialPositions: Record<string, { x: number; y: number }>, totalDx: number, totalDy: number) => void;
   rotateComponent: (id: string) => void;
   duplicateComponent: (id: string) => void;
+  clipboard: { components: CircuitComponent[]; wires: Wire[] } | null;
+  copySelection: () => void;
+  cutSelection: () => void;
+  pasteSelection: () => void;
 
   addWire: (wire: Omit<Wire, 'id'>) => void;
   updateWire: (id: string, updates: Partial<Wire>) => void;
@@ -330,6 +335,12 @@ interface CircuitStore {
   setCircuitWireLabelsVisible: (visible: boolean) => void;
 }
 
+export const globalMouseContext = {
+  worldX: 0,
+  worldY: 0,
+  isOverCanvas: false,
+};
+
 export const useCircuitStore = create<CircuitStore>((set, get) => ({
   circuit: createEmptyCircuit(),
   simulationResult: null,
@@ -352,6 +363,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   historyIndex: -1,
   faultDialogEvent: null,
   bmsSimLog: [],
+  clipboard: null,
 
   // --- Component actions (extracted to slices/componentActions.ts) ---
   ...createComponentActions(set, get),
