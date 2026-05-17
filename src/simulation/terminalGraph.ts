@@ -160,6 +160,7 @@ export function buildTerminalGraph(
       case 'neutral_bar_system':
       case 'earth_bar_grounding_system':
       case 'junction':
+      case 'connection_point':
         connectAll(graph, keys);
         break;
       case 'terminal_block':

@@ -28,6 +28,8 @@ export type ComponentType =
   /** Isolating control transformer: primary AC to reduced secondary AC. */
   | 'control_transformer'
   | 'junction'
+  /** Wiring-group tap node; auto-splices a wire when dropped on a span. */
+  | 'connection_point'
   | 'push_button'
   | 'generic_load'
   | 'contactor'

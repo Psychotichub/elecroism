@@ -602,6 +602,12 @@ const GROUPS: ComponentGroup[] = [
     emoji: '🔗',
     items: [
       { type: 'junction', label: 'Junction Point', icon: <FiLink /> },
+      {
+        type: 'connection_point',
+        label: 'Connection point',
+        icon: <FiLink />,
+        detail: 'Tap on a wire — splices automatically',
+      },
       { type: 'terminal_block', label: 'Terminal block', icon: <FiLink />, detail: 'Pass-through terminal (IN/OUT)' },
     ],
   },

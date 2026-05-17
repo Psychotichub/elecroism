@@ -240,6 +240,13 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
     features: ['All attached terminals commoned'],
     purpose: 'Tie phases, neutrals, or PE without a physical device symbol.',
   },
+  connection_point: {
+    displayName: 'Connection point',
+    description:
+      'Wire tap on the schematic. Drop onto an existing wire to splice it; attach more wires with the wire tool.',
+    features: ['Auto-splice when placed on a wire span', 'No component label on canvas'],
+    purpose: 'Branch or join conductors at a point without a junction box symbol.',
+  },
   push_button: {
     displayName: 'Push button',
     description: 'Momentary operator for NO or NC control contacts.',

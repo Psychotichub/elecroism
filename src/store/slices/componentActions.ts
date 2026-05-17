@@ -13,6 +13,7 @@ import type {
 } from '../../types';
 import { v4 as uuid } from 'uuid';
 import { clampComponentScale } from '../../utils/geometry';
+import { attachConnectionPointToWireIfHit } from '../../utils/wireTapPlacement';
 import {
   syncWireEndpoints,
   createConnectionPoints,
@@ -99,14 +100,30 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
         }),
         properties,
       };
-      set((state) => ({
-        circuit: {
-          ...state.circuit,
-          components: [...state.circuit.components, newComp],
+      if (type === 'connection_point') {
+        const base = {
+          ...get().circuit,
+          components: [...get().circuit.components, newComp],
           updatedAt: new Date().toISOString(),
-        },
-      }));
-      get().pushHistory(`Added ${type}`);
+        };
+        const { circuit: wired, attached } = attachConnectionPointToWireIfHit(
+          base,
+          newComp
+        );
+        set({ circuit: wired });
+        get().pushHistory(
+          attached ? 'Added connection point on wire' : 'Added connection point'
+        );
+      } else {
+        set((state) => ({
+          circuit: {
+            ...state.circuit,
+            components: [...state.circuit.components, newComp],
+            updatedAt: new Date().toISOString(),
+          },
+        }));
+        get().pushHistory(`Added ${type}`);
+      }
       get().runSimulation();
     },
 
@@ -284,7 +301,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       const isDraggedSelected = prev.selected || get().selectedId === id;
       const movingIds = new Set<string>();
       if (isDraggedSelected) {
-        circuit.components.forEach((c) => {
+        circuit.components.forEach((c: CircuitComponent) => {
           if (c.selected || c.id === get().selectedId) movingIds.add(c.id);
         });
       } else {
@@ -326,10 +343,10 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
     ) => {
       const circuit = get().circuit;
       const peers = circuit.components.filter(
-        (c) => c.id !== draggedId && !!initialPositions[c.id]
+        (c: CircuitComponent) => c.id !== draggedId && !!initialPositions[c.id]
       );
       if (peers.length === 0) return;
-      const peerIds = new Set(peers.map((c) => c.id));
+      const peerIds = new Set(peers.map((c: CircuitComponent) => c.id));
       // Wire intermediate vertices: shift by total offset from their initial positions too.
       // We don't store per-vertex initial positions so we just sync endpoints via syncWireEndpoints.
       set({
@@ -347,22 +364,28 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
 
     copySelection: () => {
       const circuit = get().circuit;
-      const selectedComponents = circuit.components.filter((c) => c.selected || c.id === get().selectedId);
+      const selectedComponents = circuit.components.filter(
+        (c: CircuitComponent) => c.selected || c.id === get().selectedId
+      );
       if (selectedComponents.length === 0) return;
-      const selectedIds = new Set(selectedComponents.map((c) => c.id));
+      const selectedIds = new Set(selectedComponents.map((c: CircuitComponent) => c.id));
       const selectedWires = circuit.wires.filter(
-        (w) => selectedIds.has(w.fromComponentId) && selectedIds.has(w.toComponentId)
+        (w: Wire) =>
+          selectedIds.has(w.fromComponentId) && selectedIds.has(w.toComponentId)
       );
       set({ clipboard: { components: structuredClone(selectedComponents), wires: structuredClone(selectedWires) } });
     },
 
     cutSelection: () => {
       const circuit = get().circuit;
-      const selectedComponents = circuit.components.filter((c) => c.selected || c.id === get().selectedId);
+      const selectedComponents = circuit.components.filter(
+        (c: CircuitComponent) => c.selected || c.id === get().selectedId
+      );
       if (selectedComponents.length === 0) return;
-      const selectedIds = new Set(selectedComponents.map((c) => c.id));
+      const selectedIds = new Set(selectedComponents.map((c: CircuitComponent) => c.id));
       const selectedWires = circuit.wires.filter(
-        (w) => selectedIds.has(w.fromComponentId) && selectedIds.has(w.toComponentId)
+        (w: Wire) =>
+          selectedIds.has(w.fromComponentId) && selectedIds.has(w.toComponentId)
       );
       // Copy to clipboard first, then delete.
       set((state) => ({
@@ -370,9 +393,12 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
         selectedId: null,
         circuit: {
           ...state.circuit,
-          components: state.circuit.components.filter((c) => !selectedIds.has(c.id)),
+          components: state.circuit.components.filter(
+            (c: CircuitComponent) => !selectedIds.has(c.id)
+          ),
           wires: state.circuit.wires.filter(
-            (w) => !selectedIds.has(w.fromComponentId) && !selectedIds.has(w.toComponentId)
+            (w: Wire) =>
+              !selectedIds.has(w.fromComponentId) && !selectedIds.has(w.toComponentId)
           ),
           updatedAt: new Date().toISOString(),
         },
@@ -394,7 +420,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       if (globalMouseContext.isOverCanvas) {
         let minX = Infinity;
         let minY = Infinity;
-        clipboard.components.forEach((c) => {
+        clipboard.components.forEach((c: CircuitComponent) => {
           if (c.x < minX) minX = c.x;
           if (c.y < minY) minY = c.y;
         });
@@ -404,7 +430,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
         offsetY = targetY - minY;
       }
 
-      const newComponents = clipboard.components.map((c) => {
+      const newComponents = clipboard.components.map((c: CircuitComponent) => {
         const newId = uuid();
         idMap.set(c.id, newId);
         const newConnectionPoints = c.connectionPoints.map((cp) => {
@@ -422,14 +448,16 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
         };
       });
 
-      const newWires = clipboard.wires.map((w) => ({
+      const newWires = clipboard.wires.map((w: Wire) => ({
         ...w,
         id: uuid(),
         fromComponentId: idMap.get(w.fromComponentId)!,
         fromPointId: pointIdMap.get(w.fromPointId)!,
         toComponentId: idMap.get(w.toComponentId)!,
         toPointId: pointIdMap.get(w.toPointId)!,
-        points: w.points.map((p, i) => p + (i % 2 === 0 ? offsetX : offsetY)),
+        points: w.points.map((p: number, i: number) =>
+          p + (i % 2 === 0 ? offsetX : offsetY)
+        ),
       }));
 
       const nextClipboard = { components: structuredClone(newComponents), wires: structuredClone(newWires) };
@@ -439,7 +467,10 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
         circuit: syncWireEndpoints({
           ...state.circuit,
           components: [
-            ...state.circuit.components.map((c) => ({ ...c, selected: false })),
+            ...state.circuit.components.map((c: CircuitComponent) => ({
+              ...c,
+              selected: false,
+            })),
             ...newComponents,
           ],
           wires: [...state.circuit.wires, ...newWires],

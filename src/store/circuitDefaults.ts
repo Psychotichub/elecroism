@@ -492,6 +492,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         phaseSystem: 'single_phase',
       } as ComponentProperties;
     case 'junction':
+    case 'connection_point':
       return { phaseSystem: 'single_phase' };
     case 'wire':
       return { phaseSystem: 'single_phase' };
@@ -566,6 +567,7 @@ function getDefaultLabel(type: ComponentType): string {
     earth_bar_grounding_system: 'EARTH BAR',
     terminal_block: 'TB',
     junction: 'Junction',
+    connection_point: '',
     contactor: 'Contactor',
     relay: 'Relay',
     timer: 'Timer',

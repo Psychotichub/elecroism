@@ -33,6 +33,7 @@ import AirCircuitBreakerSymbol from '../Components/AirCircuitBreakerSymbol';
 import MotorizedMCCBSymbol from '../Components/MotorizedMCCBSymbol';
 import ThreePhaseContactorSymbol from '../Components/ThreePhaseContactorSymbol';
 import JunctionSymbol from '../Components/JunctionSymbol';
+import ConnectionPointSymbol from '../Components/ConnectionPointSymbol';
 import ControlSymbol from '../Components/ControlSymbol';
 import EStopSymbol from '../Components/EStopSymbol';
 import SelectorSwitchSymbol from '../Components/SelectorSwitchSymbol';
@@ -1309,6 +1310,8 @@ const CircuitCanvas: React.FC = () => {
         );
       case 'junction':
         return <JunctionSymbol key={comp.id} {...commonProps} />;
+      case 'connection_point':
+        return <ConnectionPointSymbol key={comp.id} {...commonProps} />;
       case 'contactor':
       case 'relay':
       case 'smart_relay':

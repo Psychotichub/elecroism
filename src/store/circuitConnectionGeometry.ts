@@ -779,6 +779,8 @@ function createConnectionPoints(
       return [
         { id: uuid(), componentId, x: 0, y: 0, label: 'T1' },
       ];
+    case 'connection_point':
+      return [{ id: uuid(), componentId, x: 0, y: 0, label: 'J' }];
     case 'contactor':
     case 'relay':
     case 'smart_relay':
