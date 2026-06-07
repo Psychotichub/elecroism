@@ -10,6 +10,11 @@ import {
   clampPanelWidth,
   PANEL_DEFAULT_WIDTH,
 } from '../constants/panelLayout';
+import {
+  loadLearningPanelPrefs,
+  saveLearningPanelPrefs,
+  type LearningPanelPlacement,
+} from '../utils/learningPanelPrefs';
 
 const LEARNING_KEY = 'electroism.learningMode.v1';
 const INTEGRITY_OVERLAY_KEY = 'electroism.connectionIntegrityOverlay.v1';
@@ -208,7 +213,16 @@ interface UiStore {
   showSheetTabBar: boolean;
   setShowSheetTabBar: (on: boolean) => void;
   toggleShowSheetTabBar: () => void;
+  learningPanelPlacement: LearningPanelPlacement;
+  learningPanelPinned: boolean;
+  learningPanelMinimized: boolean;
+  setLearningPanelPlacement: (placement: LearningPanelPlacement) => void;
+  toggleLearningPanelPinned: () => void;
+  setLearningPanelMinimized: (minimized: boolean) => void;
+  toggleLearningPanelMinimized: () => void;
 }
+
+const initialLearningPanelPrefs = loadLearningPanelPrefs();
 
 export const useUiStore = create<UiStore>((set) => ({
   learningMode: loadLearningMode(),
@@ -360,6 +374,7 @@ export const useUiStore = create<UiStore>((set) => ({
     set({
       activeTutorialId: tutorialId,
       tutorialStepIndex: 0,
+      learningPanelMinimized: false,
       canvasStatusMessage: `Tutorial started: ${tutorial.title}`,
     });
   },
@@ -391,6 +406,7 @@ export const useUiStore = create<UiStore>((set) => ({
       activeChallengeId: challengeId,
       activeTutorialId: null,
       tutorialStepIndex: 0,
+      learningPanelMinimized: false,
       challengeSelectedOption: null,
       challengeFreeText: '',
       challengeSubmitted: false,
@@ -423,6 +439,7 @@ export const useUiStore = create<UiStore>((set) => ({
       activeChallengeId: null,
       activeTutorialId: null,
       tutorialStepIndex: 0,
+      learningPanelMinimized: false,
       challengeSelectedOption: null,
       challengeFreeText: '',
       challengeSubmitted: false,
@@ -498,4 +515,27 @@ export const useUiStore = create<UiStore>((set) => ({
       saveBool(SHEET_TAB_BAR_KEY, next);
       return { showSheetTabBar: next };
     }),
+  learningPanelPlacement: initialLearningPanelPrefs.placement,
+  learningPanelPinned: initialLearningPanelPrefs.pinned,
+  learningPanelMinimized: false,
+  setLearningPanelPlacement: (placement) => {
+    const pinned = placement === 'dock';
+    saveLearningPanelPrefs({ placement, pinned });
+    set({ learningPanelPlacement: placement, learningPanelPinned: pinned });
+  },
+  toggleLearningPanelPinned: () =>
+    set((s) => {
+      const placement: LearningPanelPlacement =
+        s.learningPanelPlacement === 'dock' ? 'floating' : 'dock';
+      const pinned = placement === 'dock';
+      saveLearningPanelPrefs({ placement, pinned });
+      return {
+        learningPanelPlacement: placement,
+        learningPanelPinned: pinned,
+        learningPanelMinimized: false,
+      };
+    }),
+  setLearningPanelMinimized: (minimized) => set({ learningPanelMinimized: minimized }),
+  toggleLearningPanelMinimized: () =>
+    set((s) => ({ learningPanelMinimized: !s.learningPanelMinimized })),
 }));

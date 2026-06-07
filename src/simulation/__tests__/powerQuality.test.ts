@@ -31,11 +31,17 @@ describe('applyPowerQualityHarmonics', () => {
       state: 'on',
       props: { voltage: 24, powerWatts: 120, thdPercent: 80 },
     });
+    const load = makeComponent('lamp', {
+      label: 'LOAD',
+      props: { powerWatts: 48 },
+    });
     const circuit = makeCircuit(
-      [src, smps],
+      [src, smps, load],
       [
         wire(src, 'L_OUT', smps, 'AC_L'),
         wire(src, 'N_OUT', smps, 'AC_N'),
+        wire(smps, 'DC_PLUS', load, 'T1', { color: 'red' }),
+        wire(smps, 'DC_MINUS', load, 'T2', { color: 'black' }),
       ]
     );
     const result = engine.simulate(structuredClone(circuit));

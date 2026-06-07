@@ -5,6 +5,7 @@ import type { CircuitComponent, NodeResult } from '../../types';
 import { startKonvaLayerAnimation } from '../../utils/konvaLayerAnimation';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 
 interface Props {
   component: CircuitComponent;
@@ -77,7 +78,7 @@ const IndicatorLampSymbol: React.FC<Props> = ({
             x={0}
             y={0}
             radius={18}
-            stroke="#3B82F6"
+            stroke={getCanvasInteractionColors().selection}
             strokeWidth={2}
             dash={[4, 4]}
           />

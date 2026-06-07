@@ -76,6 +76,7 @@ export function componentBridgeSignature(component: CircuitComponent): string {
     pushButtonBridgeConducting(component) ? 'pb-on' : 'pb-off',
     p.buttonType ?? '',
     p.selectorPosition ?? '',
+    p.atsController ? 'ats-on' : 'ats-off',
     p.auxContactFollowContactorId?.trim() ?? '',
     component.type === 'mcb' ? String(mcbLayoutPoles(component)) : '',
     breakerBmsInterlockOpen(component) ? 'bms-open' : 'bms-closed',
@@ -230,6 +231,12 @@ export class TerminalGraphCache {
     pickup: Set<string>
   ): TerminalGraph {
     this.ensureSkeleton(circuit);
+    const changedIds = this.changedBridgeComponentIds(circuit);
+    if (changedIds && changedIds.size > 0) {
+      this.pickupGraphCache.clear();
+      this.graph = null;
+      this.graphKey = '';
+    }
     const pickupKey = serializePickupSet(pickup);
     const cached = this.pickupGraphCache.get(pickupKey);
     if (cached) {

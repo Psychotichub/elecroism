@@ -1,4 +1,5 @@
 import React from 'react';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 import { Group, Line, Circle, Text } from 'react-konva';
 import WireSegment from '../Components/WireSegment';
 import type { Wire } from '../../types';
@@ -106,25 +107,27 @@ const WireLayer: React.FC<Props> = ({
     return { x: nextX, y: nextY };
   })();
 
+  const interaction = getCanvasInteractionColors();
+
   const terminalRing = (() => {
     if (!wireTerminalPreview) return null;
     const { x, y, kind } = wireTerminalPreview;
     const stroke =
       kind === 'invalid'
-        ? '#EF4444'
+        ? interaction.wirePreviewInvalid
         : kind === 'warning'
-          ? '#F97316'
+          ? interaction.wirePreviewWarning
           : kind === 'bend'
-            ? '#EAB308'
-            : '#22C55E';
+            ? interaction.wirePreviewBend
+            : interaction.wirePreviewValid;
     const fill =
       kind === 'invalid'
-        ? 'rgba(239,68,68,0.12)'
+        ? interaction.wirePreviewInvalidFill
         : kind === 'warning'
-          ? 'rgba(249,115,22,0.14)'
+          ? interaction.wirePreviewWarningFill
           : kind === 'bend'
-            ? 'rgba(234,179,8,0.14)'
-            : 'rgba(34,197,94,0.12)';
+            ? interaction.wirePreviewBendFill
+            : interaction.wirePreviewValidFill;
     return (
       <Circle
         x={x}

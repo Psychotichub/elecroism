@@ -3,6 +3,7 @@ import { Group, Circle, Line, Text, Arc } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 
 interface Props {
   component: CircuitComponent;
@@ -98,7 +99,7 @@ const PowerSourceSymbol: React.FC<Props> = ({
           x={0}
           y={0}
           radius={maxReach}
-          stroke="#3B82F6"
+          stroke={getCanvasInteractionColors().selection}
           strokeWidth={2}
           dash={[4, 4]}
         />

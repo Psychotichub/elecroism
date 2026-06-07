@@ -14,6 +14,10 @@ import {
   shouldCullCanvas,
   worldViewportBounds,
 } from '../../utils/viewportCull';
+import {
+  getCanvasInteractionColors,
+  setCanvasInteractionTheme,
+} from '../../design/canvasInteractionColors';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import GridLayer from './GridLayer';
 import DrawingLayerFrame from './DrawingLayerFrame';
@@ -21,6 +25,7 @@ import WireLayer from './WireLayer';
 import WireGripLayer from './WireGripLayer';
 import WireToolOverlay from './WireToolOverlay';
 import ConnectionIntegrityOverlay from './ConnectionIntegrityOverlay';
+import CanvasZoomControls from './CanvasZoomControls';
 import ValidationHintsOverlay from './ValidationHintsOverlay';
 import ArcFlashBadgeLayer from './ArcFlashBadgeLayer';
 import SnapshotDiffOverlay from './SnapshotDiffOverlay';
@@ -30,7 +35,6 @@ import SldComponentBlock from './SldComponentBlock';
 import { useUiStore } from '../../store/uiStore';
 import { runCircuitDesignValidation } from '../../utils/circuitDesignValidation';
 import { validateCrossSheetReferences } from '../../utils/crossSheetNavigation';
-import { FiMaximize, FiZoomIn, FiZoomOut } from 'react-icons/fi';
 import SwitchSymbol from '../Components/SwitchSymbol';
 import TwoWaySwitchSymbol from '../Components/TwoWaySwitchSymbol';
 import MCBSymbol from '../Components/MCBSymbol';
@@ -287,6 +291,11 @@ const CircuitCanvas: React.FC = () => {
 
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
+  const canvasInteraction = getCanvasInteractionColors();
+
+  useEffect(() => {
+    setCanvasInteractionTheme(theme);
+  }, [theme]);
   const drawingLayers = useDrawingLayerStore((s) => s.layers);
   const isLayerSelectable = useDrawingLayerStore((s) => s.isLayerSelectable);
 
@@ -1941,7 +1950,6 @@ const CircuitCanvas: React.FC = () => {
     <div
       ref={containerRef}
       className="circuit-canvas-container relative flex-1 overflow-hidden"
-      style={{ backgroundColor: tc.canvasHex }}
       role="application"
       aria-label="Circuit schematic canvas"
       aria-describedby="canvas-instructions"
@@ -2009,50 +2017,17 @@ const CircuitCanvas: React.FC = () => {
         zoom and tools, or keyboard shortcuts S, W, D, and P. Press Escape to
         cancel placement or wire in progress.
       </p>
-      <div
-        role="toolbar"
-        aria-label="Canvas view controls"
-        className={`absolute top-2 right-2 z-10 flex items-center gap-1 rounded border ${tc.border} ${tc.toolbar} p-1 shadow-md`}
-      >
-        <button
-          type="button"
-          aria-label="Zoom in"
-          title="Zoom in"
-          onClick={() => setZoom(circuit.zoom * 1.2)}
-          className={`rounded p-1.5 ${tc.btnText} ${tc.itemHover} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
-        >
-          <FiZoomIn aria-hidden />
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          title="Zoom out"
-          onClick={() => setZoom(circuit.zoom / 1.2)}
-          className={`rounded p-1.5 ${tc.btnText} ${tc.itemHover} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
-        >
-          <FiZoomOut aria-hidden />
-        </button>
-        <button
-          type="button"
-          aria-label="Reset zoom and pan"
-          title="Fit view"
-          onClick={() => {
-            setZoom(1);
-            setPan(0, 0);
-          }}
-          className={`rounded p-1.5 ${tc.btnText} ${tc.itemHover} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
-        >
-          <FiMaximize aria-hidden />
-        </button>
-        <span
-          className={`px-1 text-[10px] ${tc.textMuted}`}
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          {toolLabel}
-          {sldViewMode ? ' · SLD' : ''} · {(circuit.zoom * 100).toFixed(0)}%
-        </span>
-      </div>
+      <CanvasZoomControls
+        zoom={circuit.zoom}
+        toolLabel={toolLabel}
+        sldViewMode={sldViewMode}
+        onZoomIn={() => setZoom(circuit.zoom * 1.2)}
+        onZoomOut={() => setZoom(circuit.zoom / 1.2)}
+        onResetView={() => {
+          setZoom(1);
+          setPan(0, 0);
+        }}
+      />
       <Stage
         ref={stageRef}
         width={dimensions.width}
@@ -2209,10 +2184,14 @@ const CircuitCanvas: React.FC = () => {
                 height={Math.abs(selectionRect.endY - selectionRect.startY)}
                 fill={
                   selectionRect.endX >= selectionRect.startX
-                    ? 'rgba(59,130,246,0.12)'
-                    : 'rgba(34,197,94,0.12)'
+                    ? canvasInteraction.selectionFill
+                    : canvasInteraction.marqueeCrossingFill
                 }
-                stroke={selectionRect.endX >= selectionRect.startX ? '#3B82F6' : '#22C55E'}
+                stroke={
+                  selectionRect.endX >= selectionRect.startX
+                    ? canvasInteraction.selection
+                    : canvasInteraction.marqueeCrossing
+                }
                 strokeWidth={1}
                 dash={[6, 4]}
               />
@@ -2235,6 +2214,7 @@ const CircuitCanvas: React.FC = () => {
               issues={validationIssues}
               focusedIssueId={validationFocusIssueId}
               learningMode={learningMode}
+              theme={theme}
               panX={circuit.panX}
               panY={circuit.panY}
               zoom={circuit.zoom}

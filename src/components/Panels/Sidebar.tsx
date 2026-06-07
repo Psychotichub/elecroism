@@ -13,6 +13,7 @@ import { FiChevronsDown, FiChevronsUp, FiSearch } from 'react-icons/fi';
 import Chip from '../ui/Chip';
 import Input from '../ui/Input';
 import AppIcon from '../ui/AppIcon';
+import Tooltip from '../ui/Tooltip';
 import { cn } from '../ui/cn';
 import { MOTION_CLASS } from '../../design/motion';
 import {
@@ -257,40 +258,47 @@ const Sidebar: React.FC = () => {
           role="group"
           aria-label="Expand or collapse all component groups"
         >
-          <button
-            type="button"
-            title="Expand all groups"
-            disabled={!componentListOpen || filteredSections.length === 0}
-            onClick={expandAllGroups}
-            className="es-palette-toolbar-btn es-focus-ring disabled:opacity-30 disabled:pointer-events-none"
-          >
-            <FiChevronsDown className="h-4 w-4" aria-hidden />
-          </button>
-          <button
-            type="button"
-            title="Collapse all groups"
-            disabled={!componentListOpen || filteredSections.length === 0}
-            onClick={collapseAllGroups}
-            className="es-palette-toolbar-btn es-focus-ring disabled:opacity-30 disabled:pointer-events-none"
-          >
-            <FiChevronsUp className="h-4 w-4" aria-hidden />
-          </button>
+          <Tooltip content="Expand all groups" side="bottom">
+            <button
+              type="button"
+              aria-label="Expand all groups"
+              disabled={!componentListOpen || filteredSections.length === 0}
+              onClick={expandAllGroups}
+              className="es-palette-toolbar-btn es-focus-ring disabled:opacity-30 disabled:pointer-events-none"
+            >
+              <FiChevronsDown className="h-4 w-4" aria-hidden />
+            </button>
+          </Tooltip>
+          <Tooltip content="Collapse all groups" side="bottom">
+            <button
+              type="button"
+              aria-label="Collapse all groups"
+              disabled={!componentListOpen || filteredSections.length === 0}
+              onClick={collapseAllGroups}
+              className="es-palette-toolbar-btn es-focus-ring disabled:opacity-30 disabled:pointer-events-none"
+            >
+              <FiChevronsUp className="h-4 w-4" aria-hidden />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
       <div className="border-t border-es-borderSubtle">
-        <button
-          type="button"
-          onClick={() => setSearchPanelOpen((o) => !o)}
-          aria-expanded={searchPanelOpen}
-          aria-controls={searchPanelOpen ? 'sidebar-search-panel' : undefined}
-          title={
+        <Tooltip
+          content={
             searchPanelOpen
               ? 'Hide search and category filters'
               : 'Show search and category filters'
           }
-          className="es-palette-panel-toggle es-focus-ring"
+          side="right"
         >
+          <button
+            type="button"
+            onClick={() => setSearchPanelOpen((o) => !o)}
+            aria-expanded={searchPanelOpen}
+            aria-controls={searchPanelOpen ? 'sidebar-search-panel' : undefined}
+            className="es-palette-panel-toggle es-focus-ring"
+          >
           <span
             className={cn(
               'es-icon-inline text-es-secondary',
@@ -304,7 +312,8 @@ const Sidebar: React.FC = () => {
           <span id="sidebar-search-panel-heading" className="es-typo-label text-es-secondary">
             Search & filters
           </span>
-        </button>
+          </button>
+        </Tooltip>
         {searchPanelOpen && (
           <div
             id="sidebar-search-panel"
@@ -359,28 +368,34 @@ const Sidebar: React.FC = () => {
       </div>
 
       <div className="border-t border-es-borderSubtle">
-        <button
-          type="button"
-          onClick={() => setComponentListOpen((o) => !o)}
-          aria-expanded={componentListOpen}
-          aria-controls={componentListOpen ? 'sidebar-palette-body' : undefined}
-          title={componentListOpen ? 'Hide component list' : 'Show component list'}
-          className="es-palette-panel-toggle es-focus-ring"
+        <Tooltip
+          content={
+            componentListOpen ? 'Hide component list' : 'Show component list'
+          }
+          side="right"
         >
-          <span
-            className={cn(
-              'es-icon-inline text-es-secondary',
-              MOTION_CLASS.transitionAll,
-              componentListOpen && 'rotate-90'
-            )}
-            aria-hidden
+          <button
+            type="button"
+            onClick={() => setComponentListOpen((o) => !o)}
+            aria-expanded={componentListOpen}
+            aria-controls={componentListOpen ? 'sidebar-palette-body' : undefined}
+            className="es-palette-panel-toggle es-focus-ring"
           >
-            <AppIcon id="chevron-right" size="inline" />
-          </span>
+            <span
+              className={cn(
+                'es-icon-inline text-es-secondary',
+                MOTION_CLASS.transitionAll,
+                componentListOpen && 'rotate-90'
+              )}
+              aria-hidden
+            >
+              <AppIcon id="chevron-right" size="inline" />
+            </span>
           <span id="sidebar-component-list-heading" className="es-typo-label text-es-secondary">
             Component list
           </span>
-        </button>
+          </button>
+        </Tooltip>
       </div>
 
       {componentListOpen && (

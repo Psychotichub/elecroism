@@ -10,6 +10,17 @@ describe('design tokens', () => {
     expect(getCanvasTokens('high-contrast').canvasHex).toBe('#000000');
   });
 
+  it('keeps grid dot tokens aligned with canvas themes', () => {
+    expect(getCanvasTokens('dark').gridDot).toBe('#4b5563');
+    expect(getCanvasTokens('light').gridDot).toBe('#d1d5db');
+    expect(themeColors.dark.gridDot).toBe(CANVAS_THEME_TOKENS.dark.gridDot);
+  });
+
+  it('provides validation hint callout colors per theme', () => {
+    expect(getCanvasTokens('dark').hintBubbleFill).toContain('rgba');
+    expect(getCanvasTokens('light').hintText).toBe('#334155');
+  });
+
   it('keeps themeColors canvas hex in sync with canvas tokens', () => {
     for (const theme of ['dark', 'light', 'high-contrast'] as const) {
       expect(themeColors[theme].canvasHex).toBe(

@@ -113,6 +113,7 @@ export const TypeSpecificProps: React.FC<TypeSpecificPropsOptions> = ({
     case 'three_phase_contactor':
     case 'four_phase_contactor': return <ThreePhaseEditors.renderThreePhaseContactorProps />;
     case 'timer': return <ControlEditors.renderTimerProps />;
+    case 'smart_relay': return <ControlEditors.renderSmartRelayProps />;
     case 'estop': return <SwitchEditors.renderEStopProps />;
     case 'door_interlock':
     case 'mechanical_interlock': return <SwitchEditors.renderDoorInterlockProps />;

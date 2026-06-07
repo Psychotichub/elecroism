@@ -5,6 +5,7 @@
 import type { Circuit, CircuitComponent } from '../types';
 import { terminalKey, tokenizeLabel, bfsFrom } from './engineTypes';
 import type { PotentialSets } from './engineTypes';
+import { batteryCanSupply } from './batteryRuntime';
 
 export type DcSourceKind = 'dc_supply' | 'battery' | 'charger' | 'ups_inverter';
 
@@ -37,6 +38,7 @@ export function collectDcSourceSeeds(circuit: Circuit): {
   const minus: string[] = [];
   for (const c of circuit.components) {
     if (c.state === 'off' || c.state === 'tripped') continue;
+    if (c.type === 'dc_battery_backup' && !batteryCanSupply(c)) continue;
     if (c.type !== 'dc_power_source' && c.type !== 'dc_battery_backup') continue;
     for (const cp of c.connectionPoints) {
       const key = terminalKey(c.id, cp.id);

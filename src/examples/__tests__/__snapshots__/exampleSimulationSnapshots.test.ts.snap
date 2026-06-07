@@ -72,14 +72,14 @@ exports[`example circuit simulation snapshots > matches energization snapshot fo
       "label": "M1 - Load",
       "powerW": 15000,
       "type": "three_phase_motor",
-      "voltageV": 400.3,
+      "voltageV": 400.4,
     },
   ],
   "shortCircuitCount": 0,
   "success": true,
   "supplies": [
     {
-      "energized": true,
+      "energized": false,
       "label": "Generator",
       "type": "three_phase_source",
     },
@@ -89,8 +89,8 @@ exports[`example circuit simulation snapshots > matches energization snapshot fo
       "type": "three_phase_source",
     },
   ],
-  "totalCurrentA": 25.46,
-  "totalPowerW": 15002,
+  "totalCurrentA": 25.45,
+  "totalPowerW": 15001,
 }
 `;
 

@@ -221,19 +221,59 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
         </Label>
       )}
       {selectedComp!.type === 'dc_battery_backup' && (
-        <Label text="Battery capacity (Ah)">
-          <input
-            type="number"
-            value={selectedComp!.properties.batteryCapacityAh ?? 7}
-            onChange={(e) =>
-              updateProp({
-                batteryCapacityAh: Math.max(1, Number(e.target.value) || 1),
-              })
-            }
-            className="input-field"
-            min={1}
-          />
-        </Label>
+        <>
+          <Label text="Battery capacity (Ah)">
+            <input
+              type="number"
+              value={selectedComp!.properties.batteryCapacityAh ?? 7}
+              onChange={(e) =>
+                updateProp({
+                  batteryCapacityAh: Math.max(1, Number(e.target.value) || 1),
+                })
+              }
+              className="input-field"
+              min={1}
+            />
+          </Label>
+          <Label text="Remaining charge (Ah)">
+            <input
+              type="number"
+              value={
+                selectedComp!.properties.batteryRemainingAh ??
+                selectedComp!.properties.batteryCapacityAh ??
+                7
+              }
+              onChange={(e) =>
+                updateProp({
+                  batteryRemainingAh: Math.max(
+                    0,
+                    Number(e.target.value) || 0
+                  ),
+                })
+              }
+              className="input-field"
+              min={0}
+              step={0.1}
+            />
+          </Label>
+          <Label text="Inverter cutoff (%)">
+            <input
+              type="number"
+              value={selectedComp!.properties.batteryCutoffPercent ?? 15}
+              onChange={(e) =>
+                updateProp({
+                  batteryCutoffPercent: Math.min(
+                    50,
+                    Math.max(5, Number(e.target.value) || 15)
+                  ),
+                })
+              }
+              className="input-field"
+              min={5}
+              max={50}
+            />
+          </Label>
+        </>
       )}
       {selectedComp!.type === 'ups_module' && (
         <>
@@ -274,6 +314,25 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
                 : 'Disabled'}
             </button>
           </Label>
+          <Label text="Float charge current (A)">
+            <input
+              type="number"
+              value={selectedComp!.properties.upsChargeCurrentA ?? 2}
+              onChange={(e) =>
+                updateProp({
+                  upsChargeCurrentA: Math.max(0.1, Number(e.target.value) || 2),
+                })
+              }
+              className="input-field"
+              min={0.1}
+              step={0.1}
+            />
+          </Label>
+          <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
+            On inverter backup, battery Ah depletes with load current. When AC
+            mains returns, float charge current is drawn on the AC input. Below
+            cutoff SoC the UPS trips and drops the output.
+          </p>
         </>
       )}
       {selectedComp!.type === 'key_interlock' && (

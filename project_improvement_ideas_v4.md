@@ -127,13 +127,13 @@ Functional but dense; does not use tokens or typography scale.
 - Category separators; recent actions; `es-typo-body` sizing.
 - Max-width `lg`; keyboard focus matches `es-focus-ring`.
 
-### ❌ D3. Dockable Learning Panels
+### ✅ D3. Dockable Learning Panels
 Tutorial, Challenge, and Assignment panels are fixed `bottom-14 right-4` cards.
 - Slide-over drawer or dock below inspector; pin / minimize.
 - Persist position in `uiStore`; learning accent border (`--es-semantic-learning`).
 - Shared `Card` primitive.
 
-### ❌ D4. Tooltip Component
+### ✅ D4. Tooltip Component
 Most hints use native `title=` only.
 - Consistent delay, keyboard access, token-styled tooltip for toolbar and palette.
 
@@ -141,53 +141,54 @@ Most hints use native `title=` only.
 
 ## E. Canvas & Brand
 
-### ⚠️ E1. Canvas Surface Tokens
+### ✅ E1. Canvas Surface Tokens
 Dark canvas `#1a1d24`, light `#f4f5f7`; grid dot from `design/tokens.ts`. ✅
-- Zoom controls floating bottom-left with token styling. ❌
-- `ValidationHintsOverlay` softer callout bubble + pointer. ❌
+- Zoom controls floating bottom-left with token styling. ✅
+- `ValidationHintsOverlay` softer callout bubble + pointer. ✅
 
-### ❌ E2. Selection & Wire Preview Colours
+### ✅ E2. Selection & Wire Preview Colours
 Selection highlight should match UI `--es-accent` on light and dark canvas.
 - Wire preview / marquee contrast audit on light canvas.
 - Do not override IEC symbol fill/stroke from UI theme. ✅ (by policy)
 
-### ❌ E3. Schematic Symbol Stroke Scale
+### ✅ E3. Schematic Symbol Stroke Scale
 Perceived quality tied to canvas glyphs, not just chrome.
-- Consistent stroke width at zoom levels.
-- Symbol legend / PDF typography aligned with `es-typo-body-sm`.
+- Consistent stroke width at zoom levels (`strokeScaleEnabled={false}` + component-scale strokes; zoom-stable labels). ✅
+- Symbol legend / PDF typography aligned with `es-typo-body-sm`. ✅
 
-### ❌ E4. Light Theme Rebuild
+### ✅ E4. Light Theme Rebuild
 Light mode works but panels lack depth.
-- `#ffffff` panels on `#f4f5f7` canvas; borders via `border-subtle` + light shadow.
-- Sidebar / inspector QA pass.
+- `#ffffff` panels on `#f4f5f7` canvas; borders via `border-subtle` + light shadow. ✅
+- Sidebar / inspector QA pass (shell elevation, nested section depth, tab/toolbar strips). ✅
 
-### ❌ E5. High-Contrast & System Theme
+### ✅ E5. High-Contrast & System Theme
 HC theme ships; full primitive audit pending.
-- Focus rings on all `ui/*` controls; fault red vs yellow accent distinguishable.
-- `prefers-color-scheme` on first launch; optional Electron `nativeTheme` sync.
+- Focus rings on all `ui/*` controls; fault red vs yellow accent distinguishable. ✅
+- `prefers-color-scheme` on first launch; optional Electron `nativeTheme` sync. ✅
 
-### ❌ E6. Logomark & Export Identity
+### ✅ E6. Logomark & Export Identity
 Status bar shows plain “⚡ ElectroSim” text.
-- SVG logomark; favicon / PWA icon alignment.
-- PDF title block font sizes match UI token scale.
+- SVG logomark; favicon / PWA icon alignment. ✅
+- PDF title block font sizes match UI token scale. ✅
 
 ---
 
 ## F. Quality & Tooling
 
-### ❌ F1. UI Gallery / Visual Regression
+### ✅ F1. UI Gallery / Visual Regression
 No Storybook or dev-route screenshot baseline yet.
-- `UiGallery` route or Playwright screenshots: menu, toolbar, inspector, dialog (dark + light).
-- CI optional gate on shell chrome.
+- `UiGallery` route or Playwright screenshots: menu, toolbar, inspector, dialog (dark + light). ✅
+- CI optional gate on shell chrome (`visual-regression` job). ✅
 
-### ❌ F2. ESLint Raw Colour Ban
+### ✅ F2. ESLint Raw Colour Ban
 New panels still add inline `bg-blue-600` outside `components/ui`.
-- Rule: discourage raw Tailwind accent colours outside `src/components/ui/`.
+- `electroism/no-raw-tailwind-colors` ESLint rule on `src/**` (exempt `components/ui`, tests). ✅
+- Legacy panel/dialog/toolbar paths grandfathered in `eslint.config.js` until migrated to `es-*` tokens. ✅
 
-### ❌ F3. Responsive & PWA Layout
+### ✅ F3. Responsive & PWA Layout
 `WebInstallBanner` uses tokens partially; narrow layout untested.
-- `< 900px`: auto-collapse palette; inspector full-screen overlay.
-- Tablet touch targets ≥ 40px; document in `docs/ui-breakpoints.md`.
+- `< 900px`: auto-collapse palette; inspector full-screen overlay. ✅
+- Tablet touch targets ≥ 40px; document in `docs/ui-breakpoints.md`. ✅
 
 ---
 

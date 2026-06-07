@@ -41,6 +41,52 @@ export const renderAcDcConverterProps = () => {
             step={0.1}
           />
         </Label>
+        <Label text="Rated DC output power (W)">
+          <input
+            type="number"
+            value={p.powerWatts ?? 60}
+            onChange={(e) =>
+              updateProp({ powerWatts: Math.max(1, Number(e.target.value) || 1) })
+            }
+            className="input-field"
+            min={1}
+          />
+        </Label>
+        <Label text="Efficiency (%)">
+          <input
+            type="number"
+            value={p.supplyEfficiencyPercent ?? 60}
+            onChange={(e) =>
+              updateProp({
+                supplyEfficiencyPercent: Math.min(
+                  99,
+                  Math.max(1, Number(e.target.value) || 60)
+                ),
+              })
+            }
+            className="input-field"
+            min={1}
+            max={99}
+          />
+        </Label>
+        <Label text="AC input power factor">
+          <input
+            type="number"
+            value={p.inputPowerFactor ?? 0.7}
+            onChange={(e) =>
+              updateProp({
+                inputPowerFactor: Math.min(
+                  1,
+                  Math.max(0.05, Number(e.target.value) || 0.7)
+                ),
+              })
+            }
+            className="input-field"
+            min={0.05}
+            max={1}
+            step={0.05}
+          />
+        </Label>
         <Label text="Presets (DC out)">
           <div className="flex gap-1 flex-wrap">
             {[5, 12, 24, 48, 110].map((preset) => (
@@ -132,9 +178,11 @@ export const renderAcDcConverterProps = () => {
         <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
           Wire <strong>AC_L</strong> and <strong>AC_N</strong> to mains. The
           simulator energizes <strong>DC_PLUS</strong> / <strong>DC_MINUS</strong>{' '}
-          when AC is present (same as before). Stages above are educational: they
-          change the symbol only. Use the separate <strong>SMPS</strong> component
-          for high-frequency switch-mode supplies.
+          when AC is present. Primary AC current follows DC bus load:
+          I<sub>AC</sub> ≈ (V<sub>DC</sub>×I<sub>DC</sub>)/(V<sub>AC</sub>×η×PF).
+          Exceeding rated output power trips the supply. Rectifier stages above
+          are educational faceplate options — use <strong>SMPS</strong> for
+          switch-mode bricks.
         </p>
         <details
           className={`rounded border ${tc.border} ${theme === 'dark' ? 'bg-black/20' : 'bg-gray-50'} px-2 py-1.5`}
@@ -275,7 +323,7 @@ export const renderSmpsProps = () => { const { selectedComp, tc, updateProp } = 
           step={0.1}
         />
       </Label>
-      <Label text="DC output power (W)">
+      <Label text="Rated DC output power (W)">
         <input
           type="number"
           value={selectedComp!.properties.powerWatts ?? 120}
@@ -284,6 +332,41 @@ export const renderSmpsProps = () => { const { selectedComp, tc, updateProp } = 
           }
           className="input-field"
           min={1}
+        />
+      </Label>
+      <Label text="Efficiency (%)">
+        <input
+          type="number"
+          value={selectedComp!.properties.supplyEfficiencyPercent ?? 88}
+          onChange={(e) =>
+            updateProp({
+              supplyEfficiencyPercent: Math.min(
+                99,
+                Math.max(1, Number(e.target.value) || 88)
+              ),
+            })
+          }
+          className="input-field"
+          min={1}
+          max={99}
+        />
+      </Label>
+      <Label text="AC input power factor">
+        <input
+          type="number"
+          value={selectedComp!.properties.inputPowerFactor ?? 0.65}
+          onChange={(e) =>
+            updateProp({
+              inputPowerFactor: Math.min(
+                1,
+                Math.max(0.05, Number(e.target.value) || 0.65)
+              ),
+            })
+          }
+          className="input-field"
+          min={0.05}
+          max={1}
+          step={0.05}
         />
       </Label>
       <ThdHarmonicFields showSmpsHint />
@@ -307,10 +390,10 @@ export const renderSmpsProps = () => { const { selectedComp, tc, updateProp } = 
       </Label>
       <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Wire <strong>AC_L</strong> + <strong>AC_N</strong> to mains; the DC
-        bus (<strong>V+ / V−</strong>) only energizes when both AC terminals
-        are correctly placed (polarity respected). Same engine model as the
-        AC/DC converter; choose this symbol when you specifically want a
-        <em> switching</em> PSU on the diagram.
+        bus (<strong>V+ / V−</strong>) energizes when AC is present. Primary
+        current scales with downstream DC load; exceeding rated output power
+        shuts the supply down. Choose this symbol for switch-mode PSUs on the
+        diagram.
       </p>
     </>
   );};

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Logomark from '../brand/Logomark';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useUiStore } from '../../store/uiStore';
 import { runCadCommand } from '../../utils/cadCommands';
@@ -298,14 +299,9 @@ const StatusBar: React.FC = () => {
             Sim: main thread
           </span>
         ) : null}
-        <span
-          className="es-status-brand hidden min-[1200px]:inline-flex"
-          aria-hidden
-        >
-          <span className="text-es-accent" aria-hidden>
-            ⚡
-          </span>
-          ElectroSim
+        <span className="es-status-brand hidden min-[1200px]:inline-flex">
+          <Logomark size={14} aria-hidden />
+          <span>ElectroSim</span>
         </span>
       </div>
     </div>

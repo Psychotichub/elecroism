@@ -1,6 +1,7 @@
 import React from 'react';
 import { Circle, Group, Line, Rect, Text } from 'react-konva';
 import type { CircuitComponent } from '../../types';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 import { sldBlockStyle, shouldRenderSldComponent } from '../../utils/sldView';
 
 type Props = {
@@ -22,6 +23,7 @@ const SldComponentBlock: React.FC<Props> = ({
 
   const style = sldBlockStyle(component);
   const { x, y } = component;
+  const selectionStroke = getCanvasInteractionColors().selection;
 
   const common = {
     draggable,
@@ -40,7 +42,7 @@ const SldComponentBlock: React.FC<Props> = ({
         y={y}
         radius={style.width * 0.5}
         fill={style.fill}
-        stroke={selected ? '#FBBF24' : style.stroke}
+        stroke={selected ? selectionStroke : style.stroke}
         strokeWidth={selected ? 2 : 1}
       />
     );
@@ -51,7 +53,7 @@ const SldComponentBlock: React.FC<Props> = ({
       <Group {...common} x={x} y={y}>
         <Line
           points={[-style.width * 0.5, 0, style.width * 0.5, 0]}
-          stroke={selected ? '#FBBF24' : style.stroke}
+          stroke={selected ? selectionStroke : style.stroke}
           strokeWidth={style.height}
           lineCap="round"
           listening={false}
@@ -78,7 +80,7 @@ const SldComponentBlock: React.FC<Props> = ({
         width={style.width}
         height={style.height}
         fill={style.fill}
-        stroke={selected ? '#FBBF24' : style.stroke}
+        stroke={selected ? selectionStroke : style.stroke}
         strokeWidth={selected ? 1.8 : 1.2}
         cornerRadius={2}
         listening={false}

@@ -231,7 +231,7 @@ export function motorFullLoadAmps(
   return Math.max(0.1, steadyCurrentA);
 }
 
-function stepThermalHeat(
+export function stepThermalHeat(
   heatPct: number,
   currentA: number,
   pickupA: number,
@@ -331,4 +331,29 @@ export function motorThermalAtSample(
   motorId: string
 ): MotorThermalReading | null {
   return sample?.motorThermal?.[motorId] ?? null;
+}
+
+function ensureOverloadSim(component: CircuitComponent) {
+  if (!component.overloadSimState) component.overloadSimState = {};
+  return component.overloadSimState;
+}
+
+/**
+ * Advance overload-relay bimetal heat for one simulation step.
+ * Uses IEC 60947-4-1 Class 10/20/30 inverse-time curve from `overloadTripClass`.
+ */
+export function advanceOverloadRelayThermal(
+  relay: CircuitComponent,
+  currentA: number,
+  dtMs: number
+): { heatPct: number; tripped: boolean } {
+  const pickup = relay.properties.ratingAmps ?? 16;
+  const sim = ensureOverloadSim(relay);
+  const prev = sim.thermalHeatPct ?? 0;
+  const stepped =
+    dtMs > 0
+      ? stepThermalHeat(prev, currentA, pickup, currentA > 0.01, relay, dtMs)
+      : { heatPct: prev, tripped: false };
+  sim.thermalHeatPct = stepped.heatPct;
+  return stepped;
 }

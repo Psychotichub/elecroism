@@ -3,6 +3,7 @@ import { Group, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 import ScaledSymbolInner from './ScaledSymbolInner';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 
 interface Props {
   component: CircuitComponent;
@@ -41,7 +42,7 @@ const JunctionSymbol: React.FC<Props> = ({
           x={0}
           y={0}
           radius={14}
-          stroke="#3B82F6"
+          stroke={getCanvasInteractionColors().selection}
           strokeWidth={2}
           dash={[4, 4]}
         />

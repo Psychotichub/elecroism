@@ -73,6 +73,31 @@ jobs:
           CI: true
           SMOKE_SKIP_BUILD_CHECK: '1'
 
+  visual-regression:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer (includes UI gallery)
+        run: npm run build:renderer
+
+      - name: Install Playwright Chromium
+        run: npm run test:visual:install
+
+      - name: UI gallery visual regression
+        run: playwright test -c playwright.visual.config.ts
+        env:
+          CI: true
+
   smoke-electron-mac:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: macos-latest

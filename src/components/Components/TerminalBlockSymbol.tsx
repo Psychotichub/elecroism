@@ -3,6 +3,7 @@ import { Group, Rect, Text, Circle, Line } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 
 interface Props {
   component: CircuitComponent;
@@ -43,7 +44,7 @@ const TerminalBlockSymbol: React.FC<Props> = ({
             y={-24}
             width={48}
             height={54}
-            stroke="#3B82F6"
+            stroke={getCanvasInteractionColors().selection}
             strokeWidth={2}
             dash={[4, 4]}
             cornerRadius={4}

@@ -1,6 +1,5 @@
 import type { Circuit, ComponentType } from '../types';
 import { getComponentPanelDescription } from './componentPanelInfo';
-
 /** Schematic-only nodes omitted from the published symbol legend. */
 const LEGEND_SKIP_TYPES = new Set<ComponentType>(['connection_point']);
 

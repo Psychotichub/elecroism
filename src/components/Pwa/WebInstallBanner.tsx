@@ -1,11 +1,10 @@
 import React from 'react';
 import { FiDownload, FiMaximize, FiX } from 'react-icons/fi';
-import { useThemeStore, themeColors } from '../../store/themeStore';
 import { usePwaInstall } from '../../hooks/usePwaInstall';
+import Button from '../ui/Button';
+import IconButton from '../ui/IconButton';
 
 const WebInstallBanner: React.FC = () => {
-  const theme = useThemeStore((s) => s.theme);
-  const tc = themeColors[theme];
   const {
     showInstallBanner,
     canInstall,
@@ -19,44 +18,46 @@ const WebInstallBanner: React.FC = () => {
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 text-xs ${tc.toolbar} ${tc.border}`}
+      className="es-pwa-install-banner flex shrink-0 items-center justify-between gap-3 border-b border-es-borderSubtle bg-es-chrome1 px-3 py-2 es-typo-body-sm text-es-secondary"
       role="region"
       aria-label="Install ElectroSim"
     >
-      <p className={`min-w-0 leading-snug ${tc.textMuted}`}>
+      <p className="min-w-0 leading-snug text-es-secondary">
         {canInstall
           ? 'Install ElectroSim for offline access and a full-screen tablet workspace.'
           : 'Use full screen on your tablet for more canvas space, or install from the browser menu when available.'}
       </p>
       <div className="flex shrink-0 items-center gap-2">
         {canInstall ? (
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={() => void install()}
-            className="flex items-center gap-1 rounded bg-indigo-700 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-indigo-600"
           >
-            <FiDownload size={14} />
+            <FiDownload size={14} aria-hidden />
             Install app
-          </button>
+          </Button>
         ) : null}
         {tablet ? (
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => void enterFullscreen()}
-            className={`flex items-center gap-1 rounded border px-2.5 py-1 text-[11px] ${tc.border} ${tc.text}`}
           >
-            <FiMaximize size={14} />
+            <FiMaximize size={14} aria-hidden />
             Full screen
-          </button>
+          </Button>
         ) : null}
-        <button
-          type="button"
+        <IconButton
+          label="Dismiss install prompt"
+          size="md"
+          tooltip={false}
           onClick={dismiss}
-          className={`rounded p-1 ${tc.textMuted}`}
-          aria-label="Dismiss install prompt"
         >
-          <FiX size={16} />
-        </button>
+          <FiX />
+        </IconButton>
       </div>
     </div>
   );

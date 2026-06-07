@@ -4,6 +4,7 @@ import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 import { coilTerminalTag } from '../../utils/coilTerminalTag';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 
 interface Props {
   component: CircuitComponent;
@@ -73,7 +74,7 @@ const ControlSymbol: React.FC<Props> = ({
           y={-30}
           width={44}
           height={isContactor || isTimer ? 86 : 60}
-          stroke="#3B82F6"
+          stroke={getCanvasInteractionColors().selection}
           strokeWidth={2}
           dash={[4, 4]}
           cornerRadius={4}

@@ -3,6 +3,7 @@ import { Group, Rect, Circle, Text } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 
 interface Props {
   component: CircuitComponent;
@@ -42,7 +43,7 @@ const PhaseIndicatorBankSymbol: React.FC<Props> = ({
             y={-28}
             width={80}
             height={56}
-            stroke="#3B82F6"
+            stroke={getCanvasInteractionColors().selection}
             strokeWidth={2}
             dash={[4, 4]}
             cornerRadius={4}

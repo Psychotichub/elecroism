@@ -11,6 +11,7 @@ import {
   Button,
   IconButton,
   SegmentedControl,
+  Tooltip,
   type SegmentItem,
 } from '../ui';
 import { cn } from '../ui/cn';
@@ -99,23 +100,26 @@ const Toolbar: React.FC = () => {
 
       <div className="flex-1" />
 
-      <Button
-        variant="primary"
-        size="md"
-        onClick={() => runSlot('run-simulation')}
-        disabled={simulationPending}
-        className={cn('gap-1.5', simulationPending && MOTION_CLASS.simulatePulse)}
-        title={
+      <Tooltip
+        content={
           getBinding('run-simulation')
             ? `Simulate (${getBinding('run-simulation')})`
             : 'Simulate'
         }
       >
-        <span className="es-icon-inline">
-          <AppIcon id="simulate" size="inline" />
-        </span>
-        <span>{simulationPending ? 'Running…' : 'Simulate'}</span>
-      </Button>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => runSlot('run-simulation')}
+          disabled={simulationPending}
+          className={cn('gap-1.5', simulationPending && MOTION_CLASS.simulatePulse)}
+        >
+          <span className="es-icon-inline">
+            <AppIcon id="simulate" size="inline" />
+          </span>
+          <span>{simulationPending ? 'Running…' : 'Simulate'}</span>
+        </Button>
+      </Tooltip>
 
       <ToolbarDivider />
 

@@ -15,6 +15,9 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
     case 'ac_dc_converter':
       return {
         voltage: 24,
+        powerWatts: 60,
+        supplyEfficiencyPercent: 60,
+        inputPowerFactor: 0.7,
         phaseSystem: 'single_phase',
         acDcInputVoltageV: 230,
         acDcMainsFrequencyHz: 50,
@@ -129,10 +132,16 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         ratingAmps: 10,
         upsInverterEnabled: true,
         upsStaticBypass: false,
+        upsChargeCurrentA: 2,
         phaseSystem: 'single_phase',
       };
     case 'dc_battery_backup':
-      return { voltage: 24, batteryCapacityAh: 7, phaseSystem: 'single_phase' };
+      return {
+        voltage: 24,
+        batteryCapacityAh: 7,
+        batteryCutoffPercent: 15,
+        phaseSystem: 'single_phase',
+      };
     case 'motor_operator_kit':
       return { voltage: 230, phaseSystem: 'single_phase' };
     case 'shunt_trip_coil':
@@ -436,8 +445,13 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
       return { phaseSystem: 'single_phase' };
     case 'contactor':
     case 'relay':
-    case 'smart_relay':
       return { ratingAmps: 25, phaseSystem: 'single_phase' };
+    case 'smart_relay':
+      return {
+        ratingAmps: 10,
+        smartRelayProgram: 'OUT1 = IN1',
+        phaseSystem: 'single_phase',
+      };
     case 'timer':
       return { ratingAmps: 25, timerDelayMs: 1000, phaseSystem: 'single_phase' };
     case 'estop':
@@ -466,6 +480,8 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
       return {
         voltage: 24,
         powerWatts: 120,
+        supplyEfficiencyPercent: 88,
+        inputPowerFactor: 0.65,
         thdPercent: 80,
         phaseSystem: 'single_phase',
         meterProtocol: 'none',

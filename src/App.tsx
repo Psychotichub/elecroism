@@ -3,6 +3,7 @@ import AppMenuBar from './components/Toolbar/AppMenuBar';
 import Toolbar from './components/Toolbar/Toolbar';
 import { useGlobalEditorShortcuts } from './hooks/useGlobalEditorShortcuts';
 import { useElectronMenuBridge } from './hooks/useElectronMenuBridge';
+import { useSystemThemeSync } from './hooks/useSystemThemeSync';
 import { useProjectFileDrop } from './hooks/useProjectFileDrop';
 import ProjectDropOverlay from './components/Dialogs/ProjectDropOverlay';
 import { syncRecentMenuToNative } from './utils/projectOpen';
@@ -16,9 +17,7 @@ import ShortcutSettingsDialog from './components/Dialogs/ShortcutSettingsDialog'
 import PrivacySettingsDialog from './components/Dialogs/PrivacySettingsDialog';
 import ProjectSettingsDialog from './components/Dialogs/ProjectSettingsDialog';
 import LibraryPackBrowserDialog from './components/Dialogs/LibraryPackBrowserDialog';
-import TutorialPanel from './components/Panels/TutorialPanel';
-import ChallengePanel from './components/Panels/ChallengePanel';
-import AssignmentPanel from './components/Panels/AssignmentPanel';
+import LearningPanelHost from './components/Panels/learning/LearningPanelHost';
 import GradeSubmissionsDialog from './components/Dialogs/GradeSubmissionsDialog';
 import RestoreSessionDialog from './components/Dialogs/RestoreSessionDialog';
 import SheetTabs from './components/Toolbar/SheetTabs';
@@ -34,7 +33,12 @@ import WebInstallBanner from './components/Pwa/WebInstallBanner';
 import { MOTION_CLASS } from './design/motion';
 import { cn } from './components/ui/cn';
 import { useProjectDocumentTitle } from './hooks/useProjectDocumentTitle';
+import { useResponsiveLayout } from './hooks/useResponsiveLayout';
 import PanelSplitter from './components/layout/PanelSplitter';
+import {
+  NarrowInspectorOverlay,
+  NarrowPaletteOverlay,
+} from './components/layout/NarrowLayoutOverlays';
 import PaletteIconRail from './components/Panels/PaletteIconRail';
 import {
   PALETTE_RAIL_WIDTH,
@@ -66,8 +70,15 @@ function App() {
   const setPropertyPanelCollapsed = useUiStore(
     (s) => s.setPropertyPanelCollapsed
   );
+  const { narrow, tabletTouch } = useResponsiveLayout();
 
-  const sidebarPanelWidth = sidebarCollapsed ? PALETTE_RAIL_WIDTH : sidebarWidth;
+  const sidebarPanelWidth = narrow
+    ? PALETTE_RAIL_WIDTH
+    : sidebarCollapsed
+      ? PALETTE_RAIL_WIDTH
+      : sidebarWidth;
+  const showPaletteOverlay = narrow && !sidebarCollapsed;
+  const showInspectorOverlay = narrow && !propertyCollapsed;
 
   const handleSidebarResize = (deltaPx: number) => {
     if (sidebarCollapsed) {
@@ -102,6 +113,7 @@ function App() {
 
   useGlobalEditorShortcuts();
   useElectronMenuBridge();
+  useSystemThemeSync();
   useProjectDocumentTitle();
 
   useEffect(() => {
@@ -141,6 +153,8 @@ function App() {
       className={`h-screen w-screen flex flex-col overflow-hidden ${tc.bg}`}
       data-theme={theme}
       data-density={uiDensity}
+      data-narrow-layout={narrow || undefined}
+      data-touch-targets={tabletTouch ? 'coarse' : undefined}
     >
       <WebInstallBanner />
       <AppErrorBoundary
@@ -163,10 +177,10 @@ function App() {
           <SheetTabs />
         </AppErrorBoundary>
       ) : null}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         <div
           className={cn(
-            'h-full min-h-0 shrink-0 overflow-hidden border-r',
+            'es-sidebar-shell h-full min-h-0 shrink-0 overflow-hidden border-r',
             MOTION_CLASS.panelCollapse,
             tc.border
           )}
@@ -177,7 +191,7 @@ function App() {
               areaName="Sidebar"
               fallbackClassName={`h-full min-h-0 w-full ${errPanel}`}
             >
-              {sidebarCollapsed ? (
+              {narrow || sidebarCollapsed ? (
                 <PaletteIconRail />
               ) : (
                 <Suspense
@@ -194,48 +208,76 @@ function App() {
             </AppErrorBoundary>
           </div>
         </div>
-        <PanelSplitter
-          side="left"
-          ariaLabel={
-            sidebarCollapsed
-              ? 'Expand component palette'
-              : 'Resize component palette'
-          }
-          ariaControls="sidebar-palette-root"
-          ariaExpanded={!sidebarCollapsed}
-          onResize={handleSidebarResize}
-          onDoubleClick={resetSidebarWidth}
-          onToggleCollapse={toggleSidebarCollapsed}
-        />
+        {!narrow ? (
+          <PanelSplitter
+            side="left"
+            ariaLabel={
+              sidebarCollapsed
+                ? 'Expand component palette'
+                : 'Resize component palette'
+            }
+            ariaControls="sidebar-palette-root"
+            ariaExpanded={!sidebarCollapsed}
+            onResize={handleSidebarResize}
+            onDoubleClick={resetSidebarWidth}
+            onToggleCollapse={toggleSidebarCollapsed}
+          />
+        ) : null}
         <AppErrorBoundary
           areaName="Canvas"
           fallbackClassName={`flex min-h-0 min-w-0 flex-1 ${errPanel}`}
         >
           <CircuitCanvas />
         </AppErrorBoundary>
-        <PanelSplitter
-          side="right"
-          ariaLabel={
-            propertyCollapsed ? 'Expand inspector panel' : 'Resize inspector panel'
-          }
-          ariaControls="inspector-panel-root"
-          ariaExpanded={!propertyCollapsed}
-          onResize={handleInspectorResize}
-          onDoubleClick={resetInspectorWidth}
-          onToggleCollapse={togglePropertyPanelCollapsed}
-        />
-        <div
-          className={cn(
-            'h-full min-h-0 shrink-0 overflow-hidden border-l',
-            MOTION_CLASS.panelCollapse,
-            propertyCollapsed ? 'w-0 border-transparent' : tc.border
-          )}
-          style={{ width: propertyCollapsed ? 0 : inspectorWidth }}
-          aria-hidden={propertyCollapsed}
-        >
-          <div className="h-full w-full min-w-0">
+        {!narrow ? (
+          <>
+            <PanelSplitter
+              side="right"
+              ariaLabel={
+                propertyCollapsed
+                  ? 'Expand inspector panel'
+                  : 'Resize inspector panel'
+              }
+              ariaControls="inspector-panel-root"
+              ariaExpanded={!propertyCollapsed}
+              onResize={handleInspectorResize}
+              onDoubleClick={resetInspectorWidth}
+              onToggleCollapse={togglePropertyPanelCollapsed}
+            />
+            <div
+              className={cn(
+                'es-inspector-shell flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l',
+                MOTION_CLASS.panelCollapse,
+                propertyCollapsed ? 'w-0 border-transparent' : tc.border
+              )}
+              style={{ width: propertyCollapsed ? 0 : inspectorWidth }}
+              aria-hidden={propertyCollapsed}
+            >
+              <div className="min-h-0 flex-1 w-full">
+                <AppErrorBoundary
+                  areaName="Inspector"
+                  fallbackClassName={`h-full min-h-0 w-full ${errPanel}`}
+                >
+                  <Suspense
+                    fallback={
+                      <div
+                        className={`h-full min-h-0 w-full animate-pulse ${tc.panel}`}
+                        aria-hidden
+                      />
+                    }
+                  >
+                    <InspectorColumn />
+                  </Suspense>
+                </AppErrorBoundary>
+              </div>
+              <LearningPanelHost slot="dock" />
+            </div>
+          </>
+        ) : null}
+        {showPaletteOverlay ? (
+          <NarrowPaletteOverlay onClose={() => setSidebarCollapsed(true)}>
             <AppErrorBoundary
-              areaName="Inspector"
+              areaName="Sidebar"
               fallbackClassName={`h-full min-h-0 w-full ${errPanel}`}
             >
               <Suspense
@@ -246,11 +288,25 @@ function App() {
                   />
                 }
               >
-                <InspectorColumn />
+                <Sidebar />
               </Suspense>
             </AppErrorBoundary>
-          </div>
-        </div>
+          </NarrowPaletteOverlay>
+        ) : null}
+        {showInspectorOverlay ? (
+          <NarrowInspectorOverlay
+            onClose={() => setPropertyPanelCollapsed(true)}
+            inspector={
+              <AppErrorBoundary
+                areaName="Inspector"
+                fallbackClassName={`h-full min-h-0 w-full ${errPanel}`}
+              >
+                <InspectorColumn />
+              </AppErrorBoundary>
+            }
+            learningDock={<LearningPanelHost slot="dock" />}
+          />
+        ) : null}
       </div>
       <AppErrorBoundary
         areaName="Status bar"
@@ -269,9 +325,7 @@ function App() {
       <PrivacySettingsDialog />
       <ProjectSettingsDialog />
       <LibraryPackBrowserDialog />
-      <TutorialPanel />
-      <ChallengePanel />
-      <AssignmentPanel />
+      <LearningPanelHost slot="floating" />
       <GradeSubmissionsDialog />
       <RestoreSessionDialog
         open={restoreOpen}

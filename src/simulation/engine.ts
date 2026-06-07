@@ -57,6 +57,7 @@ import {
   mergeBalancedThreePhaseNodeResults,
 } from './threePhaseCalc';
 import { checkFaults } from './faultDetection';
+import { computeResidualCurrentMA } from './residualCurrent';
 import { applyImpedanceLoadFlow } from './loadFlow';
 import {
   dcFaultLevelsByComponentId,
@@ -68,8 +69,15 @@ import {
 } from '../utils/faultLevelAnalysis';
 import { PROSPECTIVE_SHORT_CIRCUIT_A } from '../utils/shortCircuitValidation';
 import { applyPowerQualityHarmonics } from './powerQuality';
+import { applyChargerCoupling } from './chargerCoupling';
+import {
+  applyBatteryRuntime,
+  batteryCanSupply,
+  effectiveBatteryVoltage,
+} from './batteryRuntime';
 import { TerminalGraphCache } from './terminalGraphCache';
 import type { SimulateOverrides } from './simulateOverrides';
+import { mergeAtsSimulateOverrides } from './selectorSwitchRouting';
 
 export type { SimulateOverrides } from './simulateOverrides';
 
@@ -88,17 +96,25 @@ export class CircuitEngine {
       return this.buildDegradedResult(circuit);
     }
 
+    const effectiveOverrides = mergeAtsSimulateOverrides(
+      circuit,
+      overrides?.atsSequenceTimeMs ?? 0,
+      overrides
+    );
+
+    const simStepMs = effectiveOverrides?.simStepMs ?? overrides?.simStepMs ?? 0;
     let contactorPickup = computeContactorPickupFixpoint(
       circuit,
       wallMs,
       propagatePotentials,
       this.timerCoilEnergizedSinceMs,
-      this.terminalGraphCache
+      this.terminalGraphCache,
+      simStepMs
     );
 
-    if (overrides?.forcedContactorPickup?.size) {
+    if (effectiveOverrides?.forcedContactorPickup?.size) {
       contactorPickup = new Set(contactorPickup);
-      for (const [id, on] of overrides.forcedContactorPickup) {
+      for (const [id, on] of effectiveOverrides.forcedContactorPickup) {
         const comp = circuit.components.find((c) => c.id === id);
         if (!comp) continue;
         comp.state = on ? 'on' : 'off';
@@ -202,11 +218,9 @@ export class CircuitEngine {
           } else if (component.type === 'dc_power_source') {
             voltageV = energized ? (component.properties.voltage ?? 24) : 0;
           } else if (component.type === 'dc_battery_backup') {
-            voltageV =
-              component.state === 'on'
-                ? (component.properties.voltage ?? 24)
-                : 0;
-            energized = component.state === 'on';
+            const vEff = effectiveBatteryVoltage(component);
+            energized = component.state === 'on' && batteryCanSupply(component);
+            voltageV = energized ? vEff : 0;
           } else if (component.type === 'ups_module') {
             const acOutL = component.connectionPoints.find(
               (cp) => cp.label.toUpperCase() === 'AC_OUT_L'
@@ -294,6 +308,37 @@ export class CircuitEngine {
       PROSPECTIVE_SHORT_CIRCUIT_A * 0.1
     );
 
+    updateWireStates(circuit, nodes, potentials);
+    const loadFlow = applyImpedanceLoadFlow(circuit, nodes, potentials, terminalGraph);
+    updateWireStates(circuit, nodes, potentials);
+
+    const batteryRuntime = applyBatteryRuntime(
+      circuit,
+      nodes,
+      potentials,
+      terminalGraph,
+      simStepMs,
+      wallMs
+    );
+    faults.push(...batteryRuntime.faults);
+    if (batteryRuntime.anyTripped) {
+      const next = this.simulate(circuit, depth + 1, wallMs, overrides);
+      return { ...next, faults: [...faults, ...next.faults] };
+    }
+
+    const chargerCoupling = applyChargerCoupling(
+      circuit,
+      nodes,
+      terminalGraph,
+      potentials,
+      wallMs
+    );
+    faults.push(...chargerCoupling.faults);
+    if (chargerCoupling.anyTripped) {
+      const next = this.simulate(circuit, depth + 1, wallMs, overrides);
+      return { ...next, faults: [...faults, ...next.faults] };
+    }
+
     // Series path current computation
     const seriesPathCurrents = new Map<string, number>();
     for (const component of circuit.components) {
@@ -326,7 +371,25 @@ export class CircuitEngine {
       if (component.state === 'off' || component.state === 'tripped') continue;
       const branchCurrent = seriesPathCurrents.get(component.id) || 0;
       const lnFaultPath = severeFaultAnchors.size > 0 && this.seriesDeviceOnLivePathToLnFault(component, circuit, severeFaultAnchors, contactorPickup);
-      const fault = checkFaults(component, branchCurrent, { lnFaultPath, wallMs });
+      const residualMA =
+        component.type === 'rcd' ||
+        component.type === 'residual_current_circuit_breaker' ||
+        component.type === 'earth_leakage_relay_cbct'
+          ? computeResidualCurrentMA(
+              component,
+              circuit,
+              nodes,
+              terminalGraph,
+              potentials,
+              { lnFaultAnchors: severeFaultAnchors, branchCurrentA: branchCurrent }
+            )
+          : 0;
+      const fault = checkFaults(component, branchCurrent, {
+        lnFaultPath,
+        wallMs,
+        residualMA,
+        simStepMs: effectiveOverrides?.simStepMs ?? overrides?.simStepMs ?? 0,
+      });
       if (!fault) continue;
       faults.push(fault);
       component.state = 'tripped';
@@ -364,9 +427,6 @@ export class CircuitEngine {
       return { ...next, faults: [...faults, ...next.faults] };
     }
 
-    updateWireStates(circuit, nodes, potentials);
-    const loadFlow = applyImpedanceLoadFlow(circuit, nodes, potentials, terminalGraph);
-    updateWireStates(circuit, nodes, potentials);
     const powerQuality = applyPowerQualityHarmonics(circuit, nodes);
     faults.push(...validateEthernetWires(circuit, wallMs));
     updateMultimeterCurrentReadings(circuit, nodes);
@@ -457,6 +517,22 @@ export class CircuitEngine {
 
     let sum = 0;
     for (const comp of circuit.components) {
+      if (comp.type === 'ac_dc_converter' || comp.type === 'smps') {
+        const chargerNode = nodes[comp.id];
+        const iAc = chargerNode?.currentA ?? chargerNode?.fundamentalCurrentA ?? 0;
+        if (iAc <= 0 || comp.state === 'off' || comp.state === 'tripped') continue;
+        const acL = findTerminalByLabel(comp, 'AC_L');
+        if (acL && lineReach.has(acL)) sum += iAc;
+        continue;
+      }
+      if (comp.type === 'ups_module') {
+        const upsNode = nodes[comp.id];
+        const iChg = upsNode?.upsBatteryChargeCurrentA ?? upsNode?.currentA ?? 0;
+        if (iChg <= 0 || comp.state === 'off' || comp.state === 'tripped') continue;
+        const acInL = findTerminalByLabel(comp, 'AC_IN_L');
+        if (acInL && lineReach.has(acInL)) sum += iChg;
+        continue;
+      }
       if (!isLoadComponent(comp)) continue;
       const loadI = nodes[comp.id]?.currentA || 0;
       if (loadI <= 0) continue;

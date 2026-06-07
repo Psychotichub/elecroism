@@ -1,15 +1,20 @@
 import React from 'react';
-import { FiBookOpen, FiDownload, FiX } from 'react-icons/fi';
-import { useThemeStore, themeColors } from '../../store/themeStore';
+import { FiBookOpen, FiDownload } from 'react-icons/fi';
 import { useUiStore } from '../../store/uiStore';
 import {
   buildSubmissionDocument,
   downloadSubmissionFile,
 } from '../../utils/assignmentMode';
+import Button from '../ui/Button';
+import Input from '../ui/Input';
+import Textarea from '../ui/Textarea';
+import LearningPanelShell from './learning/LearningPanelShell';
 
-const AssignmentPanel: React.FC = () => {
-  const theme = useThemeStore((s) => s.theme);
-  const tc = themeColors[theme];
+type Props = {
+  docked?: boolean;
+};
+
+const AssignmentPanel: React.FC<Props> = ({ docked = false }) => {
   const assignment = useUiStore((s) => s.activeAssignment);
   const studentName = useUiStore((s) => s.assignmentStudentName);
   const studentId = useUiStore((s) => s.assignmentStudentId);
@@ -20,6 +25,17 @@ const AssignmentPanel: React.FC = () => {
   const setStudentId = useUiStore((s) => s.setAssignmentStudentId);
   const setFreeText = useUiStore((s) => s.setAssignmentFreeText);
   const markSubmitted = useUiStore((s) => s.markAssignmentSubmitted);
+  const pinned = useUiStore((s) => s.learningPanelPinned);
+  const minimized = useUiStore((s) => s.learningPanelMinimized);
+  const toggleLearningPanelPinned = useUiStore(
+    (s) => s.toggleLearningPanelPinned
+  );
+  const toggleLearningPanelMinimized = useUiStore(
+    (s) => s.toggleLearningPanelMinimized
+  );
+  const setLearningPanelMinimized = useUiStore(
+    (s) => s.setLearningPanelMinimized
+  );
 
   if (!assignment) return null;
 
@@ -38,115 +54,100 @@ const AssignmentPanel: React.FC = () => {
   };
 
   return (
-    <aside
-      className={`fixed bottom-14 right-4 z-50 w-[22rem] max-w-[calc(100vw-2rem)] rounded-lg border shadow-xl ${tc.border} ${tc.panel} ${tc.text}`}
-      aria-label={`Assignment: ${assignment.title}`}
-    >
-      <div
-        className={`flex items-start justify-between gap-2 border-b px-3 py-2 ${tc.border}`}
-      >
-        <div className="min-w-0">
-          <p
-            className={`text-[10px] font-semibold uppercase tracking-wide ${tc.textMuted}`}
-          >
-            Classroom assignment
+    <LearningPanelShell
+      ariaLabel={`Assignment: ${assignment.title}`}
+      eyebrow="Classroom assignment"
+      title={assignment.title}
+      docked={docked}
+      pinned={pinned}
+      minimized={minimized}
+      onTogglePin={toggleLearningPanelPinned}
+      onMinimize={toggleLearningPanelMinimized}
+      onRestore={() => setLearningPanelMinimized(false)}
+      onClose={exitAssignment}
+      meta={
+        assignment.courseName ? (
+          <p className="es-typo-caption text-es-secondary">
+            {assignment.courseName}
+            {assignment.dueDate ? ` · due ${assignment.dueDate}` : ''}
           </p>
-          <h2 className={`truncate text-sm font-bold ${tc.textBright}`}>
-            {assignment.title}
-          </h2>
-          {assignment.courseName ? (
-            <p className={`mt-0.5 text-[10px] ${tc.textMuted}`}>
-              {assignment.courseName}
-              {assignment.dueDate ? ` · due ${assignment.dueDate}` : ''}
-            </p>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          onClick={exitAssignment}
-          aria-label="Exit assignment"
-          className={`shrink-0 rounded p-1 ${tc.itemHover} ${tc.textMuted} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
-        >
-          <FiX aria-hidden />
-        </button>
-      </div>
+        ) : undefined
+      }
+    >
+      <p className="es-typo-body-sm leading-relaxed">{assignment.scenario}</p>
+      <p className="es-typo-body font-semibold text-es-bright">
+        <FiBookOpen className="mr-1 inline opacity-70" aria-hidden />
+        {assignment.question}
+      </p>
 
-      <div className="space-y-3 px-3 py-3">
-        <p className="text-[11px] leading-relaxed">{assignment.scenario}</p>
-        <p className={`text-xs font-semibold ${tc.textBright}`}>
-          <FiBookOpen className="mr-1 inline opacity-70" aria-hidden />
-          {assignment.question}
-        </p>
-
-        {!submitted ? (
-          <>
-            <label className="block">
-              <span className={`text-[10px] ${tc.textMuted}`}>Your name</span>
-              <input
-                type="text"
-                value={studentName}
-                onChange={(e) => setStudentName(e.target.value)}
-                placeholder="Student name"
-                className={`mt-1 w-full rounded border px-2 py-1 text-[11px] ${tc.inputBorder} ${tc.inputBg} ${tc.inputText} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
-              />
-            </label>
-            <label className="block">
-              <span className={`text-[10px] ${tc.textMuted}`}>
-                Student ID (optional)
-              </span>
-              <input
-                type="text"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-                placeholder="ID or email"
-                className={`mt-1 w-full rounded border px-2 py-1 text-[11px] ${tc.inputBorder} ${tc.inputBg} ${tc.inputText} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
-              />
-            </label>
-            <label className="block">
-              <span className={`text-[10px] ${tc.textMuted}`}>Diagnosis</span>
-              <textarea
-                value={freeText}
-                onChange={(e) => setFreeText(e.target.value)}
-                rows={3}
-                placeholder="Describe the root cause in your own words"
-                className={`mt-1 w-full rounded border px-2 py-1 text-[11px] ${tc.inputBorder} ${tc.inputBg} ${tc.inputText} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={!studentName.trim() || !freeText.trim()}
-              className="w-full rounded bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-            >
-              Submit assignment
-            </button>
-            <p className={`text-[10px] ${tc.textMuted}`}>
-              Hints and model answers are hidden. Your instructor will grade
-              exported submission files.
-            </p>
-          </>
-        ) : (
-          <div
-            className={`rounded border px-3 py-2 text-[11px] leading-relaxed border-emerald-600/50 bg-emerald-950/40 text-emerald-200`}
-            role="status"
+      {!submitted ? (
+        <>
+          <label className="block es-form-field">
+            <span className="es-typo-caption text-es-secondary">Your name</span>
+            <Input
+              type="text"
+              value={studentName}
+              onChange={(e) => setStudentName(e.target.value)}
+              placeholder="Student name"
+              className="mt-1"
+            />
+          </label>
+          <label className="block es-form-field">
+            <span className="es-typo-caption text-es-secondary">
+              Student ID (optional)
+            </span>
+            <Input
+              type="text"
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value)}
+              placeholder="ID or email"
+              className="mt-1"
+            />
+          </label>
+          <label className="block es-form-field">
+            <span className="es-typo-caption text-es-secondary">Diagnosis</span>
+            <Textarea
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              rows={3}
+              placeholder="Describe the root cause in your own words"
+              className="mt-1"
+            />
+          </label>
+          <Button
+            variant="primary"
+            className="w-full"
+            onClick={handleSubmit}
+            disabled={!studentName.trim() || !freeText.trim()}
           >
-            <p className="font-semibold">Submitted</p>
-            <p className="mt-1">
-              Download your submission file and send it to your instructor.
-              Scores are not shown in assignment mode.
-            </p>
-            <button
-              type="button"
-              onClick={handleDownload}
-              className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded bg-emerald-700 px-3 py-1.5 text-[11px] font-semibold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
-            >
-              <FiDownload aria-hidden />
-              Download submission (.esubmit)
-            </button>
-          </div>
-        )}
-      </div>
-    </aside>
+            Submit assignment
+          </Button>
+          <p className="es-typo-caption text-es-secondary">
+            Hints and model answers are hidden. Your instructor will grade
+            exported submission files.
+          </p>
+        </>
+      ) : (
+        <div
+          className="rounded-es-sm border border-es-success bg-es-success/10 px-3 py-2 es-typo-body-sm leading-relaxed text-es-success"
+          role="status"
+        >
+          <p className="font-semibold">Submitted</p>
+          <p className="mt-1">
+            Download your submission file and send it to your instructor.
+            Scores are not shown in assignment mode.
+          </p>
+          <Button
+            variant="primary"
+            className="mt-2 w-full bg-es-success text-white hover:opacity-90"
+            onClick={handleDownload}
+          >
+            <FiDownload aria-hidden />
+            Download submission (.esubmit)
+          </Button>
+        </div>
+      )}
+    </LearningPanelShell>
   );
 };
 

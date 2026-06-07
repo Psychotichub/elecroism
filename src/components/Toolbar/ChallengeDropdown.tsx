@@ -64,7 +64,7 @@ const ChallengeDropdown: React.FC<{ inactiveClassName: string }> = ({
         aria-expanded={open}
         aria-haspopup="menu"
         title="Fault diagnosis challenges — graded by the simulation engine"
-        className={`flex items-center gap-1 rounded px-2 py-1.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+        className={`flex items-center gap-1 rounded px-2 py-1.5 text-xs transition-colors es-focus-ring ${
           activeChallengeId
             ? 'bg-amber-600 text-white'
             : inactiveClassName
@@ -96,7 +96,7 @@ const ChallengeDropdown: React.FC<{ inactiveClassName: string }> = ({
                   type="button"
                   role="menuitem"
                   onClick={() => handleStart(c.id)}
-                  className={`block w-full px-3 py-2 text-left text-xs ${tc.text} ${tc.itemHover} focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500`}
+                  className={`block w-full px-3 py-2 text-left text-xs es-focus-ring focus-visible:ring-inset ${tc.text} ${tc.itemHover}`}
                 >
                   <span className="font-semibold">{c.title}</span>
                   <CatalogMetaChips

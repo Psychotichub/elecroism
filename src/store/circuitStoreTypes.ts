@@ -46,6 +46,8 @@ export interface CircuitStore {
   simulationResult: SimulationResult | null;
   /** True while a Web Worker simulation is in flight. */
   simulationPending: boolean;
+  /** Elapsed ms on the ATS sequence clock (advances each live simulation step). */
+  atsSequenceTimeMs: number;
   selectedId: string | null;
   /** Selected vertex on the selected wire (for Delete = remove bend). */
   wireGripVertexIndex: number | null;

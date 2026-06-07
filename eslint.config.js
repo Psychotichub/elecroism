@@ -4,6 +4,18 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
+import { noRawTailwindColors } from './eslint/no-raw-tailwind-colors.mjs'
+
+/** Legacy surfaces still on raw Tailwind palette — remove paths as panels migrate to es-* tokens. */
+const LEGACY_RAW_COLOR_PATHS = [
+  'src/App.tsx',
+  'src/components/Canvas/**',
+  'src/components/Dialogs/**',
+  'src/components/ErrorBoundary/**',
+  'src/components/Panels/**',
+  'src/components/Pwa/**',
+  'src/components/Toolbar/**',
+]
 
 export default defineConfig([
   globalIgnores(['dist', 'coverage']),
@@ -51,6 +63,25 @@ export default defineConfig([
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
+    },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: [
+      'src/components/ui/**',
+      '**/*.test.ts',
+      '**/__tests__/**',
+      ...LEGACY_RAW_COLOR_PATHS,
+    ],
+    plugins: {
+      electroism: {
+        rules: {
+          'no-raw-tailwind-colors': noRawTailwindColors,
+        },
+      },
+    },
+    rules: {
+      'electroism/no-raw-tailwind-colors': 'error',
     },
   },
 ])

@@ -4,6 +4,7 @@ import { Group, Rect, Text, Line, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 import ScaledSymbolInner from './ScaledSymbolInner';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 
 interface Props {
   component: CircuitComponent;
@@ -94,7 +95,7 @@ const MotorizedMCCBSymbol: React.FC<Props> = ({
             y={-36}
             width={selectionW}
             height={104}
-            stroke="#3B82F6"
+            stroke={getCanvasInteractionColors().selection}
             strokeWidth={2}
             dash={[4, 4]}
             cornerRadius={4}

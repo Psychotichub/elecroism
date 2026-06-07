@@ -192,7 +192,7 @@ const GlossaryLegendPanel: React.FC = () => {
                 Place symbols on the canvas to build a legend for this sheet.
               </p>
             ) : (
-              <PanelDataTable minWidth={280}>
+              <PanelDataTable minWidth={280} className="es-typo-body-sm">
                 <thead className="es-table-sticky-head">
                   <tr>
                     <th className="es-table-num w-8">#</th>
@@ -211,13 +211,13 @@ const GlossaryLegendPanel: React.FC = () => {
                         <span className="font-semibold text-es-bright">
                           {r.displayName}
                         </span>
-                        <p className="mt-0.5 es-typo-caption leading-snug text-es-secondary">
+                        <p className="mt-0.5 leading-snug text-es-secondary">
                           {r.description}
                         </p>
                       </td>
                       <td className="es-table-num align-top">{r.quantity}</td>
                       <td
-                        className="align-top es-typo-caption text-es-secondary"
+                        className="align-top text-es-secondary"
                         title={r.tags}
                       >
                         {r.tags || '—'}

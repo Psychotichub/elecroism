@@ -24,6 +24,10 @@
     "test:smoke": "playwright test",
     "test:smoke:ci": "npm run build:renderer && playwright test",
     "test:smoke:install": "playwright install",
+    "test:visual": "npm run build:renderer && playwright test -c playwright.visual.config.ts",
+    "test:visual:update": "npm run build:renderer && playwright test -c playwright.visual.config.ts --update-snapshots",
+    "test:visual:install": "playwright install chromium",
+    "gallery:dev": "vite --open /gallery.html",
     "perf:budget": "node scripts/check-performance-budget.mjs",
     "perf:baseline": "npm run build:renderer && node scripts/check-performance-budget.mjs --update-baseline",
     "preview": "vite preview"

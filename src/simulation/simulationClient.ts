@@ -73,18 +73,36 @@ function getWorker(): Worker | null {
   return worker;
 }
 
-function postSimulate(circuit: Circuit, wallMs: number): Promise<SimulationResult> {
+function postSimulate(
+  circuit: Circuit,
+  wallMs: number,
+  simStepMs = 0,
+  atsSequenceTimeMs = 0
+): Promise<SimulationResult> {
   const w = getWorker();
   const id = ++seq;
+  const overrides =
+    simStepMs > 0 || atsSequenceTimeMs > 0
+      ? { simStepMs, atsSequenceTimeMs }
+      : undefined;
   if (!w) {
-    return Promise.resolve(engine.simulate(structuredClone(circuit), 0, wallMs));
+    return Promise.resolve(
+      engine.simulate(structuredClone(circuit), 0, wallMs, overrides)
+    );
   }
   return new Promise<SimulationResult>((resolve, reject) => {
     pending.set(id, {
       resolve: resolve as (v: unknown) => void,
       reject,
     });
-    const msg: WorkerRequest = { id, type: 'simulate', circuit, wallMs };
+    const msg: WorkerRequest = {
+      id,
+      type: 'simulate',
+      circuit,
+      wallMs,
+      simStepMs,
+      atsSequenceTimeMs,
+    };
     w.postMessage(msg);
   });
 }
@@ -121,9 +139,11 @@ function postTimeline(
 
 export function simulateCircuitAsync(
   circuit: Circuit,
-  wallMs = Date.now()
+  wallMs = Date.now(),
+  simStepMs = 0,
+  atsSequenceTimeMs = 0
 ): Promise<SimulationResult> {
-  return postSimulate(circuit, wallMs);
+  return postSimulate(circuit, wallMs, simStepMs, atsSequenceTimeMs);
 }
 
 export function buildTimelineAsync(

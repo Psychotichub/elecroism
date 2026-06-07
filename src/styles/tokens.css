@@ -8,13 +8,15 @@
   --es-radius-sm: 4px;
   --es-radius-md: 6px;
   --es-radius-lg: 8px;
-  --es-shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.35);
   --es-motion-fast: 100ms;
   --es-motion-normal: 150ms;
   --es-motion-slow: 300ms;
 }
 
 [data-theme='dark'] {
+  --es-shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --es-shadow-chrome-left: none;
+  --es-shadow-chrome-right: none;
   --es-surface-app: #111118;
   --es-surface-canvas: #1a1d24;
   --es-surface-chrome-1: #16161e;
@@ -51,6 +53,9 @@
   --es-surface-chrome-1: #ffffff;
   --es-surface-chrome-2: #ffffff;
   --es-surface-raised: #ffffff;
+  --es-shadow-panel: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --es-shadow-chrome-left: 4px 0 16px -6px rgba(15, 23, 42, 0.12);
+  --es-shadow-chrome-right: -4px 0 16px -6px rgba(15, 23, 42, 0.12);
   --es-border-subtle: rgba(15, 23, 42, 0.1);
   --es-border-strong: rgba(15, 23, 42, 0.18);
   --es-text-primary: #334155;
@@ -77,6 +82,9 @@
 }
 
 [data-theme='high-contrast'] {
+  --es-shadow-panel: 0 0 0 2px #ffff00;
+  --es-shadow-chrome-left: none;
+  --es-shadow-chrome-right: none;
   --es-surface-app: #000000;
   --es-surface-canvas: #000000;
   --es-surface-chrome-1: #000000;
@@ -93,7 +101,7 @@
   --es-accent-muted: rgba(255, 255, 0, 0.2);
   --es-accent-foreground: #000000;
   --es-semantic-success: #00ff00;
-  --es-semantic-warning: #ffff00;
+  --es-semantic-warning: #ffaa00;
   --es-semantic-error: #ff4444;
   --es-semantic-learning: #ffaa00;
   --es-input-bg: #000000;

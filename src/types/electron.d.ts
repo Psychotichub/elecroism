@@ -28,9 +28,15 @@ export type RecentMenuItem = {
   label: string;
 };
 
+export type ElectronColorScheme = 'light' | 'dark';
+
 export interface ElectronAPI {
   platform: NodeJS.Platform;
   isPackaged: boolean;
+  colorScheme?: ElectronColorScheme;
+  onColorSchemeChanged?: (
+    callback: (scheme: ElectronColorScheme) => void
+  ) => () => void;
   versions: {
     app: string;
     electron: string;

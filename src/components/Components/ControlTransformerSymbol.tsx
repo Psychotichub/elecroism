@@ -3,6 +3,7 @@ import { Group, Rect, Line, Text, Circle } from 'react-konva';
 import type { CircuitComponent, NodeResult } from '../../types';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 
 interface Props {
   component: CircuitComponent;
@@ -43,7 +44,7 @@ const ControlTransformerSymbol: React.FC<Props> = ({
             y={-26}
             width={60}
             height={52}
-            stroke="#3B82F6"
+            stroke={getCanvasInteractionColors().selection}
             strokeWidth={2}
             dash={[4, 4]}
             cornerRadius={4}

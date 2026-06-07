@@ -3,6 +3,7 @@ import { Text } from 'react-konva';
 import Konva from 'konva';
 import { useCircuitStore } from '../../store/circuitStore';
 import { parseCrossSheetReference } from '../../utils/crossSheetNavigation';
+import { useSymbolStrokes } from './SymbolRenderContext';
 
 export interface ComponentCanvasLabelProps {
   componentId?: string;
@@ -29,6 +30,7 @@ export const ComponentCanvasLabel: React.FC<ComponentCanvasLabelProps> = ({
   offsetX = 0,
   offsetY = 0,
 }) => {
+  const { fontSize: scaledFontSize, strokeProps } = useSymbolStrokes();
   const selectedId = useCircuitStore((s) => s.selectedId);
   const gridSize = useCircuitStore((s) => s.circuit.gridSize || 20);
   const updateComponent = useCircuitStore((s) => s.updateComponent);
@@ -61,12 +63,12 @@ export const ComponentCanvasLabel: React.FC<ComponentCanvasLabelProps> = ({
       y={y + offsetY}
       width={width}
       align="center"
-      fontSize={fontSize}
+      fontSize={scaledFontSize(fontSize)}
       fill={crossSheet ? '#2563EB' : fill}
       fontStyle="bold"
       textDecoration={crossSheet ? 'underline' : undefined}
       stroke="#F9FAFB"
-      strokeWidth={0.35}
+      {...strokeProps(0.35)}
       shadowColor="#111827"
       shadowBlur={1.5}
       shadowOpacity={0.2}

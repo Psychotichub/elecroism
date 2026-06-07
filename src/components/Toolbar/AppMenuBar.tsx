@@ -3,7 +3,7 @@ import { AppIcon } from '../ui';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useUiStore } from '../../store/uiStore';
 import { useThemeStore } from '../../store/themeStore';
-import type { Theme } from '../../store/themeStore';
+import type { ThemePreference } from '../../store/themeStore';
 import { EXAMPLE_CIRCUITS } from '../../examples/exampleCircuits';
 import { listGuidedTutorials } from '../../utils/guidedTutorials';
 import { getQuizChallenge, listQuizChallenges } from '../../utils/quizChallenges';
@@ -26,6 +26,7 @@ import { openRecentProject, readProjectFileAsText } from '../../utils/projectOpe
 import ExportAssignmentDialog from '../Dialogs/ExportAssignmentDialog';
 import { BUNDLED_ORGANIZATION_TEMPLATES } from '../../templates/bundledOrganizationTemplates';
 import { parseOrganizationTemplate } from '../../utils/organizationTemplates';
+import Logomark from '../brand/Logomark';
 import { cn } from '../ui/cn';
 import type { SemanticIconId } from '../../design/icons';
 
@@ -173,7 +174,7 @@ const MenuPanel: React.FC<MenuPanelProps> = ({
 };
 
 const AppMenuBar: React.FC = () => {
-  const theme = useThemeStore((s) => s.theme);
+  const preference = useThemeStore((s) => s.preference);
   const setTheme = useThemeStore((s) => s.setTheme);
   const uiDensity = useUiStore((s) => s.uiDensity);
   const setUiDensity = useUiStore((s) => s.setUiDensity);
@@ -510,16 +511,17 @@ const AppMenuBar: React.FC = () => {
   void shortcutBindings;
 
   const appearanceNodes: MenuNode[] = useMemo(() => {
-    const themeOption = (value: Theme, label: string): MenuNode => ({
+    const themeOption = (value: ThemePreference, label: string): MenuNode => ({
       kind: 'action',
       action: {
         label,
-        checked: theme === value,
+        checked: preference === value,
         onClick: () => setTheme(value),
       },
     });
     return [
       { kind: 'heading', label: 'Theme' },
+      themeOption('system', 'Match system'),
       themeOption('dark', 'Dark'),
       themeOption('light', 'Light'),
       themeOption('high-contrast', 'High contrast'),
@@ -553,7 +555,7 @@ const AppMenuBar: React.FC = () => {
       },
     ];
   }, [
-    theme,
+    preference,
     uiDensity,
     showSheetTabBar,
     setTheme,
@@ -789,8 +791,9 @@ const AppMenuBar: React.FC = () => {
           />
         ))}
         <div className="flex-1" />
-        <span className="pr-1 es-typo-caption text-es-secondary">
-          ⚡ ElectroSim
+        <span className="flex items-center gap-1 pr-1 es-typo-caption text-es-secondary">
+          <Logomark size={12} aria-hidden />
+          <span>ElectroSim</span>
         </span>
       </nav>
       {exportAssignmentOpen ? (

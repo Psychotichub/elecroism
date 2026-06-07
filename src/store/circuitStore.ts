@@ -8,6 +8,7 @@ import type {
 } from '../types';
 import { DEFAULT_WIRE_OBJECT_SNAP_MODES } from '../types';
 import { simulateCircuitAsync } from '../simulation/simulationClient';
+import { resolveAtsConfig } from '../simulation/atsTransferSequence';
 import { v4 as uuid } from 'uuid';
 import {
   clampComponentScale,
@@ -178,6 +179,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   sheetSaveBaselines: establishSheetSaveBaselines(bootstrapProject),
   simulationResult: null,
   simulationPending: false,
+  atsSequenceTimeMs: 0,
   selectedId: null,
   wireGripVertexIndex: null,
   tool: 'select',
@@ -1352,12 +1354,23 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     };
     const clonedCircuit = structuredClone(syncWireEndpoints(normalized));
     set({ circuit: clonedCircuit, simulationPending: true });
-    void simulateCircuitAsync(clonedCircuit, Date.now())
+    const wallMs = Date.now();
+    const prevTs = get().simulationResult?.timestamp;
+    const simStepMs =
+      prevTs != null && prevTs > 0
+        ? Math.min(Math.max(0, wallMs - prevTs), 120_000)
+        : 0;
+    const hasAts = resolveAtsConfig(clonedCircuit) != null;
+    const atsSequenceTimeMs = hasAts
+      ? get().atsSequenceTimeMs + simStepMs
+      : 0;
+    void simulateCircuitAsync(clonedCircuit, wallMs, simStepMs, atsSequenceTimeMs)
       .then((result) => {
         if (reqId !== simulationRequestSeq) return;
         set({
           simulationResult: result,
           simulationPending: false,
+          atsSequenceTimeMs,
           faultDialogEvent:
             result.faults.length > 0 ? result.faults[0] : null,
         });
@@ -1480,6 +1493,8 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       selectedId: null,
       wireGripVertexIndex: null,
       bmsSimLog: [],
+      simulationResult: null,
+      atsSequenceTimeMs: 0,
       history: hist.history,
       historyIndex: hist.historyIndex,
       wireDraftDefaults: { color: null, wireCategory: null, styleLayer: null },

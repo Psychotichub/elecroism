@@ -17,4 +17,10 @@ export type { SegmentItem } from './SegmentedControl';
 export { default as Tabs } from './Tabs';
 export type { TabItem } from './Tabs';
 export { default as Textarea } from './Textarea';
+export { default as Tooltip } from './Tooltip';
+export {
+  TOOLTIP_HIDE_DELAY_MS,
+  TOOLTIP_SHOW_DELAY_MS,
+} from './Tooltip';
+export type { TooltipSide } from './Tooltip';
 export { cn } from './cn';

@@ -10,8 +10,14 @@ import type {
   CircuitComponent,
   FaultEvent,
   AcbSimState,
+  ResidualSimState,
+  OverloadSimState,
 } from '../types';
 import { mcbLayoutPoles } from '../store/circuitConnectionGeometry';
+import {
+  advanceOverloadRelayThermal,
+  protectorTripClassS,
+} from './motorThermal';
 
 /* ------------------------------------------------------------------ */
 /*  MCB magnetic multiplier                                           */
@@ -38,6 +44,117 @@ function mcbMagneticInMultiple(component: CircuitComponent): number {
 function ensureAcbSim(component: CircuitComponent): AcbSimState {
   if (!component.acbSimState) component.acbSimState = {};
   return component.acbSimState;
+}
+
+function ensureResidualSim(component: CircuitComponent): ResidualSimState {
+  if (!component.residualSimState) component.residualSimState = {};
+  return component.residualSimState;
+}
+
+function checkResidualEarthFault(
+  component: CircuitComponent,
+  residualMA: number,
+  thresholdMA: number,
+  delayMs: number,
+  wallMs: number,
+  tag: string
+): FaultEvent | null {
+  if (residualMA <= thresholdMA) {
+    ensureResidualSim(component).earthZoneSinceMs = null;
+    return null;
+  }
+  const sim = ensureResidualSim(component);
+  sim.lastWallMs = wallMs;
+  if (delayMs <= 0) {
+    sim.earthZoneSinceMs = null;
+    return {
+      id: crypto.randomUUID(),
+      type: 'earth_fault',
+      affectedComponentId: component.id,
+      message: `${tag} "${component.label}" earth leakage ${residualMA.toFixed(0)}mA exceeds ${thresholdMA}mA sensitivity`,
+      severity: 'critical',
+      timestamp: wallMs,
+    };
+  }
+  if (sim.earthZoneSinceMs == null) sim.earthZoneSinceMs = wallMs;
+  const elapsed = wallMs - (sim.earthZoneSinceMs ?? wallMs);
+  if (elapsed >= delayMs) {
+    sim.earthZoneSinceMs = null;
+    return {
+      id: crypto.randomUUID(),
+      type: 'earth_fault',
+      affectedComponentId: component.id,
+      message: `${tag} "${component.label}" earth leakage ${residualMA.toFixed(0)}mA exceeds ${thresholdMA}mA after ${delayMs}ms delay`,
+      severity: 'critical',
+      timestamp: wallMs,
+    };
+  }
+  return null;
+}
+
+function ensureOverloadSim(component: CircuitComponent): OverloadSimState {
+  if (!component.overloadSimState) component.overloadSimState = {};
+  return component.overloadSimState;
+}
+
+function thermalStepDtMs(
+  component: CircuitComponent,
+  wallMs: number,
+  simStepMs: number
+): number {
+  const sim = ensureOverloadSim(component);
+  let dt = 0;
+  if (sim.lastWallMs != null) {
+    dt = wallMs - sim.lastWallMs;
+    if (dt < 0) dt = 0;
+    if (dt > 120_000) dt = 120_000;
+  } else if (simStepMs > 0) {
+    dt = Math.min(simStepMs, 120_000);
+  }
+  sim.lastWallMs = wallMs;
+  return dt;
+}
+
+export function checkOverloadRelayFaults(
+  component: CircuitComponent,
+  currentA: number,
+  wallMs: number,
+  simStepMs = 0
+): FaultEvent | null {
+  const pickup = component.properties.ratingAmps;
+  if (!pickup || pickup <= 0) return null;
+
+  if (currentA > 1000) {
+    return {
+      id: crypto.randomUUID(),
+      type: 'short_circuit',
+      affectedComponentId: component.id,
+      message: `Overload relay "${component.label}" short-circuit trip: ${currentA.toFixed(0)}A`,
+      severity: 'critical',
+      timestamp: wallMs,
+    };
+  }
+
+  const dtMs = thermalStepDtMs(component, wallMs, simStepMs);
+  if (dtMs <= 0) return null;
+
+  const { heatPct, tripped } = advanceOverloadRelayThermal(
+    component,
+    currentA,
+    dtMs
+  );
+  if (!tripped) return null;
+
+  const tripClass = protectorTripClassS(component);
+  const ratio = currentA / pickup;
+  return {
+    id: crypto.randomUUID(),
+    type: 'overload',
+    affectedComponentId: component.id,
+    message: `Overload relay "${component.label}" Class ${tripClass}s thermal trip: ${currentA.toFixed(1)}A (${ratio.toFixed(2)}×${pickup}A), bimetal heat ${heatPct.toFixed(0)}%`,
+    severity: 'critical',
+    timestamp: wallMs,
+  };
 }
 
 function acbArcFootnote(hz: number): string {
@@ -189,11 +306,22 @@ export function checkAcbFaults(
 export function checkFaults(
   component: CircuitComponent,
   currentA: number,
-  faultCtx?: { lnFaultPath: boolean; wallMs?: number }
+  faultCtx?: {
+    lnFaultPath: boolean;
+    wallMs?: number;
+    residualMA?: number;
+    simStepMs?: number;
+  }
 ): FaultEvent | null {
   const p = component.properties;
   const ctx = faultCtx ?? { lnFaultPath: false };
   const wall = faultCtx?.wallMs ?? Date.now();
+  const residualMA = faultCtx?.residualMA ?? 0;
+  const simStepMs = faultCtx?.simStepMs ?? 0;
+
+  if (component.type === 'overload_relay') {
+    return checkOverloadRelayFaults(component, currentA, wall, simStepMs);
+  }
 
   if (component.type === 'air_circuit_breaker') {
     return checkAcbFaults(component, currentA, ctx, wall);
@@ -271,62 +399,44 @@ export function checkFaults(
         timestamp: wall,
       };
     }
-    if (
-      component.type === 'earth_leakage_relay_cbct' &&
-      ctx.lnFaultPath &&
-      currentA > 0.1
-    ) {
-      return {
-        id: crypto.randomUUID(),
-        type: 'earth_fault',
-        affectedComponentId: component.id,
-        message: `ELR+CBCT "${component.label}" earth-fault trip at ${
-          p.earthLeakageTripMa ?? 30
-        }mA setting`,
-        severity: 'critical',
-        timestamp: wall,
-      };
+    if (component.type === 'earth_leakage_relay_cbct') {
+      const earthFault = checkResidualEarthFault(
+        component,
+        residualMA,
+        p.earthLeakageTripMa ?? 30,
+        p.elrTripDelayMs ?? 0,
+        wall,
+        'ELR+CBCT'
+      );
+      if (earthFault) return earthFault;
     }
   }
 
   if (
-    component.type === 'overload_relay' &&
-    p.ratingAmps &&
-    currentA > p.ratingAmps
+    component.type === 'rcd' ||
+    component.type === 'residual_current_circuit_breaker'
   ) {
     if (currentA > 1000) {
       return {
         id: crypto.randomUUID(),
         type: 'short_circuit',
         affectedComponentId: component.id,
-        message: `Overload relay "${component.label}" short-circuit trip: ${currentA.toFixed(0)}A`,
+        message: `Short circuit detected at "${component.label}"`,
         severity: 'critical',
         timestamp: wall,
       };
     }
-    return {
-      id: crypto.randomUUID(),
-      type: 'overload',
-      affectedComponentId: component.id,
-      message: `Overload relay "${component.label}" tripped: ${currentA.toFixed(1)}A exceeds ${p.ratingAmps}A`,
-      severity: 'critical',
-      timestamp: wall,
-    };
-  }
-
-  if (
-    (component.type === 'rcd' ||
-      component.type === 'residual_current_circuit_breaker') &&
-    currentA > 1000
-  ) {
-    return {
-      id: crypto.randomUUID(),
-      type: 'short_circuit',
-      affectedComponentId: component.id,
-      message: `Short circuit detected at "${component.label}"`,
-      severity: 'critical',
-      timestamp: wall,
-    };
+    const tag =
+      component.type === 'residual_current_circuit_breaker' ? 'RCCB' : 'RCD';
+    const earthFault = checkResidualEarthFault(
+      component,
+      residualMA,
+      p.rcdSensitivity ?? 30,
+      p.rcdTripTimeMs ?? 30,
+      wall,
+      tag
+    );
+    if (earthFault) return earthFault;
   }
 
   return null;

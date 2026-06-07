@@ -2,6 +2,7 @@ import React from 'react';
 import { Line, Text, Group, Rect } from 'react-konva';
 import Konva from 'konva';
 import type { Wire } from '../../types';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 import {
   effectiveWireDisplayText,
   getLongestWireSegmentLayout,
@@ -29,6 +30,7 @@ const WireSegment: React.FC<Props> = ({
   selected,
 }) => {
   const vis = resolveWireSegmentVisual(wire, selected);
+  const selectionColor = getCanvasInteractionColors().selection;
   const opacity = wire.energized ? 1 : 0.92;
   const labelText = effectiveWireDisplayText(wire);
   const labelLayout = getLongestWireSegmentLayout(wire.points);
@@ -67,6 +69,17 @@ const WireSegment: React.FC<Props> = ({
 
   return (
     <>
+      {selected ? (
+        <Line
+          points={wire.points}
+          stroke={selectionColor}
+          strokeWidth={Math.max(vis.strokeWidth + 2.5, 3)}
+          opacity={0.55}
+          lineCap="round"
+          lineJoin="round"
+          listening={false}
+        />
+      ) : null}
       {vis.kind === 'earth_pe' ? (
         <>
           <Line

@@ -102,6 +102,7 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
     description:
       'Residual earth-fault detection using a core-balance current transformer.',
     features: [
+      'Vector residual current on protected zone (L1+L2+L3 or L+N)',
       'Trip delay and sensitivity settings',
       'Conducts main path when healthy and enabled',
     ],
@@ -111,9 +112,10 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
   rcd: {
     displayName: 'RCD / RCCB',
     description:
-      'Residual current device that trips on imbalance between line and neutral currents.',
+      'Residual current device that trips on vector imbalance between line and neutral currents.',
     features: [
       '2P terminals 1–4 or 4P 1–8 (odd in, even out per pole)',
+      'Vector residual trip with configurable sensitivity and delay',
       'Sensitivity and type (AC/A/B) metadata',
     ],
     purpose:
@@ -221,8 +223,9 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
     features: [
       'Faceplate stages 1–4 (XFMR → RECT → C → REG) driven from properties',
       'Ideal |sin| envelope sketch for full-wave / bridge education',
-      'AC_L / AC_N in, DC_PLUS / DC_MINUS out; same energization rules as before',
-      'Nominal AC in (Vrms), 50/60 Hz, rectifier type, regulator on/off',
+      'AC_L / AC_N in, DC_PLUS / DC_MINUS out',
+      'Primary AC current coupled to DC bus load (η, PF, rated W)',
+      'Output overload trips supply and drops DC bus',
     ],
     purpose:
       'Teach or document rectification before DC loads; use the SMPS component for switch-mode bricks.',
@@ -279,9 +282,15 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
   },
   smart_relay: {
     displayName: 'Smart relay',
-    description: 'Relay with embedded logic or communication (simplified as relay).',
-    features: ['Coil-based pickup like standard relay', 'Properties for I/O counts / tags'],
-    purpose: 'Represent intelligent relays where timing or logic is implied.',
+    description:
+      'Programmable relay with IN terminals and ladder-style logic gating T1↔T2.',
+    features: [
+      'Configurable logic program (e.g. OUT1 = IN1 AND NOT IN2)',
+      'IN1/IN2 read from terminal potentials; A1/A2 powers internal logic',
+      'T1↔T2 closes when program is true and coil supply is present',
+    ],
+    purpose:
+      'Interlocks, pump alternation, or BMS-style boolean control without a full PLC.',
   },
   timer: {
     displayName: 'Timer',
@@ -296,7 +305,11 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
   overload_relay: {
     displayName: 'Overload relay (thermal)',
     description: 'Motor overload protection sensing current and opening control circuit.',
-    features: ['Trip class and motor association', 'Simulation trip behaviour'],
+    features: [
+      'IEC Class 10/20/30 bimetal thermal integrator',
+      'Tolerates inrush; trips on sustained overload',
+      'Trip class and motor association',
+    ],
     purpose: 'Mandatory with motor starters to limit rotor/stator thermal damage.',
   },
   three_phase_source: {
@@ -386,7 +399,11 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
   selector_switch: {
     displayName: 'Selector switch',
     description: 'Maintained rotary switch (AUTO / OFF / MANUAL).',
-    features: ['Position stored in properties', 'COM to AUTO or MAN routing'],
+    features: [
+      'MANUAL: COM ↔ MAN physical bridge for push-buttons',
+      'AUTO: COM ↔ AUTO bus; ATS/BMS overrides contactor pickup',
+      'ATS sequence controller with open/closed transition',
+    ],
     purpose: 'Hand/auto selection, mode control, or maintenance override.',
   },
   indicator_lamp: {
@@ -408,7 +425,12 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
   smps: {
     displayName: 'SMPS',
     description: 'Switch-mode power supply from AC mains to regulated DC bus.',
-    features: ['AC and DC terminals', 'Output voltage setpoint'],
+    features: [
+      'AC and DC terminals',
+      'Output voltage and rated power (W)',
+      'Primary current coupled to DC bus load (η, PF, THD)',
+      'Output overload trips supply',
+    ],
     purpose: '24 Vdc PLC supplies, field devices, and control power generation.',
   },
   interposing_relay: {
@@ -550,13 +572,21 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
   ups_module: {
     displayName: 'UPS module',
     description: 'Uninterruptible supply bridging mains, battery, and critical load.',
-    features: ['AC in/out and battery terminals', 'Pass-through when closed/on'],
+    features: [
+      'AC in/out and battery terminals',
+      'Inverter backup with SoC depletion and low-voltage trip',
+      'Float charge current on AC input when mains present',
+    ],
     purpose: 'IT loads, safety PLCs, or critical control where ride-through matters.',
   },
   dc_battery_backup: {
     displayName: 'DC battery backup',
     description: 'Battery string or DC UPS storage element.',
-    features: ['Positive and negative terminals', 'Voltage metadata'],
+    features: [
+      'Positive and negative terminals',
+      'Capacity (Ah), remaining charge, and cutoff SoC',
+      'Voltage sags as the pack discharges',
+    ],
     purpose: '125 Vdc substation tripping, 24 Vdc control, or telecom DC plants.',
   },
   motor_operator_kit: {

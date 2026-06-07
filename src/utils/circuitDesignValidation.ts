@@ -11,6 +11,7 @@ import { validateArcFlash } from './arcFlashAnalysis';
 import { validatePowerQuality } from './powerQualityValidation';
 import { findDuplicateDesignators } from './designatorRules';
 import { validateAtsInstallation } from '../simulation/atsTransferSequence';
+import { validateSelectorSwitchRouting } from '../simulation/selectorSwitchRouting';
 import { validateCableDerating } from './cableSizingWizard';
 import { validateDcFaultLevels } from './dcFaultCurrent';
 import {
@@ -810,6 +811,10 @@ export function runCircuitDesignValidation(
   }
 
   for (const iss of validateAtsInstallation(circuit)) {
+    push(iss);
+  }
+
+  for (const iss of validateSelectorSwitchRouting(circuit)) {
     push(iss);
   }
 

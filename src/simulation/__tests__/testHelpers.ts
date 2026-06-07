@@ -180,7 +180,50 @@ function defaultProperties(type: ComponentType): ComponentProperties {
       };
     case 'contactor':
       return { ratingAmps: 25, phaseSystem: 'single_phase' };
+    case 'smart_relay':
+      return {
+        ratingAmps: 10,
+        smartRelayProgram: 'OUT1 = IN1',
+        phaseSystem: 'single_phase',
+      };
+    case 'timer':
+      return { timerDelayMs: 1000, phaseSystem: 'single_phase' };
+    case 'overload_relay':
+      return {
+        ratingAmps: 16,
+        overloadTripClass: '10',
+        phaseSystem: 'single_phase',
+      };
+    case 'selector_switch':
+      return { selectorPosition: 'OFF', phaseSystem: 'single_phase' };
     case 'junction':
+      return { phaseSystem: 'single_phase' };
+    case 'rcd':
+    case 'residual_current_circuit_breaker':
+      return {
+        ratingAmps: 40,
+        rcdSensitivity: 30,
+        rcdTripTimeMs: 0,
+        poles: 2,
+        phaseSystem: 'single_phase',
+      };
+    case 'earth_leakage_relay_cbct':
+      return {
+        ratingAmps: 63,
+        earthLeakageTripMa: 30,
+        elrTripDelayMs: 0,
+        poles: 1,
+        phaseSystem: 'single_phase',
+      };
+    case 'socket':
+      return {
+        socketType: 'schuko',
+        voltage: 230,
+        ratingAmps: 16,
+        powerWatts: 60,
+        phaseSystem: 'single_phase',
+      };
+    case 'earth_bar_grounding_system':
       return { phaseSystem: 'single_phase' };
     default:
       return {};
@@ -208,6 +251,12 @@ function defaultConnectionPoints(
       return [cp(0, -25, '1'), cp(0, 25, '2')];
     case 'overload_relay':
       return [cp(0, -25, '1'), cp(0, 25, '2')];
+    case 'selector_switch':
+      return [
+        cp(0, -22, 'COM'),
+        cp(-16, 22, 'AUTO'),
+        cp(16, 22, 'MAN'),
+      ];
     case 'switch':
       return [cp(0, -20, '1'), cp(0, 20, '2')];
     case 'lamp':
@@ -221,6 +270,17 @@ function defaultConnectionPoints(
         cp(-20, 0, 'A1'), cp(20, 0, 'A2'),
         cp(-12, 38, '13'), cp(-12, 50, '14'),
         cp(12, 38, '21'), cp(12, 50, '22'),
+      ];
+    case 'smart_relay':
+      return [
+        cp(-28, -14, 'IN1'), cp(-28, 14, 'IN2'),
+        cp(0, -25, 'T1'), cp(0, 25, 'T2'),
+        cp(28, -8, 'A1'), cp(28, 8, 'A2'),
+      ];
+    case 'timer':
+      return [
+        cp(0, -25, 'COM'), cp(-14, 25, 'NC'), cp(14, 25, 'NO'),
+        cp(-20, 0, 'A1'), cp(20, 0, 'A2'),
       ];
     case 'three_phase_source':
       return [
@@ -269,6 +329,22 @@ function defaultConnectionPoints(
       return [
         cp(0, 0, 'T1'),
       ];
+    case 'rcd':
+    case 'residual_current_circuit_breaker':
+      return [
+        cp(0, -25, '1'),
+        cp(0, 25, '2'),
+        cp(20, -25, '3'),
+        cp(20, 25, '4'),
+      ];
+    case 'earth_leakage_relay_cbct':
+      return [cp(0, -25, '1'), cp(0, 25, '2')];
+    case 'socket':
+      return [
+        cp(-10, -20, 'L'),
+        cp(10, -20, 'N'),
+        cp(0, 20, 'PE'),
+      ];
     case 'smps':
     case 'ac_dc_converter':
       return [
@@ -296,7 +372,7 @@ function defaultConnectionPoints(
 function defaultState(type: ComponentType): CircuitComponent['state'] {
   const startsOff = new Set<ComponentType>([
     'switch', 'push_button', 'mcb', 'hrc_fuse', 'control_circuit_fuse',
-    'contactor', 'relay', 'timer', 'overload_relay',
+    'contactor', 'relay', 'smart_relay', 'timer', 'overload_relay',
     'three_phase_mcb', 'mccb', 'motor_protection_circuit_breaker',
     'four_phase_mcb', 'motorized_mccb', 'four_pole_motorized_mccb',
     'air_circuit_breaker', 'three_phase_contactor', 'four_phase_contactor',

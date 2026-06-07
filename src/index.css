@@ -8,6 +8,10 @@
     @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-es-accent focus-visible:ring-offset-1 focus-visible:ring-offset-es-chrome1;
   }
 
+  [data-theme='high-contrast'] .es-focus-ring:focus-visible {
+    @apply ring-white ring-offset-2 ring-offset-black;
+  }
+
   .es-typo-caption {
     font-size: 10px;
     line-height: 14px;
@@ -371,6 +375,86 @@
     @apply bg-es-accent text-es-accentFg ring-2 ring-inset;
     --tw-ring-color: color-mix(in oklab, var(--es-text-bright) 25%, transparent);
   }
+
+  .es-card-learning {
+    border-color: var(--es-semantic-learning);
+    box-shadow:
+      var(--es-shadow-panel),
+      inset 3px 0 0 0 var(--es-semantic-learning);
+  }
+
+  .es-learning-panel-header {
+    @apply flex items-start justify-between gap-2 border-b border-es-borderSubtle px-3 py-2;
+  }
+
+  .es-learning-panel-body {
+    @apply min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3;
+  }
+
+  .es-learning-panel-dock {
+    @apply flex max-h-[42vh] min-h-0 shrink-0 flex-col border-t border-es-borderSubtle;
+  }
+
+  .es-learning-panel-floating {
+    @apply fixed bottom-14 right-4 z-50 flex w-[22rem] max-w-[calc(100vw-2rem)] max-h-[min(70vh,32rem)] min-h-0 flex-col;
+  }
+
+  .es-learning-panel-minimized {
+    @apply flex shrink-0 items-center justify-between gap-2 border-t border-es-borderSubtle px-3 py-1.5;
+  }
+
+  .es-tooltip {
+    @apply pointer-events-none fixed z-[300] max-w-xs rounded-es-sm border border-es-borderSubtle bg-es-chrome2 px-2 py-1 es-typo-caption text-es-primary shadow-[var(--es-shadow-panel)];
+  }
+
+  .es-tooltip-multiline {
+    @apply max-w-sm whitespace-pre-line leading-relaxed;
+  }
+
+  .es-sidebar-shell,
+  .es-inspector-shell {
+    @apply bg-es-chrome2;
+  }
+
+  [data-theme='light'] .es-sidebar-shell {
+    box-shadow: var(--es-shadow-chrome-left);
+    @apply z-[1];
+  }
+
+  [data-theme='light'] .es-inspector-shell {
+    box-shadow: var(--es-shadow-chrome-right);
+    @apply z-[1];
+  }
+
+  [data-theme='light'] .circuit-canvas-container {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--es-border-subtle) 65%, transparent);
+  }
+
+  [data-theme='light'] .es-palette-toolbar,
+  [data-theme='light'] .es-inspector-tablist {
+    background-color: var(--es-input-bg);
+  }
+
+  [data-theme='light'] .es-palette-section {
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  [data-theme='light'] .es-palette-section-header {
+    background-color: var(--es-input-bg);
+  }
+
+  [data-theme='light'] .es-selection-header-card {
+    background-color: var(--es-surface-chrome-2);
+  }
+
+  .circuit-canvas-container {
+    @apply bg-es-canvas;
+  }
+
+  .es-canvas-zoom-controls {
+    @apply absolute bottom-3 left-3 z-10 flex items-center gap-0.5 rounded-es-md border border-es-borderSubtle px-1 py-1 shadow-[var(--es-shadow-panel)] backdrop-blur-sm;
+    background-color: color-mix(in oklab, var(--es-surface-chrome-2) 92%, transparent);
+  }
 }
 
 [data-density='comfortable'] .es-form-field {
@@ -387,6 +471,26 @@
 
 [data-density='comfortable'] .es-density-pad {
   @apply p-4;
+}
+
+/* Tablet / coarse-pointer chrome — minimum 40×40px targets (see docs/ui-breakpoints.md). */
+[data-touch-targets='coarse'] .es-touch-target,
+[data-touch-targets='coarse'] .es-menu-bar button,
+[data-touch-targets='coarse'] .es-sheet-tabs button,
+[data-touch-targets='coarse'] .es-palette-rail button,
+[data-touch-targets='coarse'] .es-canvas-zoom-controls button,
+[data-touch-targets='coarse'] .es-pwa-install-banner button,
+[data-touch-targets='coarse'] .es-icon-toolbar {
+  min-height: 40px;
+  min-width: 40px;
+}
+
+[data-touch-targets='coarse'] .es-menu-bar {
+  @apply h-10;
+}
+
+[data-touch-targets='coarse'] .es-sheet-tabs {
+  @apply h-10;
 }
 
 @tailwind utilities;

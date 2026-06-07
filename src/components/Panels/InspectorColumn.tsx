@@ -175,7 +175,7 @@ const InspectorColumn: React.FC = () => {
   return (
     <div
       id="inspector-panel-root"
-      className={`flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col ${tc.panel}`}
+      className={`es-inspector-root flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col ${tc.panel}`}
     >
       <div ref={tablistRef}>
         <Tabs
@@ -187,6 +187,7 @@ const InspectorColumn: React.FC = () => {
           ariaLabel="Inspector panels"
           onTabKeyDown={onTabKeyDown}
           compact={compactTabs}
+          className="es-inspector-tablist"
         />
       </div>
       <div

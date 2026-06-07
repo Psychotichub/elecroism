@@ -1,7 +1,11 @@
 /// <reference types="vitest/config" />
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const PRODUCTION_CSP = [
   "default-src 'self'",
@@ -51,6 +55,10 @@ export default defineConfig({
   plugins: [react(), electronProductionCsp()],
   build: {
     rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        gallery: path.resolve(__dirname, 'gallery.html'),
+      },
       output: {
         manualChunks(id) {
           return manualChunkFromNodeModules(id)

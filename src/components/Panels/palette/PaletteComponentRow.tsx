@@ -7,6 +7,7 @@ import {
   formatComponentPanelHelpText,
   getComponentPanelDescription,
 } from '../../../utils/componentPanelInfo';
+import Tooltip from '../../ui/Tooltip';
 import { cn } from '../../ui/cn';
 
 type Props = {
@@ -44,53 +45,61 @@ const PaletteComponentRow: React.FC<Props> = ({
     }
   );
 
+  const favoriteLabel = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+
   return (
-    <div
-      id={optionId}
-      role="option"
-      aria-selected={isFocused}
-      tabIndex={-1}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onFocus={onFocus}
-      title={title}
-      data-testid={`palette-row-${sectionKey}-${item.type}`}
-      className={cn(
-        'es-palette-row es-focus-ring',
-        isFocused && 'es-palette-row-focused'
-      )}
-    >
-      <PaletteSymbolThumbnail type={item.type} className="shrink-0" />
-      <span className="min-w-0 flex-1 truncate es-typo-body-sm text-es-primary">
-        {highlightSearchMatch(item.label, searchQuery)}
-      </span>
-      <button
-        type="button"
-        aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-        className="es-palette-fav-btn es-focus-ring"
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onToggleFavorite();
-        }}
+    <Tooltip content={title} side="right" className="es-tooltip-multiline">
+      <div
+        id={optionId}
+        role="option"
+        aria-selected={isFocused}
+        tabIndex={-1}
+        draggable
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onFocus={onFocus}
+        data-testid={`palette-row-${sectionKey}-${item.type}`}
+        className={cn(
+          'es-palette-row es-focus-ring',
+          isFocused && 'es-palette-row-focused'
+        )}
       >
-        <FiStar
-          className={cn(
-            'h-3.5 w-3.5',
-            isFavorite
-              ? 'fill-amber-400 text-amber-400'
-              : 'text-es-secondary opacity-40'
-          )}
-          strokeWidth={isFavorite ? 0 : 1.75}
-        />
-      </button>
-    </div>
+        <PaletteSymbolThumbnail type={item.type} className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate es-typo-body-sm text-es-primary">
+          {highlightSearchMatch(item.label, searchQuery)}
+        </span>
+        <Tooltip content={favoriteLabel} side="right">
+          <button
+            type="button"
+            aria-label={favoriteLabel}
+            className="es-palette-fav-btn es-focus-ring"
+            onMouseEnter={(e) => e.stopPropagation()}
+            onMouseLeave={(e) => e.stopPropagation()}
+            onFocus={(e) => e.stopPropagation()}
+            onBlur={(e) => e.stopPropagation()}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleFavorite();
+            }}
+          >
+            <FiStar
+              className={cn(
+                'h-3.5 w-3.5',
+                isFavorite
+                  ? 'fill-amber-400 text-amber-400'
+                  : 'text-es-secondary opacity-40'
+              )}
+              strokeWidth={isFavorite ? 0 : 1.75}
+            />
+          </button>
+        </Tooltip>
+      </div>
+    </Tooltip>
   );
 };
 

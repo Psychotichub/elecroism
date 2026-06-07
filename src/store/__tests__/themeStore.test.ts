@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { themeColors, themeLabel, useThemeStore } from '../themeStore'
+import {
+  preferenceLabel,
+  resolveTheme,
+  themeColors,
+  themeLabel,
+  useThemeStore,
+} from '../themeStore'
 
 const THEME_KEY = 'electroism.theme.v1'
 
@@ -22,33 +28,69 @@ function createStorage() {
 describe('themeStore', () => {
   beforeEach(() => {
     const storage = createStorage()
-    vi.stubGlobal('window', { localStorage: storage })
-    useThemeStore.setState({ theme: 'dark' })
+    vi.stubGlobal('window', {
+      localStorage: storage,
+      matchMedia: vi.fn(() => ({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+      electronAPI: undefined,
+    })
+    useThemeStore.setState({ preference: 'dark', theme: 'dark' })
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('cycles dark → light → high-contrast → dark', () => {
-    useThemeStore.setState({ theme: 'dark' })
-    useThemeStore.getState().cycleTheme()
-    expect(useThemeStore.getState().theme).toBe('light')
-    useThemeStore.getState().cycleTheme()
-    expect(useThemeStore.getState().theme).toBe('high-contrast')
-    useThemeStore.getState().cycleTheme()
+  it('defaults to system preference on first launch', () => {
+    useThemeStore.setState({
+      preference: 'system',
+      theme: resolveTheme('system'),
+    })
+    expect(useThemeStore.getState().preference).toBe('system')
     expect(useThemeStore.getState().theme).toBe('dark')
   })
 
-  it('persists theme to localStorage', () => {
+  it('cycles dark → light → high-contrast → system → dark', () => {
+    useThemeStore.setState({ preference: 'dark', theme: 'dark' })
+    useThemeStore.getState().cycleTheme()
+    expect(useThemeStore.getState().preference).toBe('light')
+    useThemeStore.getState().cycleTheme()
+    expect(useThemeStore.getState().preference).toBe('high-contrast')
+    useThemeStore.getState().cycleTheme()
+    expect(useThemeStore.getState().preference).toBe('system')
+    useThemeStore.getState().cycleTheme()
+    expect(useThemeStore.getState().preference).toBe('dark')
+  })
+
+  it('persists theme preference to localStorage', () => {
     useThemeStore.getState().setTheme('high-contrast')
     expect(window.localStorage.getItem(THEME_KEY)).toBe('high-contrast')
+    expect(useThemeStore.getState().preference).toBe('high-contrast')
     expect(useThemeStore.getState().theme).toBe('high-contrast')
+  })
+
+  it('syncs resolved theme when preference is system', () => {
+    useThemeStore.getState().setTheme('system')
+    vi.stubGlobal('window', {
+      localStorage: window.localStorage,
+      matchMedia: vi.fn(() => ({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+      electronAPI: undefined,
+    })
+    useThemeStore.getState().syncSystemTheme()
+    expect(useThemeStore.getState().theme).toBe('light')
   })
 
   it('exposes semantic palette tokens', () => {
     expect(themeColors.dark.toolbar).toContain('es-chrome1')
     expect(themeColors['high-contrast'].canvasHex).toBe('#000000')
     expect(themeLabel('high-contrast')).toBe('High contrast')
+    expect(preferenceLabel('system')).toBe('Match system')
   })
 })

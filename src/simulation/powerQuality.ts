@@ -100,20 +100,16 @@ export function singlePhaseNeutralHarmonicA(
   return harmonicRmsCurrentA(lineFundamentalA, thdPercent) * triplenFraction;
 }
 
-function smpsInputFundamentalA(c: CircuitComponent): number {
-  const pOut =
-    c.properties.powerWatts ??
-    (c.properties.voltage ?? 24) * 5;
-  const eta = 0.9;
-  const vAc = 230;
-  return pOut / eta / vAc;
-}
-
 function fundamentalCurrentForComponent(
   c: CircuitComponent,
   node: NodeResult
 ): number {
-  if (c.type === 'smps') return smpsInputFundamentalA(c);
+  if (c.type === 'smps' || c.type === 'ac_dc_converter') {
+    if (node.fundamentalCurrentA != null && node.fundamentalCurrentA > 0) {
+      return node.fundamentalCurrentA;
+    }
+    return 0;
+  }
   return node.lineCurrentRmsA ?? node.currentA ?? 0;
 }
 

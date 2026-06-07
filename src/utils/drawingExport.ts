@@ -11,6 +11,15 @@ import {
 import { captureStageRegion } from './export';
 import { applyExportLayerVisibility } from './drawingLayerStage';
 import { resolvedProjectTitleBlock } from './projectTitleBlock';
+import {
+  EXPORT_BODY_SM_LINE_MM,
+  EXPORT_BODY_SM_PT,
+  EXPORT_CAPTION_PT,
+  EXPORT_LABEL_PT,
+  EXPORT_TITLE_SM_PT,
+} from '../design/exportTypography';
+import { buildSymbolLegend } from './symbolLegend';
+import { drawSymbolLegendPdf } from './symbolLegendPdf';
 
 export type DrawingTitleBlock = {
   brandLabel: string;
@@ -51,7 +60,10 @@ const MAX_REV_HISTORY_ROWS = 4;
 
 export function titleBlockHeight(meta: DrawingTitleBlock): number {
   const rows = Math.min(meta.revisionHistory.length, MAX_REV_HISTORY_ROWS);
-  return BASE_TITLE_H + (rows > 0 ? 6 + rows * 4 : 0);
+  return (
+    BASE_TITLE_H +
+    (rows > 0 ? 6 + rows * EXPORT_BODY_SM_LINE_MM : 0)
+  );
 }
 
 export function drawingAreaHeight(meta: DrawingTitleBlock): number {
@@ -188,7 +200,7 @@ function drawRevisionHistoryTable(
   if (rows.length === 0) return;
 
   const tableY = y0 + BASE_TITLE_H + 2;
-  doc.setFontSize(6);
+  doc.setFontSize(EXPORT_CAPTION_PT);
   doc.setFont('helvetica', 'bold');
   doc.text('Rev', MARGIN + 2, tableY);
   doc.text('Date', MARGIN + 14, tableY);
@@ -197,7 +209,7 @@ function drawRevisionHistoryTable(
 
   doc.setFont('helvetica', 'normal');
   rows.forEach((row, i) => {
-    const y = tableY + 4 + i * 4;
+    const y = tableY + EXPORT_BODY_SM_LINE_MM + i * EXPORT_BODY_SM_LINE_MM;
     doc.text(row.revision.slice(0, 6), MARGIN + 2, y);
     doc.text(row.date.slice(0, 10), MARGIN + 14, y);
     doc.text(row.description.slice(0, 72), MARGIN + 38, y);
@@ -219,12 +231,12 @@ export function drawPdfTitleBlock(
   doc.setLineWidth(0.3);
   doc.rect(MARGIN, y0, DRAW_W, blockH);
 
-  doc.setFontSize(9);
+  doc.setFontSize(EXPORT_TITLE_SM_PT);
   doc.setFont('helvetica', 'bold');
   doc.text(meta.brandLabel.slice(0, 42), MARGIN + 2, y0 + 6);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(EXPORT_BODY_SM_PT);
   const col1 = MARGIN + 2;
   const col2 = MARGIN + 72;
   const col3 = MARGIN + 142;
@@ -245,10 +257,10 @@ export function drawPdfTitleBlock(
   doc.text(`Checked: ${meta.checkedBy}`, col3, row3);
 
   if (meta.approvedBy && meta.approvedBy !== '—') {
-    doc.setFontSize(7);
+    doc.setFontSize(EXPORT_CAPTION_PT);
     doc.text(`Approved: ${meta.approvedBy}`, col1, y0 + blockH - 2);
     doc.text(`Date: ${meta.date}`, col3, y0 + blockH - 2);
-    doc.setFontSize(8);
+    doc.setFontSize(EXPORT_BODY_SM_PT);
   } else {
     doc.text(`Date: ${meta.date}`, col3, row3);
   }
@@ -261,11 +273,11 @@ export function drawPdfSheetIndexPage(
   meta: DrawingTitleBlock,
   rows: SheetIndexRow[]
 ): void {
-  doc.setFontSize(14);
+  doc.setFontSize(EXPORT_TITLE_SM_PT);
   doc.setFont('helvetica', 'bold');
   doc.text('Sheet Index', MARGIN, 24);
 
-  doc.setFontSize(9);
+  doc.setFontSize(EXPORT_LABEL_PT);
   doc.setFont('helvetica', 'bold');
   const yStart = 36;
   doc.text('Sheet', MARGIN, yStart);
@@ -339,6 +351,16 @@ export async function buildDrawingPdf(
     const fit = fitImageRect(imgW, imgH, DRAW_W, drawH);
     doc.addImage(dataUrl, 'PNG', fit.x, fit.y, fit.w, fit.h);
     drawPdfTitleBlock(doc, meta, sheet, sheets.length);
+  }
+
+  const legendRows = buildSymbolLegend(circuit);
+  if (legendRows.length > 0) {
+    doc.addPage();
+    drawSymbolLegendPdf(
+      doc,
+      legendRows,
+      meta.circuitName || circuit.name || 'Drawing'
+    );
   }
 
   return doc;

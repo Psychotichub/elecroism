@@ -60,6 +60,78 @@ export const renderTimerProps = () => { const { selectedComp, tc, updateProp } =
   );};
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
+export const renderSmartRelayProps = () => {
+  const { selectedComp, tc, updateProp } = usePPCtx();
+  const program = selectedComp!.properties.smartRelayProgram ?? 'OUT1 = IN1';
+  return (
+    <>
+      <Label text="Logic program">
+        <input
+          type="text"
+          value={program}
+          onChange={(e) => updateProp({ smartRelayProgram: e.target.value })}
+          className="input-field font-mono"
+          spellCheck={false}
+          placeholder="OUT1 = IN1 AND NOT IN2"
+        />
+      </Label>
+      <Label text="Quick presets">
+        <div className="flex gap-1 flex-wrap">
+          {[
+            'OUT1 = IN1',
+            'OUT1 = IN1 AND IN2',
+            'OUT1 = IN1 AND NOT IN2',
+            'OUT1 = IN1 OR IN2',
+          ].map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => updateProp({ smartRelayProgram: preset })}
+              className={`px-2 py-1 rounded es-typo-body ${
+                program === preset
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="Contact rating (A)">
+        <input
+          type="number"
+          value={selectedComp!.properties.ratingAmps ?? 10}
+          onChange={(e) =>
+            updateProp({
+              ratingAmps: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="input-field"
+          min={0}
+        />
+      </Label>
+      <Label text="Output state">
+        <span
+          className={`es-typo-body font-medium ${
+            selectedComp!.state === 'on' ? 'text-green-400' : tc.textMuted
+          }`}
+        >
+          {selectedComp!.state === 'on'
+            ? 'T1↔T2 closed — logic true + A1/A2 powered'
+            : 'T1↔T2 open — logic false or coil supply missing'}
+        </span>
+      </Label>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
+        Wire <strong>IN1/IN2</strong> to digital inputs (live, neutral, or PE
+        counts as active). Supply <strong>A1/A2</strong> for internal logic.
+        Program gates <strong>T1↔T2</strong> when the equation evaluates true.
+      </p>
+    </>
+  );
+};
+
+// eslint-disable-next-line react-hooks/rules-of-hooks
 export const renderInterposingRelayProps = () => { const { selectedComp, tc, updateProp } = usePPCtx(); return (
     <>
       <Label text="Coil voltage (V)">

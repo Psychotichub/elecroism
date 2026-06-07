@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Group, Rect, Text, Line, Circle } from 'react-konva';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 import type {
   CircuitComponent,
   ComponentProperties,
@@ -168,7 +169,7 @@ const ACDCConverterSymbol: React.FC<Props> = ({
             y={minY - 4}
             width={bodyW + 8}
             height={bodyH + 8}
-            stroke="#3B82F6"
+            stroke={getCanvasInteractionColors().selection}
             strokeWidth={2}
             dash={[4, 4]}
             cornerRadius={4}

@@ -4,6 +4,7 @@ import type { CircuitComponent, NodeResult, WireColor } from '../../types';
 import { getWireColor } from '../../utils/geometry';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
 import ScaledSymbolInner from './ScaledSymbolInner';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 
 interface Props {
   component: CircuitComponent;
@@ -77,7 +78,7 @@ const BusbarSymbol: React.FC<Props> = ({
           y={-8}
           width={selectionW}
           height={16}
-          stroke="#3B82F6"
+          stroke={getCanvasInteractionColors().selection}
           strokeWidth={2}
           dash={[4, 4]}
           cornerRadius={2}

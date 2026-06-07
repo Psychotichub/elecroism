@@ -1,18 +1,23 @@
 import React, { useMemo } from 'react';
-import { FiCheck, FiTarget, FiX } from 'react-icons/fi';
+import { FiCheck, FiTarget } from 'react-icons/fi';
 import { useCircuitStore } from '../../store/circuitStore';
-import { useThemeStore, themeColors } from '../../store/themeStore';
 import { useUiStore } from '../../store/uiStore';
 import CatalogMetaChips from '../Catalog/CatalogMetaChips';
+import Button from '../ui/Button';
+import Textarea from '../ui/Textarea';
 import { getQuizChallenge } from '../../utils/quizChallenges';
 import {
   buildChallengeQuiz,
   gradeChallengeAnswer,
 } from '../../utils/quizChallengeRuntime';
+import { cn } from '../ui/cn';
+import LearningPanelShell from './learning/LearningPanelShell';
 
-const ChallengePanel: React.FC = () => {
-  const theme = useThemeStore((s) => s.theme);
-  const tc = themeColors[theme];
+type Props = {
+  docked?: boolean;
+};
+
+const ChallengePanel: React.FC<Props> = ({ docked = false }) => {
   const activeAssignment = useUiStore((s) => s.activeAssignment);
   const activeChallengeId = useUiStore((s) => s.activeChallengeId);
   const challengeSelectedOption = useUiStore((s) => s.challengeSelectedOption);
@@ -26,6 +31,17 @@ const ChallengePanel: React.FC = () => {
   const setChallengeFreeText = useUiStore((s) => s.setChallengeFreeText);
   const setChallengeGrade = useUiStore((s) => s.setChallengeGrade);
   const markChallengeSubmitted = useUiStore((s) => s.markChallengeSubmitted);
+  const pinned = useUiStore((s) => s.learningPanelPinned);
+  const minimized = useUiStore((s) => s.learningPanelMinimized);
+  const toggleLearningPanelPinned = useUiStore(
+    (s) => s.toggleLearningPanelPinned
+  );
+  const toggleLearningPanelMinimized = useUiStore(
+    (s) => s.toggleLearningPanelMinimized
+  );
+  const setLearningPanelMinimized = useUiStore(
+    (s) => s.setLearningPanelMinimized
+  );
 
   const circuit = useCircuitStore((s) => s.circuit);
   const simulationResult = useCircuitStore((s) => s.simulationResult);
@@ -55,136 +71,117 @@ const ChallengePanel: React.FC = () => {
   };
 
   return (
-    <aside
-      className={`fixed bottom-14 right-4 z-50 w-[22rem] max-w-[calc(100vw-2rem)] rounded-lg border shadow-xl ${tc.border} ${tc.panel} ${tc.text}`}
-      aria-label={`Challenge: ${challenge.title}`}
+    <LearningPanelShell
+      ariaLabel={`Challenge: ${challenge.title}`}
+      eyebrow="Challenge mode"
+      title={challenge.title}
+      docked={docked}
+      pinned={pinned}
+      minimized={minimized}
+      onTogglePin={toggleLearningPanelPinned}
+      onMinimize={toggleLearningPanelMinimized}
+      onRestore={() => setLearningPanelMinimized(false)}
+      onClose={exitChallenge}
+      meta={
+        <CatalogMetaChips
+          meta={{
+            difficulty: challenge.difficulty,
+            estimatedMinutes: challenge.estimatedMinutes,
+            prerequisites: challenge.prerequisites,
+          }}
+        />
+      }
     >
-      <div
-        className={`flex items-start justify-between gap-2 border-b px-3 py-2 ${tc.border}`}
-      >
-        <div className="min-w-0">
-          <p
-            className={`text-[10px] font-semibold uppercase tracking-wide ${tc.textMuted}`}
+      <p className="es-typo-body-sm leading-relaxed">{challenge.scenario}</p>
+      <p className="es-typo-body font-semibold text-es-bright">
+        <FiTarget className="mr-1 inline opacity-70" aria-hidden />
+        {challenge.question}
+      </p>
+
+      {!challengeSubmitted ? (
+        <>
+          <fieldset className="space-y-1.5">
+            <legend className="sr-only">Diagnosis options</legend>
+            {quiz.options.map((option) => (
+              <label
+                key={option}
+                className={cn(
+                  'flex cursor-pointer items-start gap-2 rounded-es-sm border border-es-borderSubtle px-2 py-1.5 es-typo-body-sm',
+                  challengeSelectedOption === option &&
+                    'border-es-accent bg-es-accentMuted'
+                )}
+              >
+                <input
+                  type="radio"
+                  name="challenge-option"
+                  className="mt-0.5"
+                  checked={challengeSelectedOption === option}
+                  onChange={() => setChallengeSelectedOption(option)}
+                />
+                <span>{option}</span>
+              </label>
+            ))}
+          </fieldset>
+          <label className="block">
+            <span className="es-typo-caption text-es-secondary">
+              Or type your diagnosis
+            </span>
+            <Textarea
+              value={challengeFreeText}
+              onChange={(e) => setChallengeFreeText(e.target.value)}
+              rows={2}
+              placeholder="e.g. Q1 is OFF — circuit open upstream"
+              className="mt-1"
+            />
+          </label>
+          <Button
+            variant="primary"
+            className="w-full"
+            onClick={handleSubmit}
+            disabled={!challengeSelectedOption && !challengeFreeText.trim()}
           >
-            Challenge mode
-          </p>
-          <h2 className={`truncate text-sm font-bold ${tc.textBright}`}>
-            {challenge.title}
-          </h2>
-          <CatalogMetaChips
-            meta={{
-              difficulty: challenge.difficulty,
-              estimatedMinutes: challenge.estimatedMinutes,
-              prerequisites: challenge.prerequisites,
-            }}
-            className="mt-1"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={exitChallenge}
-          aria-label="Exit challenge"
-          className={`shrink-0 rounded p-1 ${tc.itemHover} ${tc.textMuted} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
+            Submit diagnosis
+          </Button>
+        </>
+      ) : (
+        <div
+          className={cn(
+            'rounded-es-sm border px-3 py-2 es-typo-body-sm leading-relaxed',
+            challengeGrade?.correct
+              ? 'border-es-success bg-es-success/10 text-es-success'
+              : 'border-es-warning bg-es-warning/10 text-es-warning'
+          )}
+          role="status"
         >
-          <FiX aria-hidden />
-        </button>
-      </div>
-
-      <div className="space-y-3 px-3 py-3">
-        <p className="text-[11px] leading-relaxed">{challenge.scenario}</p>
-        <p className={`text-xs font-semibold ${tc.textBright}`}>
-          <FiTarget className="mr-1 inline opacity-70" aria-hidden />
-          {challenge.question}
-        </p>
-
-        {!challengeSubmitted ? (
-          <>
-            <fieldset className="space-y-1.5">
-              <legend className={`sr-only`}>Diagnosis options</legend>
-              {quiz.options.map((option) => (
-                <label
-                  key={option}
-                  className={`flex cursor-pointer items-start gap-2 rounded border px-2 py-1.5 text-[11px] ${tc.border} ${
-                    challengeSelectedOption === option
-                      ? 'border-blue-500 bg-blue-600/10'
-                      : ''
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="challenge-option"
-                    className="mt-0.5"
-                    checked={challengeSelectedOption === option}
-                    onChange={() => setChallengeSelectedOption(option)}
-                  />
-                  <span>{option}</span>
-                </label>
-              ))}
-            </fieldset>
-            <label className="block">
-              <span className={`text-[10px] ${tc.textMuted}`}>
-                Or type your diagnosis
+          <p className="font-semibold">
+            {challengeGrade?.correct ? (
+              <span className="inline-flex items-center gap-1">
+                <FiCheck aria-hidden /> Correct ({challengeGrade.score}%)
               </span>
-              <textarea
-                value={challengeFreeText}
-                onChange={(e) => setChallengeFreeText(e.target.value)}
-                rows={2}
-                placeholder="e.g. Q1 is OFF — circuit open upstream"
-                className={`mt-1 w-full rounded border px-2 py-1 text-[11px] ${tc.inputBorder} ${tc.inputBg} ${tc.inputText} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={!challengeSelectedOption && !challengeFreeText.trim()}
-              className="w-full rounded bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-            >
-              Submit diagnosis
-            </button>
-          </>
-        ) : (
-          <div
-            className={`rounded border px-3 py-2 text-[11px] leading-relaxed ${
-              challengeGrade?.correct
-                ? 'border-emerald-600/50 bg-emerald-950/40 text-emerald-200'
-                : 'border-amber-600/50 bg-amber-950/40 text-amber-200'
-            }`}
-            role="status"
-          >
-            <p className="font-semibold">
-              {challengeGrade?.correct ? (
-                <span className="inline-flex items-center gap-1">
-                  <FiCheck aria-hidden /> Correct ({challengeGrade.score}%)
-                </span>
-              ) : (
-                `Incorrect (${challengeGrade?.score ?? 0}%)`
-              )}
-            </p>
-            <p className="mt-1">{challengeGrade?.feedback}</p>
-            {quiz.engineExplanation ? (
-              <p className={`mt-2 text-[10px] ${tc.textMuted}`}>
-                Reference: {quiz.engineExplanation}
-              </p>
-            ) : null}
-          </div>
-        )}
-
-        {challengeSubmitted ? (
-          <button
-            type="button"
-            onClick={exitChallenge}
-            className={`w-full rounded px-3 py-1.5 text-[11px] ${tc.btnBg} ${tc.btnText} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
-          >
-            Close challenge
-          </button>
-        ) : (
-          <p className={`text-[10px] ${tc.textMuted}`}>
-            Inspect the canvas and Properties panel. Hints are hidden until you
-            submit.
+            ) : (
+              `Incorrect (${challengeGrade?.score ?? 0}%)`
+            )}
           </p>
-        )}
-      </div>
-    </aside>
+          <p className="mt-1">{challengeGrade?.feedback}</p>
+          {quiz.engineExplanation ? (
+            <p className="mt-2 es-typo-caption text-es-secondary">
+              Reference: {quiz.engineExplanation}
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      {challengeSubmitted ? (
+        <Button variant="secondary" className="w-full" onClick={exitChallenge}>
+          Close challenge
+        </Button>
+      ) : (
+        <p className="es-typo-caption text-es-secondary">
+          Inspect the canvas and Properties panel. Hints are hidden until you
+          submit.
+        </p>
+      )}
+    </LearningPanelShell>
   );
 };
 

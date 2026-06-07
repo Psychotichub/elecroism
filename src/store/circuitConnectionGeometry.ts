@@ -783,13 +783,21 @@ function createConnectionPoints(
       return [{ id: uuid(), componentId, x: 0, y: 0, label: 'J' }];
     case 'contactor':
     case 'relay':
-    case 'smart_relay':
       return [
         { id: uuid(), componentId, x: 0, y: -25, label: 'T1' },
         { id: uuid(), componentId, x: 0, y: 25, label: 'T2' },
         { id: uuid(), componentId, x: -20, y: 0, label: 'A1' },
         { id: uuid(), componentId, x: 20, y: 0, label: 'A2' },
         ...(type === 'contactor' ? contactorAuxConnectionPoints(componentId) : []),
+      ];
+    case 'smart_relay':
+      return [
+        { id: uuid(), componentId, x: -28, y: -14, label: 'IN1' },
+        { id: uuid(), componentId, x: -28, y: 14, label: 'IN2' },
+        { id: uuid(), componentId, x: 0, y: -25, label: 'T1' },
+        { id: uuid(), componentId, x: 0, y: 25, label: 'T2' },
+        { id: uuid(), componentId, x: 28, y: -8, label: 'A1' },
+        { id: uuid(), componentId, x: 28, y: 8, label: 'A2' },
       ];
     case 'timer':
       return [

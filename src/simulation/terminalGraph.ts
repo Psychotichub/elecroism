@@ -35,6 +35,11 @@ import {
   BRIDGE_PAIRS_T_POWER_3P,
   BRIDGE_PAIRS_T_POWER_4P,
 } from '../utils/terminalBridgeAliases';
+import { selectorSwitchBridgePairs } from './selectorSwitchRouting';
+import {
+  computeSmartRelayOutputs,
+  unionPickupSets,
+} from './smartRelayLogic';
 
 /* ------------------------------------------------------------------ */
 /*  Component classification helpers                                  */
@@ -253,13 +258,17 @@ export function applyInternalBridges(
         break;
       case 'contactor':
       case 'relay':
-      case 'smart_relay':
         if (!skipInternalBridge && contactorPickupSet) {
           const pickedUp = contactorPickupSet.has(component.id);
           if (pickedUp) {
             bridgeLabelPairs(graph, component, BRIDGE_PAIRS_SINGLE_CONT);
           }
           bridgeAuxContacts(graph, component, pickedUp);
+        }
+        break;
+      case 'smart_relay':
+        if (!skipInternalBridge && contactorPickupSet?.has(component.id)) {
+          bridgeLabelPairs(graph, component, BRIDGE_PAIRS_SINGLE_CONT);
         }
         break;
       case 'timer':
@@ -270,9 +279,6 @@ export function applyInternalBridges(
           const nc = findTerminalByLabel(component, 'NC');
           if (com && no && pickedUp) addEdge(graph, com, no);
           if (com && nc && !pickedUp) addEdge(graph, com, nc);
-          if (pickedUp) {
-            bridgeLabelPairs(graph, component, BRIDGE_PAIRS_1P);
-          }
         }
         break;
       case 'interposing_relay':
@@ -310,15 +316,9 @@ export function applyInternalBridges(
         break;
       case 'selector_switch': {
         if (skipInternalBridge) break;
-        const pos = component.properties.selectorPosition ?? 'OFF';
-        const com = findTerminalByLabel(component, 'COM');
-        if (!com) break;
-        if (pos === 'AUTO') {
-          const target = findTerminalByLabel(component, 'AUTO');
-          if (target) addEdge(graph, com, target);
-        } else if (pos === 'MANUAL') {
-          const target = findTerminalByLabel(component, 'MAN');
-          if (target) addEdge(graph, com, target);
+        const pairs = selectorSwitchBridgePairs(component);
+        if (pairs.length > 0) {
+          bridgeLabelPairs(graph, component, pairs);
         }
         break;
       }
@@ -537,7 +537,8 @@ export function computeContactorPickupFixpoint(
     graph: Map<string, Set<string>>
   ) => PotentialSets,
   timerCoilEnergizedSinceMs: Map<string, number>,
-  graphCache?: TerminalGraphCache
+  graphCache?: TerminalGraphCache,
+  simStepMs = 0
 ): Set<string> {
   const timerIdsInCircuit = new Set(
     circuit.components.filter((c) => c.type === 'timer').map((c) => c.id)
@@ -555,10 +556,25 @@ export function computeContactorPickupFixpoint(
     if (c.state === 'on') pickup.add(c.id);
   }
   for (let iter = 0; iter < 16; iter++) {
-    const graph = graphCache
-      ? graphCache.buildForPickupIteration(circuit, pickup)
-      : buildTerminalGraph(circuit, null, pickup);
-    const potentials = propagatePotentials(circuit, graph);
+    let graphPickup = pickup;
+    let potentials: PotentialSets = {
+      live: new Set(),
+      neutral: new Set(),
+      pe: new Set(),
+      liveL1: new Set(),
+      liveL2: new Set(),
+      liveL3: new Set(),
+    };
+    for (let sub = 0; sub < 3; sub++) {
+      const graph = graphCache
+        ? graphCache.buildForPickupIteration(circuit, graphPickup)
+        : buildTerminalGraph(circuit, null, graphPickup);
+      potentials = propagatePotentials(circuit, graph);
+      const smartOutputs = computeSmartRelayOutputs(circuit, potentials);
+      const merged = unionPickupSets(pickup, smartOutputs);
+      if (pickupSetsEqual(graphPickup, merged)) break;
+      graphPickup = merged;
+    }
     const next = new Set<string>();
     for (const c of circuit.components) {
       if (!isCoilActuatedContactorType(c.type)) continue;
@@ -569,15 +585,18 @@ export function computeContactorPickupFixpoint(
           timerCoilEnergizedSinceMs.delete(c.id);
           continue;
         }
-        const since = timerCoilEnergizedSinceMs.get(c.id) ?? wallMs;
         if (!timerCoilEnergizedSinceMs.has(c.id)) {
-          timerCoilEnergizedSinceMs.set(c.id, since);
+          timerCoilEnergizedSinceMs.set(c.id, wallMs);
         }
-        if (wallMs - since >= delayMs) {
+        const since = timerCoilEnergizedSinceMs.get(c.id) ?? wallMs;
+        let elapsed = wallMs - since;
+        if (elapsed <= 0 && simStepMs > 0) elapsed = simStepMs;
+        if (elapsed >= delayMs) {
           next.add(c.id);
         }
         continue;
       }
+      if (c.type === 'smart_relay') continue;
       if (coilHot) {
         next.add(c.id);
       }
@@ -588,7 +607,29 @@ export function computeContactorPickupFixpoint(
     }
     pickup = next;
   }
+  const finalGraphPickup = unionPickupSets(
+    pickup,
+    computeSmartRelayOutputs(
+      circuit,
+      propagatePotentials(
+        circuit,
+        graphCache
+          ? graphCache.buildForPickupIteration(circuit, pickup)
+          : buildTerminalGraph(circuit, null, pickup)
+      )
+    )
+  );
+  const finalSmart = new Set(
+    [...finalGraphPickup].filter((id) => {
+      const c = circuit.components.find((x) => x.id === id);
+      return c?.type === 'smart_relay';
+    })
+  );
   for (const c of circuit.components) {
+    if (c.type === 'smart_relay') {
+      c.state = finalSmart.has(c.id) ? 'on' : 'off';
+      continue;
+    }
     if (!isCoilActuatedContactorType(c.type)) continue;
     c.state = pickup.has(c.id) ? 'on' : 'off';
   }
@@ -596,7 +637,7 @@ export function computeContactorPickupFixpoint(
     if (c.type !== 'aux_contact_block') continue;
     const fid = c.properties.auxContactFollowContactorId?.trim();
     if (!fid) continue;
-    c.state = pickup.has(fid) ? 'on' : 'off';
+    c.state = finalGraphPickup.has(fid) ? 'on' : 'off';
   }
-  return pickup;
+  return finalGraphPickup;
 }

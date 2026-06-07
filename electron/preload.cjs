@@ -1,4 +1,8 @@
-const { app, contextBridge, ipcRenderer } = require("electron");
+const { app, contextBridge, ipcRenderer, nativeTheme } = require("electron");
+
+function readColorScheme() {
+  return nativeTheme.shouldUseDarkColors ? "dark" : "light";
+}
 
 /** @typedef {'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'} UpdatePhase */
 
@@ -7,6 +11,17 @@ const { app, contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("electronAPI", {
   platform: process.platform,
   isPackaged: app.isPackaged,
+  colorScheme: readColorScheme(),
+  /** @param {(scheme: 'light' | 'dark') => void} callback */
+  onColorSchemeChanged(callback) {
+    const listener = () => {
+      callback(readColorScheme());
+    };
+    nativeTheme.on("updated", listener);
+    return () => {
+      nativeTheme.removeListener("updated", listener);
+    };
+  },
   versions: {
     app: process.env.npm_package_version ?? "0.0.0",
     electron: process.versions.electron,

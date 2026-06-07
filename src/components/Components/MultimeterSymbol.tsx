@@ -4,6 +4,7 @@ import type { CircuitComponent, NodeResult } from '../../types';
 import { useCircuitStore } from '../../store/circuitStore';
 import ScaledSymbolInner from './ScaledSymbolInner';
 import { ComponentCanvasLabel } from './ComponentCanvasLabel';
+import { getCanvasInteractionColors } from '../../design/canvasInteractionColors';
 
 interface Props {
   component: CircuitComponent;
@@ -83,7 +84,7 @@ const MultimeterSymbol: React.FC<Props> = ({
             y={minY - 4}
             width={bodyW + 8}
             height={bodyH + 8}
-            stroke="#3B82F6"
+            stroke={getCanvasInteractionColors().selection}
             strokeWidth={2}
             dash={[4, 4]}
             cornerRadius={6}

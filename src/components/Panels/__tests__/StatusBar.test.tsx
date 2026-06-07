@@ -58,5 +58,6 @@ describe('StatusBar zones', () => {
     expect(brand).toBeTruthy();
     expect(brand?.className).toContain('min-[1200px]:inline-flex');
     expect(brand?.textContent).toContain('ElectroSim');
+    expect(brand?.querySelector('svg')).toBeTruthy();
   });
 });

@@ -163,6 +163,20 @@ export interface ConnectionPoint {
   label: string;
 }
 
+/** Bimetal thermal integrator for `overload_relay` (Class 10/20/30). */
+export interface OverloadSimState {
+  lastWallMs?: number;
+  /** Winding heat 0–100% toward trip threshold */
+  thermalHeatPct?: number;
+}
+
+/** Persisted dynamic state for residual-current trip delay timers. */
+export interface ResidualSimState {
+  lastWallMs?: number;
+  /** Wall time when residual exceeded pickup */
+  earthZoneSinceMs?: number | null;
+}
+
 /** Persisted dynamic state for `air_circuit_breaker` (thermal integral, definite delays). */
 export interface AcbSimState {
   lastWallMs?: number;
@@ -195,6 +209,10 @@ export interface CircuitComponent {
   drawingLayer?: DrawingLayerId;
   /** Runtime integration for ACB time-current behaviour (cloned with circuit on simulate) */
   acbSimState?: AcbSimState;
+  /** RCD / ELR residual trip delay integration */
+  residualSimState?: ResidualSimState;
+  /** Overload relay bimetal thermal integration */
+  overloadSimState?: OverloadSimState;
 }
 
 export interface ComponentProperties {
@@ -377,6 +395,11 @@ export interface ComponentProperties {
   indicatorSupplyType?: 'ac' | 'dc';
   /** Timer relay ON-delay before IN↔OUT closes after coil energizes. */
   timerDelayMs?: number;
+  /**
+   * Smart relay ladder program, e.g. `OUT1 = IN1 AND NOT IN2`.
+   * Output T1↔T2 closes when A1/A2 are powered and the expression is true.
+   */
+  smartRelayProgram?: string;
 
   /**
    * `aux_contact_block` only: when set to another component id (contactor,
@@ -387,6 +410,12 @@ export interface ComponentProperties {
 
   /** Battery string capacity (Ah) — DC fault estimate. */
   batteryCapacityAh?: number;
+  /** Runtime state of charge (Ah); defaults to capacity when unset. */
+  batteryRemainingAh?: number;
+  /** SoC cutoff (%) below which the battery cannot supply the UPS inverter. */
+  batteryCutoffPercent?: number;
+  /** UPS float/trickle charge current (A) when AC mains is present. */
+  upsChargeCurrentA?: number;
   /** Battery / DC source internal resistance override (mΩ). */
   batteryInternalResistance_mOhm?: number;
   /** UPS: static bypass (maintenance) feeds AC in→out when mains present. */
@@ -466,6 +495,10 @@ export interface ComponentProperties {
   acDcRectifierType?: 'half_wave' | 'full_wave' | 'bridge';
   /** AC–DC converter: output regulation stage (linear regulator after filter). */
   acDcHasRegulator?: boolean;
+  /** Conversion efficiency (%); used for primary current coupling. */
+  supplyEfficiencyPercent?: number;
+  /** AC input power factor for primary current (0.05–1). */
+  inputPowerFactor?: number;
 }
 
 /** Per-target object snap while drawing wires (AutoCAD-style osnap modes). */
@@ -674,6 +707,16 @@ export interface NodeResult {
   harmonicCurrentA?: number;
   /** Fundamental (60 Hz) current before harmonic content (A) */
   fundamentalCurrentA?: number;
+  /** Charger DC bus output power (W) — ac_dc_converter / smps */
+  dcOutputPowerW?: number;
+  /** Charger DC bus output current (A) — ac_dc_converter / smps */
+  dcOutputCurrentA?: number;
+  /** Battery remaining charge (Ah) — dc_battery_backup */
+  batteryRemainingAh?: number;
+  /** Battery state of charge (0–100%) */
+  batteryStateOfChargePct?: number;
+  /** UPS battery charge current (A) when mains is present */
+  upsBatteryChargeCurrentA?: number;
   /** RMS phase-to-neutral (V), wye */
   voltageL1NV?: number;
   voltageL2NV?: number;

@@ -32,12 +32,11 @@ Three-phase AC supply (L1, L2, L3, N, PE).
 - **What to Improve**:
   - Integrate source phase sequence (R-Y-B vs B-Y-R) configuration. This would allow validating if downstream three-phase motors run in reverse.
 
-### ⚠️ A4. AC/DC Converter (`ac_dc_converter`) & SMPS (`smps`)
+### ✅ A4. AC/DC Converter (`ac_dc_converter`) & SMPS (`smps`)
 Power supply units converting AC mains to DC.
 - **Working Principle**: Detects if primary AC terminals are energized (both Live and Neutral must be active). If so, it seeds the output DC positive and negative terminals.
-- **What to Improve**:
-  - Primary-secondary load coupling: Current drawn on the DC load side does not reflect back to increase AC primary side current draw. Add a simple transformer ratio/efficiency scaling `I_AC = (V_DC * I_DC) / (V_AC * efficiency * PF)` to simulate true primary draw.
-  - Implement overload shut-down or current-limiting simulation when DC output current exceeds the rated power output (e.g. SMPS rating).
+- **Primary-secondary coupling** (`chargerCoupling.ts`): AC fundamental current follows downstream DC bus load — `I_AC = (V_DC × I_DC) / (V_AC × η × PF)`. Configurable rated output power (W), efficiency (%), and input power factor. ✅
+- **Overload shut-down**: DC output power above rated trips the supply (`tripped`) and de-energizes the DC bus; upstream series devices include charger primary current. ✅
 
 ### ✅ A5. Control Transformer (`control_transformer`)
 Isolating control transformer stepping down AC voltage (e.g. 400V/230V to 110V/24V AC).
@@ -46,12 +45,11 @@ Isolating control transformer stepping down AC voltage (e.g. 400V/230V to 110V/2
   - Lacks transformer regulation curve (voltage drop under high control coil inrush, like when large contactors pull in). 
   - Add primary-to-secondary winding isolation faults check.
 
-### ⚠️ A6. UPS Module (`ups_module`) & DC Battery Backup (`dc_battery_backup`)
+### ✅ A6. UPS Module (`ups_module`) & DC Battery Backup (`dc_battery_backup`)
 Emergency battery backup devices.
 - **Working Principle**: The UPS passes AC input to output via static bypass, or switches to battery inverter output upon AC mains failure. The DC Battery Backup acts as a secondary DC seed.
-- **What to Improve**:
-  - **Battery Discharge Curve**: Batteries are currently modeled as infinite energy reservoirs. Add a runtime state that depletes capacity (Ah) during AC failure, eventually tripping the UPS on under-voltage.
-  - **Charging Path**: Charge current is not modeled on the supply line when AC mains is restored.
+- **Battery discharge** (`batteryRuntime.ts`): `batteryRemainingAh` depletes on inverter backup proportional to output load; voltage sags with SoC; below cutoff the UPS trips and the DC bus drops. ✅
+- **Charging path**: Configurable `upsChargeCurrentA` float-charges the battery when AC mains is present; charge power appears on the UPS AC input (upstream series devices). ✅
 
 ---
 
@@ -89,17 +87,15 @@ Melting protection fuses.
 - **What to Improve**:
   - Implement a "replace fuse" interactive action on the UI canvas (since fuses do not have "reset handles" like MCBs).
 
-### ⚠️ B6. RCD / RCCB (`rcd` / `residual_current_circuit_breaker`) & Earth Leakage Relay (`earth_leakage_relay_cbct`)
+### ✅ B6. RCD / RCCB (`rcd` / `residual_current_circuit_breaker`) & Earth Leakage Relay (`earth_leakage_relay_cbct`)
 Residual current devices.
-- **Working Principle**: Detects earth faults and trips. Currently relies on a simplified Boolean check (`ctx.lnFaultPath` is true).
-- **What to Improve**:
-  - **True Vector Imbalance**: Replace the Boolean flag with actual current phasor summation `I_residual = VectorSum(I_L1, I_L2, I_L3, I_N)`. If `I_residual` exceeds the rating sensitivity (e.g. 30mA), trip the device. This allows simulating realistic earth leakage when grounding paths are connected downstream.
+- **Working Principle**: Detects earth faults and trips via vector residual current `I_residual = |VectorSum(I_L1, I_L2, I_L3, I_N)|` on the protected zone. Trips when `I_residual` exceeds sensitivity (e.g. 30 mA), honouring `rcdTripTimeMs` / `elrTripDelayMs`.
+- **Simulation**: `residualCurrent.ts` — harmonic imbalance, 3φ unbalance, downstream L–N faults, and PE return paths (live-fed load with PE but no neutral).
 
-### ⚠️ B7. Thermal Overload Relay (`overload_relay`)
+### ✅ B7. Thermal Overload Relay (`overload_relay`)
 Protective bimetallic relay for motors.
-- **Working Principle**: Trips on overload when motor current exceeds rating.
-- **What to Improve**:
-  - Change instantaneous overload tripping to a thermal delay integrator (simulating bimetal heating) based on Class 10/20/30 curves, preventing false trips during motor inrush/starting transients.
+- **Working Principle**: Bimetal thermal integrator trips when heat reaches 100% — no instantaneous overload pickup on first evaluation.
+- **Simulation**: `motorThermal.ts` IEC 60947-4-1 Class 10/20/30 inverse-time curve via `overloadTripClass`; `checkOverloadRelayFaults` advances `overloadSimState` each step using `simStepMs` / wall-clock Δt.
 
 ---
 
@@ -117,11 +113,10 @@ Normally open/normally closed buttons.
 - **What to Improve**:
   - Renders correctly. Validate that E-stop loops interrupt the safety contactor circuit instantly.
 
-### ⚠️ C3. Selector Switch (`selector_switch`)
+### ✅ C3. Selector Switch (`selector_switch`)
 3-position rotary switch (AUTO / OFF / MANUAL).
-- **Working Principle**: Directs potential to different terminals depending on selector position. Can act as an ATS controller.
-- **What to Improve**:
-  - The ATS controller sequence runs on timer loops. Make the control circuit path routing clear: in AUTO, BMS DI/DO overrides switch position; in MANUAL, physical terminals are bridged.
+- **Working Principle**: OFF isolates COM; MANUAL bridges **COM ↔ MAN** for panel push-buttons; AUTO bridges **COM ↔ AUTO** and, when `atsController` is set, ATS/BMS `forcedContactorPickup` overrides which contactor closes.
+- **Simulation**: `selectorSwitchRouting.ts` — routing modes, `mergeAtsSimulateOverrides` in `engine.simulate`, live `atsSequenceTimeMs` clock in the store.
 
 ### ✅ C4. Contactors & Relays (`contactor`, `relay`, `three_phase_contactor`, `four_phase_contactor`, `interposing_relay`)
 Electromechanical switches.
@@ -129,11 +124,10 @@ Electromechanical switches.
 - **What to Improve**:
   - **Coil Voltage Matching**: Coils are simulated as generic loads. Validate that the control supply voltage matches the coil rating (e.g., trying to power a 24V DC coil with 230V AC triggers a damage fault event).
 
-### ⚠️ C5. Smart Relay (`smart_relay`) & Timers (`timer`)
+### ✅ C5. Smart Relay (`smart_relay`) & Timers (`timer`)
 Programmable controllers and time-delay relays.
-- **Working Principle**: Timers implement a delayed contact closure upon coil energization.
-- **What to Improve**:
-  - Smart relays are currently treated as generic switching items. Add basic logic inputs: allow users to configure simple program equations (e.g., `OUT1 = IN1 AND NOT IN2`) to control output contacts in simulation.
+- **Working Principle**: Timers implement ON-delay contact closure after coil energization (A1/A2); NC/NO swap when delay elapses. Smart relays read IN1/IN2 from terminal potentials and close T1↔T2 when A1/A2 is powered and the configured program (e.g. `OUT1 = IN1 AND NOT IN2`) evaluates true.
+- **Implemented**: Property-panel logic editor with presets; fixpoint graph includes smart-relay outputs; timer delay uses `simStepMs` for stepped simulation.
 
 ### ⚠️ C6. Aux Contact Block (`aux_contact_block`)
 Add-on auxiliary contacts mounted on contactors/relays.
