@@ -11,10 +11,21 @@ import { gradeDiagnosis } from '../quizGrading';
 describe('quiz challenges', () => {
   const engine = new CircuitEngine();
 
-  it('lists motor and lighting challenges', () => {
-    const ids = listQuizChallenges().map((c) => c.id);
-    expect(ids).toContain('dol-mcb-off');
-    expect(ids).toContain('lighting-switch-off');
+  it('lists five challenges with catalog metadata', () => {
+    const challenges = listQuizChallenges();
+    const ids = challenges.map((c) => c.id);
+    expect(ids).toEqual([
+      'dol-mcb-off',
+      'dol-coil-unwired',
+      'lighting-switch-off',
+      'lighting-mcb-tripped',
+      'lighting-neutral-fault',
+    ]);
+    for (const c of challenges) {
+      expect(c.difficulty).toBeTruthy();
+      expect(c.estimatedMinutes).toBeGreaterThan(0);
+      expect(Array.isArray(c.prerequisites)).toBe(true);
+    }
   });
 
   it('each challenge yields a de-energized target and engine explanation', () => {
@@ -64,6 +75,20 @@ describe('quiz challenges', () => {
     const lamp = circuit.components.find((c) => c.label === 'L1')!;
     const explanation = explainWhyDeenergized(circuit, lamp.id, result);
     const grade = gradeChallengeAnswer(challenge, 'S1 is switched OFF', explanation);
+    expect(grade.correct).toBe(true);
+  });
+
+  it('grades lighting neutral-fault by keyword', () => {
+    const challenge = getQuizChallenge('lighting-neutral-fault')!;
+    const circuit = challenge.build();
+    const result = engine.simulate(circuit);
+    const lamp = circuit.components.find((c) => c.label === 'L1')!;
+    const explanation = explainWhyDeenergized(circuit, lamp.id, result);
+    const grade = gradeChallengeAnswer(
+      challenge,
+      'Open neutral — no return path for L1',
+      explanation
+    );
     expect(grade.correct).toBe(true);
   });
 });

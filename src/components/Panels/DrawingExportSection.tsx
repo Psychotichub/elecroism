@@ -1,11 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import { useCircuitStore } from '../../store/circuitStore';
+import { useUiStore } from '../../store/uiStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
+import { resolvedProjectTitleBlock } from '../../utils/projectTitleBlock';
 
 const DrawingExportSection: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
   const circuit = useCircuitStore((s) => s.circuit);
+  const project = useCircuitStore((s) => s.project);
   const setDrawingMetadata = useCircuitStore((s) => s.setDrawingMetadata);
   const addDrawingSheet = useCircuitStore((s) => s.addDrawingSheet);
   const addDrawingSheetFromSelection = useCircuitStore(
@@ -14,10 +17,13 @@ const DrawingExportSection: React.FC = () => {
   const updateDrawingSheet = useCircuitStore((s) => s.updateDrawingSheet);
   const removeDrawingSheet = useCircuitStore((s) => s.removeDrawingSheet);
   const exportDrawingPdf = useCircuitStore((s) => s.exportDrawingPdf);
+  const exportDocumentationPack = useCircuitStore((s) => s.exportDocumentationPack);
+  const setProjectSettingsOpen = useUiStore((s) => s.setProjectSettingsOpen);
 
   const [exportMsg, setExportMsg] = useState<string | null>(null);
 
   const sheets = circuit.drawingSheets ?? [];
+  const titleBlock = resolvedProjectTitleBlock(project, circuit);
 
   const handleExportPdf = useCallback(async () => {
     setExportMsg(null);
@@ -26,27 +32,12 @@ const DrawingExportSection: React.FC = () => {
     else setExportMsg('PDF downloaded.');
   }, [exportDrawingPdf]);
 
-  const field = (
-    id: string,
-    label: string,
-    value: string,
-    onChange: (v: string) => void,
-    placeholder?: string
-  ) => (
-    <div className="mb-2">
-      <label htmlFor={id} className={`mb-0.5 block text-[10px] ${tc.textMuted}`}>
-        {label}
-      </label>
-      <input
-        id={id}
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="input-field w-full py-1 text-xs"
-      />
-    </div>
-  );
+  const handleExportPack = useCallback(async () => {
+    setExportMsg(null);
+    const err = await exportDocumentationPack();
+    if (err) setExportMsg(err);
+    else setExportMsg('Documentation pack ZIP downloaded.');
+  }, [exportDocumentationPack]);
 
   return (
     <div className={`rounded-md border p-2 ${tc.border}`}>
@@ -56,50 +47,68 @@ const DrawingExportSection: React.FC = () => {
         Drawing export (PDF)
       </h3>
       <p className={`mb-2 text-[10px] leading-snug ${tc.textMuted}`}>
-        Title block fields populate every exported page. Add multiple sheets for
-        a sheet index and per-page crops (from selection or full drawing).
+        Title block and revision history are set in project settings and apply
+        to every sheet. Add multiple export sheets for a sheet index and
+        per-page crops. Export a full client documentation pack (ZIP) with
+        drawing PDF, schedules, coordination report, and README manifest.
       </p>
 
-      {field(
-        'drawing-name',
-        'Drawing / circuit name',
-        circuit.name,
-        (v) => setDrawingMetadata({ name: v }),
-        'MCC-01 Schematic'
-      )}
-      {field(
-        'drawing-project',
-        'Project',
-        circuit.drawingProject ?? '',
-        (v) => setDrawingMetadata({ drawingProject: v }),
-        'Client / site name'
-      )}
-      {field(
-        'drawing-number',
-        'Drawing number',
-        circuit.drawingNumber ?? '',
-        (v) => setDrawingMetadata({ drawingNumber: v }),
-        'EL-001'
-      )}
-      {field(
-        'drawing-rev',
-        'Revision',
-        circuit.drawingRevision ?? '',
-        (v) => setDrawingMetadata({ drawingRevision: v }),
-        'A'
-      )}
-      {field(
-        'drawn-by',
-        'Drawn by',
-        circuit.drawnBy ?? '',
-        (v) => setDrawingMetadata({ drawnBy: v })
-      )}
-      {field(
-        'checked-by',
-        'Checked by',
-        circuit.checkedBy ?? '',
-        (v) => setDrawingMetadata({ checkedBy: v })
-      )}
+      <div className={`mb-2 rounded border p-2 ${tc.border}`}>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className={`text-[10px] font-semibold ${tc.textMuted}`}>
+            Title block (project-wide)
+          </span>
+          <button
+            type="button"
+            onClick={() => setProjectSettingsOpen(true)}
+            className="rounded bg-indigo-700 px-2 py-0.5 text-[10px] text-white hover:bg-indigo-600"
+          >
+            Edit…
+          </button>
+        </div>
+        <dl className={`grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] ${tc.textMuted}`}>
+          <div>
+            <dt className="inline font-semibold">Client: </dt>
+            <dd className="inline">{titleBlock.client || '—'}</dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold">Drawing: </dt>
+            <dd className="inline">{titleBlock.drawingNumber || '—'}</dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold">Rev: </dt>
+            <dd className="inline">{titleBlock.revision || '—'}</dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold">Scale: </dt>
+            <dd className="inline">{titleBlock.scale || 'NTS'}</dd>
+          </div>
+        </dl>
+        {(titleBlock.revisionHistory?.length ?? 0) > 0 ? (
+          <p className={`mt-1 text-[10px] ${tc.textMuted}`}>
+            {titleBlock.revisionHistory!.length} revision record
+            {titleBlock.revisionHistory!.length === 1 ? '' : 's'} (last four on
+            PDF).
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mb-2">
+        <label
+          htmlFor="drawing-name"
+          className={`mb-0.5 block text-[10px] ${tc.textMuted}`}
+        >
+          Active sheet name (export title)
+        </label>
+        <input
+          id="drawing-name"
+          type="text"
+          value={circuit.name}
+          onChange={(e) => setDrawingMetadata({ name: e.target.value })}
+          placeholder="MCC-01 Schematic"
+          className="input-field w-full py-1 text-xs"
+        />
+      </div>
 
       <div className="mb-2">
         <span className={`text-[10px] font-semibold ${tc.textMuted}`}>
@@ -169,7 +178,7 @@ const DrawingExportSection: React.FC = () => {
           onClick={() =>
             addDrawingSheet({
               title: circuit.name || 'Schematic',
-              reference: circuit.drawingNumber?.trim() || '=S1',
+              reference: titleBlock.drawingNumber?.trim() || '=S1',
             })
           }
           className="rounded bg-slate-600 px-2 py-1 text-[10px] text-white hover:bg-slate-500"
@@ -193,6 +202,13 @@ const DrawingExportSection: React.FC = () => {
           className="rounded bg-indigo-700 px-2 py-1 text-[10px] text-white hover:bg-indigo-600"
         >
           Export PDF
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleExportPack()}
+          className="rounded bg-emerald-800 px-2 py-1 text-[10px] text-white hover:bg-emerald-700"
+        >
+          Documentation pack
         </button>
       </div>
       {exportMsg ? (

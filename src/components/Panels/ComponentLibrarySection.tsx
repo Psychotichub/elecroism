@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCircuitStore } from '../../store/circuitStore';
+import { useUiStore } from '../../store/uiStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import type { ComponentMacro } from '../../utils/componentMacros';
 import { loadComponentMacros } from '../../utils/componentMacros';
@@ -24,6 +25,9 @@ const ComponentLibrarySection: React.FC = () => {
   );
   const importGlobalMacrosToProject = useCircuitStore(
     (s) => s.importGlobalMacrosToProject
+  );
+  const setLibraryPackBrowserOpen = useUiStore(
+    (s) => s.setLibraryPackBrowserOpen
   );
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -167,6 +171,13 @@ const ComponentLibrarySection: React.FC = () => {
           className="rounded bg-indigo-700 px-2 py-1 text-[10px] text-white hover:bg-indigo-600"
         >
           Import pack
+        </button>
+        <button
+          type="button"
+          onClick={() => setLibraryPackBrowserOpen(true)}
+          className="rounded bg-emerald-800 px-2 py-1 text-[10px] text-white hover:bg-emerald-700"
+        >
+          Get packs…
         </button>
         {globalCount > 0 && library.length === 0 ? (
           <button

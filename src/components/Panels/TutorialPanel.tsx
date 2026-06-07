@@ -3,6 +3,7 @@ import { FiCheck, FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import { useUiStore } from '../../store/uiStore';
+import CatalogMetaChips from '../Catalog/CatalogMetaChips';
 import {
   evaluateTutorialStep,
   getGuidedTutorial,
@@ -55,6 +56,14 @@ const TutorialPanel: React.FC = () => {
           <h2 className={`truncate text-sm font-bold ${tc.textBright}`}>
             {tutorial.title}
           </h2>
+          <CatalogMetaChips
+            meta={{
+              difficulty: tutorial.difficulty,
+              estimatedMinutes: tutorial.estimatedMinutes,
+              prerequisites: tutorial.prerequisites,
+            }}
+            className="mt-1"
+          />
         </div>
         <button
           type="button"

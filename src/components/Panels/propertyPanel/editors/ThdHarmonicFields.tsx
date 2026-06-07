@@ -21,7 +21,7 @@ const ThdHarmonicFields: React.FC<ThdHarmonicFieldsProps> = ({
 
   return (
     <div className={`rounded-md border p-2.5 space-y-2 ${tc.border}`}>
-      <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+      <p className={`es-typo-caption font-semibold ${tc.textBright}`}>
         Harmonics / power quality
       </p>
       {showMotorDrive ? (
@@ -66,7 +66,7 @@ const ThdHarmonicFields: React.FC<ThdHarmonicFieldsProps> = ({
             key={p}
             type="button"
             onClick={() => updateProp({ thdPercent: p })}
-            className={`rounded px-2 py-0.5 text-[10px] ${
+            className={`rounded px-2 py-0.5 es-typo-caption ${
               thd === p ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300'
             }`}
           >
@@ -74,7 +74,7 @@ const ThdHarmonicFields: React.FC<ThdHarmonicFieldsProps> = ({
           </button>
         ))}
       </div>
-      <p className={`text-[10px] leading-snug ${tc.textMuted}`}>
+      <p className={`es-typo-caption leading-snug ${tc.textMuted}`}>
         {showSmpsHint
           ? 'SMPS draws pulsed input current — typical THD 60–100%. RMS current is higher than fundamental for the same real power.'
           : 'Nonlinear loads increase RMS current and inject triplen (3rd-order) harmonics that add in the neutral on 3φ + N systems.'}

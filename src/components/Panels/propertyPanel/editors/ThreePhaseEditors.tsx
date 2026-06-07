@@ -20,16 +20,16 @@ export const renderPhaseCurrentUnbalanceFields = () => { const { selectedComp, t
     const f3 = selectedComp.properties.threePhaseCurrentFactorL3 ?? 1;
     return (
       <div className={`rounded-md border p-2.5 space-y-2 ${tc.border}`}>
-        <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+        <p className={`es-typo-caption font-semibold ${tc.textBright}`}>
           Phase detail (optional)
         </p>
-        <p className={`text-[10px] leading-snug ${tc.textMuted}`}>
+        <p className={`es-typo-caption leading-snug ${tc.textMuted}`}>
           Set per-phase power (W) for a 4-wire board model (overrides total
           powerWatts for line currents). Otherwise current factors keep mean = 1.
           Per-phase PF sets angle vs voltage for I_N. Voltage factors scale L–N
           (mean 1); L–L follows from 120° phasors.
         </p>
-        <p className={`text-[9px] font-medium ${tc.textMuted}`}>Per-phase power (W)</p>
+        <p className={`es-typo-caption font-medium ${tc.textMuted}`}>Per-phase power (W)</p>
         <Label text="P_L1">
           <input
             type="number"
@@ -148,7 +148,7 @@ export const renderPhaseCurrentUnbalanceFields = () => { const { selectedComp, t
             className="input-field"
           />
         </Label>
-        <p className={`text-[9px] font-medium ${tc.textMuted}`}>Power factor (per phase)</p>
+        <p className={`es-typo-caption font-medium ${tc.textMuted}`}>Power factor (per phase)</p>
         <Label text="PF L1 (blank = main PF)">
           <input
             type="number"
@@ -233,7 +233,7 @@ export const renderPhaseCurrentUnbalanceFields = () => { const { selectedComp, t
             className="input-field"
           />
         </Label>
-        <p className={`text-[9px] font-medium ${tc.textMuted}`}>L–N voltage (× nominal U_L-N)</p>
+        <p className={`es-typo-caption font-medium ${tc.textMuted}`}>L–N voltage (× nominal U_L-N)</p>
         <Label text="U_L-N factor L1">
           <input
             type="number"
@@ -306,7 +306,7 @@ export const renderPhaseCurrentUnbalanceFields = () => { const { selectedComp, t
               powerWattsL3: undefined,
             })
           }
-          className={`w-full rounded px-2 py-1.5 text-xs ${tc.btnBg} ${tc.btnText} ${tc.btnHover}`}
+          className={`w-full rounded px-2 py-1.5 es-typo-body ${tc.btnBg} ${tc.btnText} ${tc.btnHover}`}
         >
           Reset phase options
         </button>
@@ -373,7 +373,7 @@ export const renderThreePhaseMotorProps = () => {
                 key={v}
                 type="button"
                 onClick={() => updateProp({ lineVoltage: v })}
-                className={`px-2 py-1 rounded text-xs ${
+                className={`px-2 py-1 rounded es-typo-body ${
                   ll === v
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-600 text-gray-300'
@@ -413,14 +413,14 @@ export const renderThreePhaseMotorProps = () => {
           <button
             type="button"
             onClick={() => resetTripped(selectedComp.id)}
-            className="w-full px-3 py-2 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-500"
+            className="w-full px-3 py-2 bg-amber-600 text-white rounded es-typo-body font-medium hover:bg-amber-500"
           >
             Clear motor overload / fault
           </button>
         )}
         <Label text="State">
           <span
-            className={`text-xs font-medium ${
+            className={`es-typo-body font-medium ${
               selectedComp.state === 'fault'
                 ? 'text-red-400'
                 : selectedComp.state === 'on'
@@ -444,7 +444,7 @@ export const renderThreePhaseContactorProps = () => {
     return (
       <>
         <Label text="Poles">
-          <span className={`text-xs ${tc.textMuted}`}>
+          <span className={`es-typo-body ${tc.textMuted}`}>
             {variant === '4p' ? '4' : '3'} power + coil A1/A2
           </span>
         </Label>
@@ -470,7 +470,7 @@ export const renderThreePhaseContactorProps = () => {
                 key={v}
                 type="button"
                 onClick={() => updateProp({ lineVoltage: v })}
-                className={`px-2 py-1 rounded text-xs ${
+                className={`px-2 py-1 rounded es-typo-body ${
                   (selectedComp.properties.lineVoltage ?? 400) === v
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-600 text-gray-300'
@@ -483,7 +483,7 @@ export const renderThreePhaseContactorProps = () => {
         </Label>
         <Label text="Power path (simulated)">
           <span
-            className={`text-xs font-medium ${
+            className={`es-typo-body font-medium ${
               selectedComp.state === 'on'
                 ? 'text-green-400'
                 : tc.textMuted
@@ -494,11 +494,11 @@ export const renderThreePhaseContactorProps = () => {
               : 'Open — energize A1 and A2 (live ↔ neutral)'}
           </span>
         </Label>
-        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
           Main contacts close only when the coil terminals see line on one side
           and neutral on the other. Coil voltage is not modeled numerically.
         </p>
-        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
           Power path:{' '}
           {variant === '4p' ? (
             <>

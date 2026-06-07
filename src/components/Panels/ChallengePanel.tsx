@@ -3,6 +3,7 @@ import { FiCheck, FiTarget, FiX } from 'react-icons/fi';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import { useUiStore } from '../../store/uiStore';
+import CatalogMetaChips from '../Catalog/CatalogMetaChips';
 import { getQuizChallenge } from '../../utils/quizChallenges';
 import {
   buildChallengeQuiz,
@@ -12,6 +13,7 @@ import {
 const ChallengePanel: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
+  const activeAssignment = useUiStore((s) => s.activeAssignment);
   const activeChallengeId = useUiStore((s) => s.activeChallengeId);
   const challengeSelectedOption = useUiStore((s) => s.challengeSelectedOption);
   const challengeFreeText = useUiStore((s) => s.challengeFreeText);
@@ -37,7 +39,7 @@ const ChallengePanel: React.FC = () => {
     return buildChallengeQuiz(challenge, circuit, simulationResult);
   }, [challenge, circuit, simulationResult]);
 
-  if (!challenge || !quiz) return null;
+  if (activeAssignment || !challenge || !quiz) return null;
 
   const handleSubmit = () => {
     const answer =
@@ -69,6 +71,14 @@ const ChallengePanel: React.FC = () => {
           <h2 className={`truncate text-sm font-bold ${tc.textBright}`}>
             {challenge.title}
           </h2>
+          <CatalogMetaChips
+            meta={{
+              difficulty: challenge.difficulty,
+              estimatedMinutes: challenge.estimatedMinutes,
+              prerequisites: challenge.prerequisites,
+            }}
+            className="mt-1"
+          />
         </div>
         <button
           type="button"

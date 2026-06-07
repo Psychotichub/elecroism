@@ -603,6 +603,7 @@ function getDefaultLabel(type: ComponentType): string {
     energy_meter: 'EM',
     digital_multifunction_meter: 'DMFM',
     multimeter: 'DMM',
+    plugin_component: 'Plugin',
   };
   return labels[type] || type;
 }

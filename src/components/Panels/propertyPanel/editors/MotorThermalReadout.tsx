@@ -20,10 +20,10 @@ export const MotorThermalReadout: React.FC = () => {
 
   return (
     <div className={`rounded-md border p-2.5 space-y-1.5 ${tc.border}`}>
-      <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+      <p className={`es-typo-caption font-semibold ${tc.textBright}`}>
         Motor thermal model
       </p>
-      <p className={`text-[10px] leading-snug ${tc.textMuted}`}>
+      <p className={`es-typo-caption leading-snug ${tc.textMuted}`}>
         I²t integrator from scope timeline — class {thermal?.tripClassS ?? 10}s
         {protector ? ` via ${protector.label}` : ''}. Record the oscilloscope to
         update.
@@ -48,7 +48,7 @@ export const MotorThermalReadout: React.FC = () => {
               />
             </div>
             <span
-              className={`text-xs font-semibold tabular-nums ${
+              className={`es-typo-body font-semibold es-tabular-nums ${
                 tripped ? 'text-red-400' : tc.textBright
               }`}
             >
@@ -56,18 +56,18 @@ export const MotorThermalReadout: React.FC = () => {
             </span>
           </div>
           {thermal?.currentRatio != null ? (
-            <p className={`text-[10px] ${tc.textMuted}`}>
+            <p className={`es-typo-caption ${tc.textMuted}`}>
               I / I<sub>pickup</sub> = {thermal.currentRatio.toFixed(2)} at cursor
             </p>
           ) : null}
           {tripped ? (
-            <p className="text-[10px] font-medium text-red-400">
+            <p className="es-typo-caption font-medium text-red-400">
               Thermal trip — overload curve exceeded
             </p>
           ) : null}
         </>
       ) : (
-        <p className={`text-[10px] italic ${tc.textMuted}`}>
+        <p className={`es-typo-caption italic ${tc.textMuted}`}>
           No thermal data — open Scope, select this motor, and Record.
         </p>
       )}

@@ -1,0 +1,113 @@
+{
+  "menus": [
+    {
+      "id": "file",
+      "label": "File",
+      "items": [
+        { "type": "action", "id": "new", "label": "New", "accelerator": "CmdOrCtrl+N" },
+        { "type": "action", "id": "open", "label": "Open…", "accelerator": "CmdOrCtrl+O" },
+        { "type": "submenu", "id": "open-recent", "label": "Open Recent", "dynamic": "recent" },
+        { "type": "action", "id": "save", "label": "Save", "accelerator": "CmdOrCtrl+S" },
+        { "type": "action", "id": "project-settings", "label": "Project settings…" },
+        { "type": "action", "id": "get-library-packs", "label": "Get library packs…" },
+        { "type": "separator" },
+        { "type": "action", "id": "export-png", "label": "Export PNG…" },
+        { "type": "action", "id": "export-pdf", "label": "Export PDF…" },
+        { "type": "action", "id": "coordination-pdf", "label": "Coordination study PDF…" },
+        { "type": "action", "id": "export-documentation-pack", "label": "Documentation pack (ZIP)…" },
+        { "type": "action", "id": "export-wire-csv", "label": "Wire schedule CSV" },
+        { "type": "action", "id": "export-bom-csv", "label": "BOM CSV" },
+        { "type": "action", "id": "export-terminal-csv", "label": "Terminal schedule CSV" },
+        { "type": "action", "id": "export-cable-csv", "label": "Cable schedule CSV" },
+        { "type": "action", "id": "export-panel-schedule-csv", "label": "Panel schedule CSV" },
+        { "type": "action", "id": "export-panel-schedule-pdf", "label": "Panel schedule PDF…" },
+        { "type": "action", "id": "export-review-comments-pdf", "label": "Review comments PDF…" },
+        { "type": "action", "id": "export-review-comments-json", "label": "Review comments JSON" },
+        { "type": "separator", "platforms": ["win32", "linux"] },
+        { "type": "role", "role": "quit", "platforms": ["win32", "linux"] }
+      ]
+    },
+    {
+      "id": "edit",
+      "label": "Edit",
+      "items": [
+        { "type": "action", "id": "undo", "label": "Undo", "accelerator": "CmdOrCtrl+Z" },
+        { "type": "action", "id": "redo", "label": "Redo", "accelerator": "CmdOrCtrl+Y" },
+        { "type": "separator" },
+        { "type": "action", "id": "cut", "label": "Cut", "accelerator": "CmdOrCtrl+X" },
+        { "type": "action", "id": "copy", "label": "Copy", "accelerator": "CmdOrCtrl+C" },
+        { "type": "action", "id": "paste", "label": "Paste", "accelerator": "CmdOrCtrl+V" },
+        { "type": "action", "id": "select-all", "label": "Select all", "accelerator": "CmdOrCtrl+A" },
+        { "type": "separator" },
+        { "type": "action", "id": "rotate", "label": "Rotate selection", "accelerator": "R" }
+      ]
+    },
+    {
+      "id": "view",
+      "label": "View",
+      "items": [
+        { "type": "action", "id": "zoom-in", "label": "Zoom in", "accelerator": "CmdOrCtrl+=" },
+        { "type": "action", "id": "zoom-out", "label": "Zoom out", "accelerator": "CmdOrCtrl+-" },
+        { "type": "action", "id": "fit-screen", "label": "Fit to screen", "accelerator": "F" },
+        { "type": "separator" },
+        { "type": "action", "id": "toggle-wire-labels", "label": "Wire labels" },
+        { "type": "action", "id": "toggle-connection-overlay", "label": "Connection integrity overlay" },
+        { "type": "action", "id": "toggle-arc-flash", "label": "Arc-flash badges" },
+        { "type": "separator" },
+        { "type": "action", "id": "toggle-object-snap", "label": "Object snap", "accelerator": "F3" },
+        { "type": "action", "id": "toggle-ortho", "label": "Ortho mode", "accelerator": "F8" },
+        { "type": "action", "id": "toggle-grid-snap", "label": "Grid snap", "accelerator": "F9" },
+        { "type": "action", "id": "toggle-auto-route", "label": "Auto-route wires" },
+        { "type": "separator" },
+        { "type": "action", "id": "toggle-sld-view", "label": "Single-line diagram (SLD)" },
+        { "type": "action", "id": "export-sld-pdf", "label": "Export SLD PDF…" },
+        { "type": "separator" },
+        { "type": "action", "id": "cycle-theme", "label": "Cycle theme" }
+      ]
+    },
+    {
+      "id": "simulate",
+      "label": "Simulate",
+      "items": [
+        { "type": "action", "id": "run-simulation", "label": "Run simulation" }
+      ]
+    },
+    {
+      "id": "window",
+      "label": "Window",
+      "items": [
+        { "type": "action", "id": "toggle-sidebar", "label": "Toggle component palette" },
+        { "type": "action", "id": "toggle-inspector", "label": "Toggle inspector" },
+        { "type": "separator" },
+        { "type": "action", "id": "command-palette", "label": "Command palette", "accelerator": "CmdOrCtrl+K" },
+        { "type": "separator", "platforms": ["darwin"] },
+        { "type": "role", "role": "minimize", "platforms": ["darwin"] },
+        { "type": "role", "role": "zoom", "platforms": ["darwin"] },
+        { "type": "role", "role": "front", "platforms": ["darwin"] }
+      ]
+    },
+    {
+      "id": "help",
+      "label": "Help",
+      "platforms": ["win32", "linux"],
+      "items": [
+        { "type": "action", "id": "about", "label": "About ElectroSim" },
+        { "type": "action", "id": "check-for-updates", "label": "Check for updates…" }
+      ]
+    }
+  ],
+  "darwinAppMenu": {
+    "items": [
+      { "type": "action", "id": "about", "label": "About ElectroSim" },
+      { "type": "action", "id": "check-for-updates", "label": "Check for updates…" },
+      { "type": "separator" },
+      { "type": "role", "role": "services" },
+      { "type": "separator" },
+      { "type": "role", "role": "hide" },
+      { "type": "role", "role": "hideOthers" },
+      { "type": "role", "role": "unhide" },
+      { "type": "separator" },
+      { "type": "role", "role": "quit" }
+    ]
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "version": "1.0",
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "registryUrl": "https://raw.githubusercontent.com/Psychotichub/elecroism/main/public/library-pack-registry.json",
+  "packs": [
+    {
+      "id": "iec-symbols-starter",
+      "name": "IEC Symbols Starter",
+      "description": "MCB and contactor templates with IEC-style device tags for panel drawings.",
+      "version": "1.0.0",
+      "author": "ElectroSim",
+      "tags": [
+        "iec",
+        "symbols",
+        "protection"
+      ],
+      "macroCount": 3,
+      "minPackVersion": "1.0",
+      "minAppVersion": "0.0.0",
+      "downloadUrl": "https://github.com/Psychotichub/elecroism/releases/download/library-packs-v1.0.0/iec-symbols-starter.elib.json",
+      "bundled": true,
+      "publishedAt": "2026-06-07",
+      "releaseNotes": "Initial curated IEC symbol macros."
+    },
+    {
+      "id": "motor-starters-starter",
+      "name": "Motor Starters Starter",
+      "description": "DOL starter macro (MCB + contactor) and motor protection breaker templates.",
+      "version": "1.0.0",
+      "author": "ElectroSim",
+      "tags": [
+        "motor",
+        "starter",
+        "dol"
+      ],
+      "macroCount": 2,
+      "minPackVersion": "1.0",
+      "minAppVersion": "0.0.0",
+      "downloadUrl": "https://raw.githubusercontent.com/Psychotichub/elecroism/main/public/library-packs/motor-starters-starter.elib.json",
+      "bundled": true,
+      "publishedAt": "2026-06-07",
+      "releaseNotes": "DOL starter and motor MCB macros."
+    },
+    {
+      "id": "bms-io-starter",
+      "name": "BMS I/O Starter",
+      "description": "Digital and analog BMS I/O module templates for supervisory panels.",
+      "version": "1.0.0",
+      "author": "ElectroSim",
+      "tags": [
+        "bms",
+        "io",
+        "di",
+        "ai"
+      ],
+      "macroCount": 3,
+      "minPackVersion": "1.0",
+      "minAppVersion": "0.0.0",
+      "downloadUrl": "https://github.com/Psychotichub/elecroism/releases/download/library-packs-v1.0.0/bms-io-starter.elib.json",
+      "bundled": true,
+      "publishedAt": "2026-06-07",
+      "releaseNotes": "DI, AI, and paired I/O module macros."
+    }
+  ]
+}

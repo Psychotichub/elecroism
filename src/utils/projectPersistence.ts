@@ -5,9 +5,11 @@ import type {
   ProjectFileDocument,
   ProjectSheet,
   RecentProjectEntry,
+  RecentProjectMeta,
   SheetCircuitData,
 } from '../types/project';
 import { PROJECT_FILE_VERSION } from '../types/project';
+import { migrateProjectTitleBlock } from './projectTitleBlock';
 import type { ComponentMacro } from './componentMacros';
 import { createEmptyCircuit } from '../store/circuitDefaults';
 
@@ -104,6 +106,8 @@ export function serializeProject(project: ElectroProject): ProjectFileDocument {
     activeSheetId: project.activeSheetId,
     sheets: project.sheets,
     library: project.library,
+    titleBlock: project.titleBlock,
+    plugins: project.plugins,
   };
 }
 
@@ -128,7 +132,14 @@ export function deserializeProjectFile(
       typeof doc.created === 'string' ? doc.created : now;
     const docUpdated =
       typeof doc.updated === 'string' ? doc.updated : now;
-    return {
+    const titleBlock =
+      doc.titleBlock && typeof doc.titleBlock === 'object'
+        ? (doc.titleBlock as ElectroProject['titleBlock'])
+        : undefined;
+    const plugins = Array.isArray(doc.plugins)
+      ? (doc.plugins as ElectroProject['plugins'])
+      : undefined;
+    return migrateProjectTitleBlock({
       id: uuid(),
       name: docName,
       createdAt: docCreated,
@@ -138,7 +149,9 @@ export function deserializeProjectFile(
       library: Array.isArray(doc.library)
         ? (doc.library as ComponentMacro[])
         : [],
-    };
+      titleBlock,
+      plugins,
+    });
   }
 
   // Legacy .esim v1.0 — single circuit wrapper
@@ -227,16 +240,27 @@ export function listRecentProjects(): RecentProjectEntry[] {
   }
 }
 
-export function touchRecentProject(project: ElectroProject): void {
+function recentEntryKey(entry: RecentProjectEntry): string {
+  return entry.filePath ?? entry.storageId ?? entry.name;
+}
+
+export function touchRecentProject(
+  project: ElectroProject,
+  meta?: RecentProjectMeta
+): void {
   if (typeof window === 'undefined') return;
   const entry: RecentProjectEntry = {
     name: project.name,
     updatedAt: project.updatedAt,
     sheetCount: project.sheets.length,
+    displayName: meta?.displayName,
+    filePath: meta?.filePath,
+    storageId: meta?.storageId,
   };
+  const key = recentEntryKey(entry);
   const next = [
     entry,
-    ...listRecentProjects().filter((r) => r.name !== entry.name),
+    ...listRecentProjects().filter((r) => recentEntryKey(r) !== key),
   ].slice(0, MAX_RECENT);
   try {
     window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));

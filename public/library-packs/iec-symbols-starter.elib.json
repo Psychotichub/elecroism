@@ -1,0 +1,148 @@
+{
+  "version": "1.0",
+  "name": "IEC Symbols Starter",
+  "exportedAt": "2026-06-07T17:43:53.925Z",
+  "author": "ElectroSim",
+  "description": "Common IEC-style device templates for panel drawings.",
+  "macros": [
+    {
+      "id": "iec-mcb-16",
+      "name": "IEC MCB 16 A",
+      "createdAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "components": [
+        {
+          "id": "c-mcb16",
+          "type": "mcb",
+          "label": "Q1",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "state": "on",
+          "selected": false,
+          "connectionPoints": [
+            {
+              "id": "c-mcb16-p1",
+              "componentId": "c-mcb16",
+              "label": "1",
+              "x": -20,
+              "y": 0
+            },
+            {
+              "id": "c-mcb16-p2",
+              "componentId": "c-mcb16",
+              "label": "2",
+              "x": 20,
+              "y": 0
+            }
+          ],
+          "properties": {
+            "ratingAmps": 16,
+            "phaseSystem": "single_phase"
+          }
+        }
+      ],
+      "wires": [],
+      "description": "Single-pole MCB template with IEC-style tag",
+      "tags": [
+        "iec",
+        "protection"
+      ]
+    },
+    {
+      "id": "iec-mcb-32",
+      "name": "IEC MCB 32 A",
+      "createdAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "components": [
+        {
+          "id": "c-mcb32",
+          "type": "mcb",
+          "label": "Q2",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "state": "on",
+          "selected": false,
+          "connectionPoints": [
+            {
+              "id": "c-mcb32-p1",
+              "componentId": "c-mcb32",
+              "label": "1",
+              "x": -20,
+              "y": 0
+            },
+            {
+              "id": "c-mcb32-p2",
+              "componentId": "c-mcb32",
+              "label": "2",
+              "x": 20,
+              "y": 0
+            }
+          ],
+          "properties": {
+            "ratingAmps": 32,
+            "phaseSystem": "single_phase"
+          }
+        }
+      ],
+      "wires": [],
+      "description": "32 A feeder breaker template",
+      "tags": [
+        "iec",
+        "protection"
+      ]
+    },
+    {
+      "id": "iec-contactor",
+      "name": "IEC Contactor K1",
+      "createdAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "components": [
+        {
+          "id": "c-k1",
+          "type": "contactor",
+          "label": "K1",
+          "x": 80,
+          "y": 0,
+          "rotation": 0,
+          "state": "off",
+          "selected": false,
+          "connectionPoints": [
+            {
+              "id": "c-k1-a1",
+              "componentId": "c-k1",
+              "label": "A1",
+              "x": -20,
+              "y": -8
+            },
+            {
+              "id": "c-k1-a2",
+              "componentId": "c-k1",
+              "label": "A2",
+              "x": 20,
+              "y": -8
+            },
+            {
+              "id": "c-k1-coil",
+              "componentId": "c-k1",
+              "label": "COIL",
+              "x": 0,
+              "y": 18
+            }
+          ],
+          "properties": {
+            "coilVoltageV": 230,
+            "phaseSystem": "single_phase"
+          }
+        }
+      ],
+      "wires": [],
+      "description": "Three-pole contactor with coil terminal",
+      "tags": [
+        "iec",
+        "control"
+      ]
+    }
+  ]
+}

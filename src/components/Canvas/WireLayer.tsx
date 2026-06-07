@@ -2,6 +2,8 @@ import React from 'react';
 import { Group, Line, Circle, Text } from 'react-konva';
 import WireSegment from '../Components/WireSegment';
 import type { Wire } from '../../types';
+import { useDrawingLayerStore } from '../../store/drawingLayerStore';
+import { resolveWireDrawingLayer } from '../../utils/drawingLayers';
 import { getWireColor } from '../../utils/geometry';
 import type { WireSnapKind } from '../../utils/wireSnap';
 
@@ -63,6 +65,10 @@ const WireLayer: React.FC<Props> = ({
   wireRuleMessage,
   wireLabelsMasterVisible,
 }) => {
+  const layerSettings = useDrawingLayerStore((s) => s.layers);
+  const isLayerSelectable = useDrawingLayerStore((s) => s.isLayerSelectable);
+  const isLayerVisible = useDrawingLayerStore((s) => s.isLayerVisible);
+
   const draftPoints = (() => {
     if (!wireInProgress || wirePoints.length < 2) return wirePoints;
     if (!cursorPos) return wirePoints;
@@ -134,18 +140,44 @@ const WireLayer: React.FC<Props> = ({
 
   return (
     <Group listening>
-      {wires.map((wire) => (
-        <WireSegment
-          key={wire.id}
-          wire={wire}
-          selected={selectedId === wire.id}
-          panX={panX}
-          panY={panY}
-          zoom={zoom}
-          wireLabelsMasterVisible={wireLabelsMasterVisible}
-          onSelect={(world) => onSelectWire(wire.id, world)}
-        />
-      ))}
+      {wires.map((wire) => {
+        const layerId = resolveWireDrawingLayer(wire);
+        const layer = layerSettings.find((l) => l.id === layerId);
+        if (!isLayerVisible(layerId)) return null;
+        const selectable = isLayerSelectable(layerId);
+        return (
+          <Group
+            key={wire.id}
+            drawingLayer={layerId}
+            listening={selectable}
+          >
+            {layer?.colorWash ? (
+              <Line
+                points={wire.points}
+                stroke={layer.washColor}
+                strokeWidth={10}
+                opacity={0.55}
+                lineCap="round"
+                lineJoin="round"
+                listening={false}
+              />
+            ) : null}
+            <WireSegment
+              wire={wire}
+              selected={selectedId === wire.id}
+              panX={panX}
+              panY={panY}
+              zoom={zoom}
+              wireLabelsMasterVisible={wireLabelsMasterVisible}
+              onSelect={
+                selectable
+                  ? (world) => onSelectWire(wire.id, world)
+                  : () => undefined
+              }
+            />
+          </Group>
+        );
+      })}
 
       {wireInProgress && linePoints.length >= 2 && (
         <Line

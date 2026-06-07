@@ -24,7 +24,7 @@ export const renderSwitchProps = () => { const { selectedComp, updateProp, toggl
       <Label text="State">
         <button
           onClick={() => toggleComponent(selectedComp!.id)}
-          className={`px-3 py-1 rounded text-xs font-medium ${
+          className={`px-3 py-1 rounded es-typo-body font-medium ${
             selectedComp!.state === 'on'
               ? 'bg-green-600 text-white'
               : 'bg-gray-600 text-gray-300'
@@ -39,7 +39,7 @@ export const renderSwitchProps = () => { const { selectedComp, updateProp, toggl
 // eslint-disable-next-line react-hooks/rules-of-hooks
 export const renderTwoWaySwitchProps = () => { const { selectedComp, tc, toggleComponent } = usePPCtx(); return (
     <>
-      <p className={`text-[11px] ${tc.textMuted} leading-snug mb-2`}>
+      <p className={`es-typo-body-sm ${tc.textMuted} leading-snug mb-2`}>
         Maintained SPDT: <strong>ON</strong> connects <strong>COM</strong> to{' '}
         <strong>T1</strong>; <strong>OFF</strong> connects <strong>COM</strong> to{' '}
         <strong>T2</strong>. Double-click the symbol on the canvas to flip throws, or
@@ -49,7 +49,7 @@ export const renderTwoWaySwitchProps = () => { const { selectedComp, tc, toggleC
         <button
           type="button"
           onClick={() => toggleComponent(selectedComp!.id)}
-          className={`px-3 py-1 rounded text-xs font-medium ${
+          className={`px-3 py-1 rounded es-typo-body font-medium ${
             selectedComp!.state === 'on'
               ? 'bg-green-600 text-white'
               : 'bg-sky-600 text-white'
@@ -78,7 +78,7 @@ export const renderPushButtonProps = () => { const { selectedComp, tc, updatePro
           <option value="NC">Normally closed (NC)</option>
         </select>
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Select tool: hold on the symbol — NO closes the contact while held; NC
         opens it while held. The label shows contact state (Closed/Open), not
         “power on”.
@@ -91,7 +91,7 @@ export const renderEStopProps = () => { const { selectedComp, tc, toggleComponen
     <>
       <Label text="State">
         <span
-          className={`text-xs font-medium ${
+          className={`es-typo-body font-medium ${
             selectedComp!.state === 'on' ? 'text-green-400' : 'text-red-400'
           }`}
         >
@@ -103,7 +103,7 @@ export const renderEStopProps = () => { const { selectedComp, tc, toggleComponen
       <button
         type="button"
         onClick={() => toggleComponent(selectedComp!.id)}
-        className={`w-full px-3 py-2 rounded text-xs font-semibold ${
+        className={`w-full px-3 py-2 rounded es-typo-body font-semibold ${
           selectedComp!.state === 'on'
             ? 'bg-red-600 text-white hover:bg-red-700'
             : 'bg-emerald-600 text-white hover:bg-emerald-700'
@@ -113,7 +113,7 @@ export const renderEStopProps = () => { const { selectedComp, tc, toggleComponen
           ? 'PRESS — Latch open'
           : 'TWIST TO RELEASE — Reset'}
       </button>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Wire <strong>IN/OUT</strong> in series with the contactor coil A1/A2
         loop. Pressing the head latches the contact open until reset, killing
         every coil downstream.
@@ -126,7 +126,7 @@ export const renderDoorInterlockProps = () => { const { selectedComp, tc, toggle
     <>
       <Label text="Door state">
         <span
-          className={`text-xs font-medium ${
+          className={`es-typo-body font-medium ${
             selectedComp!.state === 'on' ? 'text-green-400' : 'text-yellow-300'
           }`}
         >
@@ -138,7 +138,7 @@ export const renderDoorInterlockProps = () => { const { selectedComp, tc, toggle
       <button
         type="button"
         onClick={() => toggleComponent(selectedComp!.id)}
-        className={`w-full px-3 py-2 rounded text-xs font-semibold ${
+        className={`w-full px-3 py-2 rounded es-typo-body font-semibold ${
           selectedComp!.state === 'on'
             ? 'bg-yellow-600 text-white hover:bg-yellow-700'
             : 'bg-emerald-600 text-white hover:bg-emerald-700'
@@ -146,7 +146,7 @@ export const renderDoorInterlockProps = () => { const { selectedComp, tc, toggle
       >
         {selectedComp!.state === 'on' ? 'Open door' : 'Close door'}
       </button>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Use this in series with coil circuits so opening the panel door removes
         control power to hazardous motion.
       </p>
@@ -168,7 +168,7 @@ export const renderSelectorSwitchProps = () => {
                 key={p}
                 type="button"
                 onClick={() => updateProp({ selectorPosition: p })}
-                className={`flex-1 px-2 py-1 rounded text-xs ${
+                className={`flex-1 px-2 py-1 rounded es-typo-body ${
                   cur === p
                     ? p === 'AUTO'
                       ? 'bg-emerald-600 text-white'
@@ -183,7 +183,7 @@ export const renderSelectorSwitchProps = () => {
             ))}
           </div>
         </Label>
-        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
           AUTO bridges <strong>COM ↔ AUTO</strong> (BMS / interlock control of
           the coil). MANUAL bridges <strong>COM ↔ MAN</strong> (panel push-
           buttons). OFF opens both, isolating the contactor.
@@ -194,7 +194,7 @@ export const renderSelectorSwitchProps = () => {
             onClick={() =>
               updateProp({ atsController: !selectedComp.properties.atsController })
             }
-            className={`w-full rounded px-3 py-2 text-xs font-medium ${
+            className={`w-full rounded px-3 py-2 es-typo-body font-medium ${
               selectedComp.properties.atsController
                 ? 'bg-emerald-600 text-white'
                 : 'bg-gray-600 text-gray-300'
@@ -212,7 +212,7 @@ export const renderSelectorSwitchProps = () => {
                     key={mode}
                     type="button"
                     onClick={() => updateProp({ atsTransition: mode })}
-                    className={`flex-1 rounded px-2 py-1 text-xs capitalize ${
+                    className={`flex-1 rounded px-2 py-1 es-typo-body capitalize ${
                       (selectedComp.properties.atsTransition ?? 'open') === mode
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-600 text-gray-300'
@@ -272,7 +272,7 @@ export const renderSelectorSwitchProps = () => {
                 className="input-field"
               />
             </Label>
-            <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+            <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
               Labels default to Mains / Generator / KM-M / KM-G. Record the
               oscilloscope on <strong>ATS transfer</strong> to step through
               utility fail → gen start → transfer → retransfer.

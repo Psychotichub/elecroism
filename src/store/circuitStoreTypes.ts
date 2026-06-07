@@ -22,6 +22,11 @@ import type { AlignMode, DistributeMode } from '../utils/componentAlignment';
 import type { SpatialRenumberOrder } from '../utils/designatorRules';
 import type { ProjectSnapshotSummary } from '../utils/projectSnapshots';
 import type { LibraryMergeMode } from '../utils/componentLibraryPack';
+import type {
+  ProjectTitleBlock,
+  RevisionHistoryEntry,
+} from '../types/project';
+import type { CircuitValidationIssue } from '../utils/circuitDesignValidation';
 
 export type DrawingMetadataPatch = {
   drawingProject?: string;
@@ -36,6 +41,8 @@ export type DrawingMetadataPatch = {
 export interface CircuitStore {
   project: ElectroProject;
   circuit: Circuit;
+  /** Per-sheet fingerprints from the last explicit save (download). */
+  sheetSaveBaselines: Record<string, string>;
   simulationResult: SimulationResult | null;
   /** True while a Web Worker simulation is in flight. */
   simulationPending: boolean;
@@ -250,8 +257,37 @@ export interface CircuitStore {
   exportTerminalScheduleCsv: () => void;
   /** Download a CSV cable schedule with persisted wizard sizing per wire. */
   exportCableScheduleCsv: () => void;
+  /** Download panel / MCC lineup schedule CSV. */
+  exportPanelScheduleCsv: () => void;
+  /** Download panel / MCC lineup schedule PDF. Returns error message or null. */
+  exportPanelSchedulePdf: () => string | null;
+  addReviewCommentAtPoint: (
+    worldX: number,
+    worldY: number,
+    body: string,
+    author?: string
+  ) => string | null;
+  addReviewCommentOnComponent: (
+    componentId: string,
+    body: string,
+    author?: string
+  ) => string | null;
+  addReviewCommentReply: (
+    threadId: string,
+    body: string,
+    author?: string
+  ) => boolean;
+  resolveReviewCommentThread: (threadId: string) => void;
+  reopenReviewCommentThread: (threadId: string) => void;
+  deleteReviewCommentThread: (threadId: string) => void;
+  exportReviewCommentsPdf: () => string | null;
+  exportReviewCommentsJson: () => string | null;
   /** Export schematic PDF with title block (multi-sheet when configured). */
   exportDrawingPdf: () => Promise<string | null>;
+  /** Zip documentation pack: PDFs, schedules, README manifest. */
+  exportDocumentationPack: () => Promise<string | null>;
+  /** Export single-line diagram PDF (temporarily enables SLD view for capture). */
+  exportSldPdf: () => Promise<string | null>;
 
   undo: () => void;
   redo: () => void;
@@ -270,6 +306,10 @@ export interface CircuitStore {
 
   selectComponents: (ids: string[]) => void;
   focusComponents: (ids: string[]) => boolean;
+  focusValidationIssue: (issue: CircuitValidationIssue) => boolean;
+  frameViewport: (
+    bounds: import('../utils/drawingBounds').WorldBounds
+  ) => boolean;
   jumpToLabel: (labelQuery: string) => boolean;
   selectAllOfType: (typeQuery: string) => boolean;
   selectUnwiredComponents: () => boolean;
@@ -292,14 +332,22 @@ export interface CircuitStore {
 
   commitActiveSheet: () => ElectroProject;
   switchProjectSheet: (sheetId: string) => boolean;
+  navigateCrossSheetRef: (raw: string) => boolean;
   addProjectSheet: (name?: string) => string | undefined;
   duplicateProjectSheet: (sheetId: string) => string | null;
   renameProjectSheet: (sheetId: string, name: string) => void;
   removeProjectSheet: (sheetId: string) => boolean;
   setProjectName: (name: string) => void;
+  setProjectTitleBlock: (patch: Partial<ProjectTitleBlock>) => void;
+  addRevisionHistoryEntry: (entry: RevisionHistoryEntry) => void;
   newProject: (name?: string) => void;
-  loadProject: (project: ElectroProject) => void;
-  loadProjectFromDocument: (data: unknown) => boolean;
+  newProjectFromOrganizationTemplate: (templateId: string) => Promise<string | null>;
+  loadOrganizationTemplateFile: (data: unknown) => string | null;
+  loadProject: (project: ElectroProject, recentMeta?: import('../types/project').RecentProjectMeta) => void;
+  loadProjectFromDocument: (
+    data: unknown,
+    recentMeta?: import('../types/project').RecentProjectMeta
+  ) => boolean;
   loadCircuitAsProject: (circuit: Circuit) => void;
   saveProject: () => void;
   autosaveProject: () => void;
@@ -317,6 +365,12 @@ export interface CircuitStore {
   listStoredSnapshots: () => Promise<ProjectSnapshotSummary[]>;
   restoreProjectSnapshot: (snapshotId: string) => Promise<boolean>;
   deleteProjectSnapshot: (snapshotId: string) => Promise<boolean>;
+  renameProjectSnapshot: (snapshotId: string, label: string) => Promise<boolean>;
+  compareProjectSnapshot: (
+    snapshotId: string
+  ) => Promise<
+    import('../utils/projectSnapshotDiff').ProjectSnapshotCompareResult | null
+  >;
 
   setProjectLibrary: (library: ComponentMacro[]) => void;
   updateLibraryMacro: (
@@ -341,4 +395,17 @@ export interface CircuitStore {
     data: unknown,
     mode?: LibraryMergeMode
   ) => boolean;
+  installRegistryLibraryPack: (
+    entry: import('../utils/libraryPackRegistry').LibraryPackRegistryEntry,
+    mode?: LibraryMergeMode
+  ) => Promise<string | null>;
+  loadProjectPlugin: (data: unknown) => string | null;
+  removeProjectPlugin: (pluginId: string) => void;
+  addPluginComponent: (
+    pluginId: string,
+    typeId: string,
+    x: number,
+    y: number
+  ) => boolean;
+  loadExamplePlugin: () => Promise<string | null>;
 }

@@ -13,7 +13,7 @@ export const renderEnergyMeterProps = () => { const { selectedComp, tc, updatePr
               key={v}
               type="button"
               onClick={() => updateProp({ lineVoltage: v })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.lineVoltage ?? 400) === v
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -70,7 +70,7 @@ export const renderEnergyMeterProps = () => { const { selectedComp, tc, updatePr
           />
         </Label>
       )}
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Pass-through 3φ + N meter — wires straight through the bus. The
         display shows live U / I / kW from the simulator. CTs are clamped on
         each pole; their primary rating is documentation only.
@@ -99,7 +99,7 @@ export const renderMultimeterProps = () => { const { selectedComp, tc, updatePro
                     | 'continuity',
                 })
               }
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.multimeterMode ?? 'voltage') === m.v
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -125,7 +125,7 @@ export const renderMultimeterProps = () => { const { selectedComp, tc, updatePro
                   multimeterSignal: s.v as 'auto' | 'ac' | 'dc',
                 })
               }
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 ((selectedComp!.properties as { multimeterSignal?: 'auto' | 'ac' | 'dc' })
                   .multimeterSignal ?? 'auto') === s.v
                   ? 'bg-blue-600 text-white'
@@ -138,7 +138,7 @@ export const renderMultimeterProps = () => { const { selectedComp, tc, updatePro
         </div>
       </Label>
       <Label text="High-voltage checks">
-        <label className="flex items-center gap-2 text-xs">
+        <label className="flex items-center gap-2 es-typo-body">
           <input
             type="checkbox"
             checked={selectedComp!.properties.multimeterHighVoltage !== false}
@@ -166,7 +166,7 @@ export const renderMultimeterProps = () => { const { selectedComp, tc, updatePro
           max={5000}
         />
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Two-probe DMM: wire <strong>COM</strong> and <strong>VΩA</strong> to
         test points. Continuity mode shows <strong>BEEP</strong> and lights the
         buzzer indicator when both probes are electrically continuous. Choose
@@ -245,7 +245,7 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
                   upsStaticBypass: !selectedComp!.properties.upsStaticBypass,
                 })
               }
-              className={`w-full px-3 py-2 rounded text-xs font-semibold ${
+              className={`w-full px-3 py-2 rounded es-typo-body font-semibold ${
                 selectedComp!.properties.upsStaticBypass
                   ? 'bg-amber-600 text-white hover:bg-amber-700'
                   : 'bg-gray-600 text-white hover:bg-gray-700'
@@ -263,7 +263,7 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
                     selectedComp!.properties.upsInverterEnabled === false,
                 })
               }
-              className={`w-full px-3 py-2 rounded text-xs font-semibold ${
+              className={`w-full px-3 py-2 rounded es-typo-body font-semibold ${
                 selectedComp!.properties.upsInverterEnabled !== false
                   ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-gray-600 text-white hover:bg-gray-700'
@@ -281,7 +281,7 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
           <button
             type="button"
             onClick={() => toggleComponent(selectedComp!.id)}
-            className={`w-full px-3 py-2 rounded text-xs font-semibold ${
+            className={`w-full px-3 py-2 rounded es-typo-body font-semibold ${
               selectedComp!.state === 'on'
                 ? 'bg-green-600 text-white hover:bg-green-700'
                 : 'bg-gray-600 text-white hover:bg-gray-700'
@@ -349,7 +349,7 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
           <PqaLiveReadings />
         </>
       )}
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Auxiliary infrastructure components are mostly planning/documentation
         blocks, except key interlock which behaves as a series contact.
       </p>

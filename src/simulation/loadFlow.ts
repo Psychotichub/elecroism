@@ -7,6 +7,11 @@ import {
 } from './engineTypes';
 import { isLoadComponent } from './componentClassification';
 import {
+  pluginLiveTerminal,
+  pluginNeutralTerminal,
+  pluginSimConfigFromComponent,
+} from './pluginSimulation';
+import {
   defaultSinglePhaseLoadVoltage,
   getDefaultThreePhaseLineVoltage,
 } from './potentials';
@@ -354,6 +359,10 @@ function liveTerminalForLoad(c: CircuitComponent): string | null {
     const cp = c.connectionPoints.find((p) => p.label.toUpperCase() === 'L1');
     return cp ? terminalKey(c.id, cp.id) : null;
   }
+  if (c.type === 'plugin_component') {
+    const cfg = pluginSimConfigFromComponent(c);
+    return cfg ? pluginLiveTerminal(c, cfg) : null;
+  }
   return null;
 }
 
@@ -374,6 +383,10 @@ function neutralTerminalForLoad(c: CircuitComponent): string | null {
   if (c.type === 'three_phase_motor') {
     const cp = c.connectionPoints.find((p) => p.label.toUpperCase() === 'N');
     return cp ? terminalKey(c.id, cp.id) : null;
+  }
+  if (c.type === 'plugin_component') {
+    const cfg = pluginSimConfigFromComponent(c);
+    return cfg ? pluginNeutralTerminal(c, cfg) : null;
   }
   return null;
 }

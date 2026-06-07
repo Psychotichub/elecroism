@@ -29,9 +29,11 @@ export type TimelineSample = {
   timeMs: number;
   nodes: Record<string, ScopeSampleNode>;
   motorThermal?: Record<string, MotorThermalReading>;
+  atsPhase?: string;
+  atsPhaseLabel?: string;
 };
 
-export type TimelineScenario = 'normal' | 'fault_clearing';
+export type TimelineScenario = 'normal' | 'fault_clearing' | 'ats_transfer';
 
 export type TimelineOptions = {
   durationMs?: number;

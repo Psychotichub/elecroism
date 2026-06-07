@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import type Konva from 'konva';
 import type { Circuit, DrawingSheet } from '../types';
+import type { ElectroProject, RevisionHistoryEntry } from '../types/project';
 import {
   boundsForComponents,
   computeDrawingContentBounds,
@@ -8,15 +9,22 @@ import {
   type WorldBounds,
 } from './drawingBounds';
 import { captureStageRegion } from './export';
+import { applyExportLayerVisibility } from './drawingLayerStage';
+import { resolvedProjectTitleBlock } from './projectTitleBlock';
 
 export type DrawingTitleBlock = {
+  brandLabel: string;
+  logoUrl?: string;
   project: string;
   drawingNumber: string;
   revision: string;
   drawnBy: string;
   checkedBy: string;
+  approvedBy: string;
+  scale: string;
   date: string;
   circuitName: string;
+  revisionHistory: RevisionHistoryEntry[];
 };
 
 export type ResolvedDrawingSheet = {
@@ -35,22 +43,56 @@ export type SheetIndexRow = {
 const PAGE_W = 297;
 const PAGE_H = 210;
 const MARGIN = 10;
-const TITLE_H = 28;
+const BASE_TITLE_H = 28;
 const DRAW_TOP = MARGIN;
-const DRAW_H = PAGE_H - MARGIN - TITLE_H - MARGIN;
 const DRAW_W = PAGE_W - MARGIN * 2;
 
-export function buildTitleBlock(circuit: Circuit): DrawingTitleBlock {
+const MAX_REV_HISTORY_ROWS = 4;
+
+export function titleBlockHeight(meta: DrawingTitleBlock): number {
+  const rows = Math.min(meta.revisionHistory.length, MAX_REV_HISTORY_ROWS);
+  return BASE_TITLE_H + (rows > 0 ? 6 + rows * 4 : 0);
+}
+
+export function drawingAreaHeight(meta: DrawingTitleBlock): number {
+  return PAGE_H - MARGIN - titleBlockHeight(meta) - MARGIN;
+}
+
+export function buildTitleBlock(
+  circuit: Circuit,
+  project?: Pick<ElectroProject, 'name' | 'titleBlock'> | null
+): DrawingTitleBlock {
+  const resolved = project
+    ? resolvedProjectTitleBlock(project as ElectroProject, circuit)
+    : {
+        brandName: circuit.drawingProject?.trim() || circuit.name || 'ElectroSim',
+        client: circuit.drawingProject?.trim() || circuit.name || 'Untitled',
+        drawingNumber:
+          circuit.drawingNumber?.trim() || circuit.name || 'DRG-001',
+        revision: circuit.drawingRevision?.trim() || 'A',
+        scale: circuit.drawingScale?.trim() || 'NTS',
+        drawnBy: circuit.drawnBy?.trim() || '—',
+        checkedBy: circuit.checkedBy?.trim() || '—',
+        approvedBy: circuit.approvedBy?.trim() || '—',
+        revisionHistory: circuit.revisionHistory ?? [],
+      };
   const date = new Date(circuit.updatedAt || circuit.createdAt || Date.now());
   return {
-    project: circuit.drawingProject?.trim() || circuit.name || 'Untitled',
-    drawingNumber:
-      circuit.drawingNumber?.trim() || circuit.name || 'DRG-001',
-    revision: circuit.drawingRevision?.trim() || 'A',
-    drawnBy: circuit.drawnBy?.trim() || '—',
-    checkedBy: circuit.checkedBy?.trim() || '—',
+    brandLabel:
+      resolved.brandName?.trim() ||
+      resolved.client?.trim() ||
+      'ElectroSim',
+    logoUrl: resolved.logoUrl,
+    project: resolved.client ?? 'Untitled',
+    drawingNumber: resolved.drawingNumber ?? 'DRG-001',
+    revision: resolved.revision ?? 'A',
+    drawnBy: resolved.drawnBy ?? '—',
+    checkedBy: resolved.checkedBy ?? '—',
+    approvedBy: resolved.approvedBy ?? '—',
+    scale: resolved.scale ?? 'NTS',
     date: date.toLocaleDateString(),
     circuitName: circuit.name || 'Circuit',
+    revisionHistory: resolved.revisionHistory ?? [],
   };
 }
 
@@ -137,20 +179,49 @@ function fitImageRect(
   };
 }
 
-function drawTitleBlock(
+function drawRevisionHistoryTable(
+  doc: jsPDF,
+  meta: DrawingTitleBlock,
+  y0: number
+): void {
+  const rows = meta.revisionHistory.slice(-MAX_REV_HISTORY_ROWS);
+  if (rows.length === 0) return;
+
+  const tableY = y0 + BASE_TITLE_H + 2;
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Rev', MARGIN + 2, tableY);
+  doc.text('Date', MARGIN + 14, tableY);
+  doc.text('Description', MARGIN + 38, tableY);
+  doc.line(MARGIN + 2, tableY + 1, PAGE_W - MARGIN - 2, tableY + 1);
+
+  doc.setFont('helvetica', 'normal');
+  rows.forEach((row, i) => {
+    const y = tableY + 4 + i * 4;
+    doc.text(row.revision.slice(0, 6), MARGIN + 2, y);
+    doc.text(row.date.slice(0, 10), MARGIN + 14, y);
+    doc.text(row.description.slice(0, 72), MARGIN + 38, y);
+  });
+
+  doc.setDrawColor(40);
+  doc.line(MARGIN, y0 + BASE_TITLE_H, MARGIN + DRAW_W, y0 + BASE_TITLE_H);
+}
+
+export function drawPdfTitleBlock(
   doc: jsPDF,
   meta: DrawingTitleBlock,
   sheet: ResolvedDrawingSheet,
   sheetCount: number
 ): void {
-  const y0 = PAGE_H - TITLE_H;
+  const blockH = titleBlockHeight(meta);
+  const y0 = PAGE_H - blockH;
   doc.setDrawColor(40);
   doc.setLineWidth(0.3);
-  doc.rect(MARGIN, y0, DRAW_W, TITLE_H);
+  doc.rect(MARGIN, y0, DRAW_W, blockH);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.text('ElectroSim', MARGIN + 2, y0 + 6);
+  doc.text(meta.brandLabel.slice(0, 42), MARGIN + 2, y0 + 6);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
@@ -169,12 +240,23 @@ function drawTitleBlock(
   doc.text(`Title: ${sheet.title}`, col2, row2);
   doc.text(`Ref: ${sheet.reference}`, col3, row2);
 
-  doc.text(`Drawn: ${meta.drawnBy}`, col1, row3);
-  doc.text(`Checked: ${meta.checkedBy}`, col2, row3);
-  doc.text(`Date: ${meta.date}`, col3, row3);
+  doc.text(`Scale: ${meta.scale}`, col1, row3);
+  doc.text(`Drawn: ${meta.drawnBy}`, col2, row3);
+  doc.text(`Checked: ${meta.checkedBy}`, col3, row3);
+
+  if (meta.approvedBy && meta.approvedBy !== '—') {
+    doc.setFontSize(7);
+    doc.text(`Approved: ${meta.approvedBy}`, col1, y0 + blockH - 2);
+    doc.text(`Date: ${meta.date}`, col3, y0 + blockH - 2);
+    doc.setFontSize(8);
+  } else {
+    doc.text(`Date: ${meta.date}`, col3, row3);
+  }
+
+  drawRevisionHistoryTable(doc, meta, y0);
 }
 
-function drawSheetIndexPage(
+export function drawPdfSheetIndexPage(
   doc: jsPDF,
   meta: DrawingTitleBlock,
   rows: SheetIndexRow[]
@@ -205,7 +287,7 @@ function drawSheetIndexPage(
     reference: meta.drawingNumber,
     bounds: { minX: 0, minY: 0, maxX: 1, maxY: 1 },
   };
-  drawTitleBlock(doc, meta, indexSheet, rows.length);
+  drawPdfTitleBlock(doc, meta, indexSheet, rows.length);
 }
 
 function loadImageSize(dataUrl: string): Promise<{ w: number; h: number }> {
@@ -219,15 +301,17 @@ function loadImageSize(dataUrl: string): Promise<{ w: number; h: number }> {
 
 export async function buildDrawingPdf(
   stage: Konva.Stage,
-  circuit: Circuit
+  circuit: Circuit,
+  project?: Pick<ElectroProject, 'name' | 'titleBlock'> | null
 ): Promise<jsPDF> {
-  const meta = buildTitleBlock(circuit);
+  const meta = buildTitleBlock(circuit, project);
+  const drawH = drawingAreaHeight(meta);
   const sheets = resolveDrawingSheets(circuit);
   const indexRows = buildSheetIndexRows(sheets);
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
   if (sheets.length > 1) {
-    drawSheetIndexPage(doc, meta, indexRows);
+    drawPdfSheetIndexPage(doc, meta, indexRows);
     doc.addPage();
   }
 
@@ -237,18 +321,24 @@ export async function buildDrawingPdf(
     }
 
     const sheet = sheets[i];
-    const dataUrl = captureStageRegion(
-      stage,
-      sheet.bounds,
-      circuit.zoom,
-      circuit.panX,
-      circuit.panY,
-      2
-    );
+    const restoreLayers = applyExportLayerVisibility(stage);
+    let dataUrl: string;
+    try {
+      dataUrl = captureStageRegion(
+        stage,
+        sheet.bounds,
+        circuit.zoom,
+        circuit.panX,
+        circuit.panY,
+        2
+      );
+    } finally {
+      restoreLayers();
+    }
     const { w: imgW, h: imgH } = await loadImageSize(dataUrl);
-    const fit = fitImageRect(imgW, imgH, DRAW_W, DRAW_H);
+    const fit = fitImageRect(imgW, imgH, DRAW_W, drawH);
     doc.addImage(dataUrl, 'PNG', fit.x, fit.y, fit.w, fit.h);
-    drawTitleBlock(doc, meta, sheet, sheets.length);
+    drawPdfTitleBlock(doc, meta, sheet, sheets.length);
   }
 
   return doc;
@@ -261,9 +351,10 @@ export function safeDrawingFileBase(name: string): string {
 export async function downloadDrawingPdf(
   stage: Konva.Stage,
   circuit: Circuit,
-  baseFileName?: string
+  baseFileName?: string,
+  project?: Pick<ElectroProject, 'name' | 'titleBlock'> | null
 ): Promise<void> {
-  const doc = await buildDrawingPdf(stage, circuit);
+  const doc = await buildDrawingPdf(stage, circuit, project);
   const base = safeDrawingFileBase(baseFileName ?? circuit.name);
   doc.save(`${base}-drawing.pdf`);
 }

@@ -1,20 +1,24 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useCircuitStore } from '../../store/circuitStore';
-import { useThemeStore, themeColors } from '../../store/themeStore';
 import { useUiStore } from '../../store/uiStore';
+import type { DrawingSearchResult } from '../../utils/drawingSearch';
 import {
-  DRAWING_QUICK_ACTIONS,
-  searchDrawing,
-  type DrawingSearchResult,
-} from '../../utils/drawingSearch';
+  buildPaletteSections,
+  flattenPaletteSections,
+} from '../../utils/commandPaletteSections';
+import {
+  loadRecentPaletteIds,
+  recordPaletteSelection,
+} from '../../utils/commandPaletteRecent';
+import Dialog from '../ui/Dialog';
+import Input from '../ui/Input';
+import PaletteResultRow from './commandPalette/PaletteResultRow';
 
 type PalettePanelProps = {
   onClose: () => void;
 };
 
 const PalettePanel: React.FC<PalettePanelProps> = ({ onClose }) => {
-  const theme = useThemeStore((s) => s.theme);
-  const tc = themeColors[theme];
   const circuit = useCircuitStore((s) => s.circuit);
   const focusComponents = useCircuitStore((s) => s.focusComponents);
   const setSelected = useCircuitStore((s) => s.setSelected);
@@ -28,26 +32,21 @@ const PalettePanel: React.FC<PalettePanelProps> = ({ onClose }) => {
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  const [recentIds] = useState(() => loadRecentPaletteIds());
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const items: DrawingSearchResult[] = query.trim()
-    ? searchDrawing(circuit, query, 14)
-    : DRAWING_QUICK_ACTIONS.map((a) => ({
-        id: `action-${a.id}`,
-        kind: 'action' as const,
-        title: a.title,
-        subtitle: a.subtitle,
-        score: 100,
-        componentIds: [],
-      }));
-
-  const safeIndex = Math.min(
-    activeIndex,
-    Math.max(0, items.length - 1)
+  const sections = useMemo(
+    () => buildPaletteSections(circuit, query, recentIds),
+    [circuit, query, recentIds]
   );
+
+  const items = useMemo(() => flattenPaletteSections(sections), [sections]);
+
+  const safeIndex = Math.min(activeIndex, Math.max(0, items.length - 1));
 
   const runAction = useCallback(
     (item: DrawingSearchResult) => {
+      recordPaletteSelection(item.id);
       onClose();
       if (item.kind === 'component') {
         focusComponents(item.componentIds);
@@ -111,67 +110,77 @@ const PalettePanel: React.FC<PalettePanelProps> = ({ onClose }) => {
     }
   };
 
+  let rowIndex = 0;
+
   return (
-    <div
-      className="fixed inset-0 z-[200] flex items-start justify-center bg-black/50 pt-[12vh] px-4"
-      onMouseDown={onClose}
-    >
-      <div
-        className={`w-full max-w-lg rounded-lg border shadow-2xl ${tc.border} ${tc.panel}`}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <input
-          ref={inputRef}
-          type="text"
-          autoFocus
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setActiveIndex(0);
-          }}
-          onKeyDown={onKeyDown}
-          placeholder="Find device, wire, or action…"
-          className={`w-full border-b bg-transparent px-3 py-2.5 text-sm outline-none ${tc.border} ${tc.text}`}
-          aria-label="Command palette search"
-        />
-        <ul className="max-h-72 overflow-y-auto py-1" role="listbox">
-          {items.length === 0 ? (
-            <li className={`px-3 py-2 text-xs ${tc.textMuted}`}>No matches</li>
-          ) : (
-            items.map((item, idx) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={idx === safeIndex}
-                  className={`flex w-full flex-col px-3 py-2 text-left text-xs ${
-                    idx === safeIndex
-                      ? 'bg-blue-600 text-white'
-                      : `${tc.itemHover} ${tc.text}`
-                  }`}
-                  onMouseEnter={() => setActiveIndex(idx)}
-                  onClick={() => runAction(item)}
-                >
-                  <span className="font-medium">{item.title}</span>
-                  <span
-                    className={
-                      idx === safeIndex ? 'text-blue-100' : tc.textMuted
-                    }
-                  >
-                    {item.subtitle}
-                  </span>
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-        <div
-          className={`border-t px-3 py-1.5 text-[10px] ${tc.border} ${tc.textMuted}`}
-        >
+    <Dialog
+      open
+      title="Command palette"
+      ariaLabel="Command palette"
+      showHeader={false}
+      align="top"
+      maxWidth="lg"
+      overlayClassName="z-[200]"
+      bodyClassName="p-0"
+      className="es-command-palette-panel"
+      onClose={onClose}
+      onKeyDown={onKeyDown}
+      footerClassName="justify-start"
+      footer={
+        <p className="es-typo-caption text-es-secondary">
           ↑↓ navigate · Enter select · Esc close · Ctrl+K
-        </div>
+        </p>
+      }
+    >
+      <Input
+        ref={inputRef}
+        type="text"
+        autoFocus
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setActiveIndex(0);
+        }}
+        onKeyDown={onKeyDown}
+        placeholder="Find device, wire, or action…"
+        aria-label="Command palette search"
+        className="es-command-palette-input"
+      />
+      <div
+        className="es-command-palette-list"
+        role="listbox"
+        aria-label="Command palette results"
+        data-testid="command-palette-list"
+      >
+        {items.length === 0 ? (
+          <p className="px-3 py-2 es-typo-body text-es-secondary">No matches</p>
+        ) : (
+          sections.map((section) => (
+            <section key={section.id} data-testid={`palette-section-${section.id}`}>
+              <h3 className="es-command-palette-section-heading">
+                {section.label}
+              </h3>
+              <ul className="py-0.5">
+                {section.items.map((item) => {
+                  const idx = rowIndex;
+                  rowIndex += 1;
+                  return (
+                    <li key={item.id}>
+                      <PaletteResultRow
+                        item={item}
+                        selected={idx === safeIndex}
+                        onHover={() => setActiveIndex(idx)}
+                        onSelect={() => runAction(item)}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 };
 

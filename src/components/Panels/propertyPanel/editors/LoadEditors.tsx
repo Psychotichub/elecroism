@@ -86,7 +86,7 @@ export const renderLoadProps = () => { const { selectedComp, updateProp } = useP
             <button
               key={v}
               onClick={() => updateProp({ voltage: v })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 selectedComp!.properties.voltage === v
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -201,7 +201,7 @@ export const renderIndicatorLampProps = () => {
                 key={t}
                 type="button"
                 onClick={() => updateProp({ indicatorPhaseTag: t })}
-                className={`px-2 py-1 rounded text-xs ${
+                className={`px-2 py-1 rounded es-typo-body ${
                   (selectedComp.properties.indicatorPhaseTag ?? 'L') === t
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-600 text-gray-300'
@@ -222,7 +222,7 @@ export const renderIndicatorLampProps = () => {
                 key={s.v}
                 type="button"
                 onClick={() => updateProp({ indicatorSupplyType: s.v })}
-                className={`flex-1 px-2 py-1 rounded text-xs ${
+                className={`flex-1 px-2 py-1 rounded es-typo-body ${
                   (selectedComp.properties.indicatorSupplyType ?? 'ac') === s.v
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-600 text-gray-300'
@@ -233,7 +233,7 @@ export const renderIndicatorLampProps = () => {
             ))}
           </div>
         </Label>
-        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
           Wire <strong>L</strong> to the phase you want indicated and{' '}
           <strong>N</strong> to neutral / return. The lamp lights only when the
           selected supply type matches the connected network.
@@ -256,7 +256,7 @@ export const renderPhaseIndicatorBankProps = () => { const { selectedComp, tc, u
           min={1}
         />
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Three phase presence indicator bank (L1/L2/L3) with shared neutral.
         Use for panel-front phase healthy indication.
       </p>

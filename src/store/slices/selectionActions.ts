@@ -1,11 +1,18 @@
 import type { CircuitComponent } from '../../types';
-import { runCircuitDesignValidation } from '../../utils/circuitDesignValidation';
+import {
+  runCircuitDesignValidation,
+  type CircuitValidationIssue,
+} from '../../utils/circuitDesignValidation';
+import { useUiStore } from '../uiStore';
+import { viewportForValidationIssue } from '../../utils/validationFocus';
 import {
   componentIdsFaulted,
   componentIdsWithUnwiredTerminals,
   selectAllOfTypeQuery,
   viewportForComponents,
 } from '../../utils/drawingSearch';
+import { viewportForBounds } from '../../utils/crossSheetNavigation';
+import type { WorldBounds } from '../../utils/drawingBounds';
 import type { CircuitStoreGet, CircuitStoreSet } from './sliceTypes';
 
 export function createSelectionActions(
@@ -38,6 +45,14 @@ export function createSelectionActions(
         get().setZoom(vp.zoom);
         get().setPan(vp.panX, vp.panY);
       }
+      get().setTool('select');
+      return true;
+    },
+
+    frameViewport: (bounds: WorldBounds) => {
+      const vp = viewportForBounds(bounds);
+      get().setZoom(vp.zoom);
+      get().setPan(vp.panX, vp.panY);
       get().setTool('select');
       return true;
     },
@@ -82,6 +97,31 @@ export function createSelectionActions(
       if (ids.length === 0) return false;
       get().focusComponents(ids);
       return true;
+    },
+
+    focusValidationIssue: (issue: CircuitValidationIssue) => {
+      useUiStore.getState().setValidationFocusIssueId(issue.id);
+
+      if (issue.navigateRef) {
+        return get().navigateCrossSheetRef(issue.navigateRef);
+      }
+
+      const circuit = get().circuit;
+      const vp = viewportForValidationIssue(circuit, issue);
+      if (issue.componentIds.length > 0) {
+        get().selectComponents(issue.componentIds);
+      }
+      if (vp) {
+        get().setZoom(vp.zoom);
+        get().setPan(vp.panX, vp.panY);
+        get().setTool('select');
+        return true;
+      }
+      if (issue.componentIds.length > 0) {
+        return get().focusComponents(issue.componentIds);
+      }
+      get().setTool('select');
+      return (issue.wireIds?.length ?? 0) > 0;
     },
   };
 }

@@ -39,6 +39,10 @@ export interface CircuitValidationIssue {
   message: string;
   /** Primary component(s) to highlight when the user selects the issue. */
   componentIds: string[];
+  /** Wires implicated by the issue (thermal, voltage drop, colour, etc.). */
+  wireIds?: string[];
+  /** When set, clicking the issue follows this cross-sheet reference. */
+  navigateRef?: string;
 }
 
 /** One row in the protection coordination feeder table (Validation tab). */
@@ -639,6 +643,7 @@ export function runCircuitDesignValidation(
         severity: 'error',
         message: `Wire "${w.id.slice(0, 8)}…" joins PE (or shield) to a neutral conductor. PE must not be used as a neutral; bond only where rules allow (e.g. service PEN).`,
         componentIds: [w.fromComponentId, w.toComponentId],
+        wireIds: [w.id],
       });
     }
   }
@@ -729,6 +734,7 @@ export function runCircuitDesignValidation(
             severity: 'warning',
             message: `"${c.label}" ${p.label} → wire: breaker/fuse rating (${rating} A) is higher than a typical continuous capacity for ${w.crossSection} mm² Cu (${cap} A class). Size the cable to the protective device.`,
             componentIds: [c.id],
+            wireIds: [w.id],
           });
         }
       }
@@ -745,6 +751,7 @@ export function runCircuitDesignValidation(
           severity: 'warning',
           message: `Wire ${w.crossSection} mm² carries ~${i.toFixed(2)} A in the last solve — may be undersized vs typical Cu capacity (~${cap} A continuous).`,
           componentIds: [],
+          wireIds: [w.id],
         });
       }
       const dropV = w.voltageDropV ?? 0;
@@ -754,6 +761,7 @@ export function runCircuitDesignValidation(
           severity: 'warning',
           message: `Wire ${w.wireNumber ?? w.id.slice(0, 6)} (${w.crossSection} mm²): ~${dropV.toFixed(2)} V conductor drop in load-flow — consider larger cable or shorter run.`,
           componentIds: [],
+          wireIds: [w.id],
         });
       }
     }
@@ -811,6 +819,7 @@ export function runCircuitDesignValidation(
       severity: iss.severity,
       message: iss.message,
       componentIds: [],
+      wireIds: [iss.wireId],
     });
   }
 
@@ -837,6 +846,7 @@ export function runCircuitDesignValidation(
       severity: 'info',
       message: `DC wire ${w.wireLabel || w.wireNumber || w.id.slice(0, 8)}: colour "${w.color}" does not match typical DC convention (red +, black/blue −) for ${fromL}↔${toL}.`,
       componentIds: [],
+      wireIds: [w.id],
     });
   }
 

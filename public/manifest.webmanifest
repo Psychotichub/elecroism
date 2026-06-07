@@ -1,0 +1,25 @@
+{
+  "name": "ElectroSim",
+  "short_name": "ElectroSim",
+  "description": "Electrical simulation and control schematic builder.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#111827",
+  "theme_color": "#1E1E2E",
+  "icons": [
+    {
+      "src": "./icons/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

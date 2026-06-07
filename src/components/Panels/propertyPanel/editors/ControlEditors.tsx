@@ -6,7 +6,7 @@ import type { ComponentProperties } from '../../../../types';
 export const renderTimerProps = () => { const { selectedComp, tc, updateProp } = usePPCtx(); return (
     <>
       <Label text="Timer mode">
-        <span className={`text-xs ${tc.textMuted}`}>
+        <span className={`es-typo-body ${tc.textMuted}`}>
           ON-delay (coil energizes first, contact closes after delay)
         </span>
       </Label>
@@ -29,7 +29,7 @@ export const renderTimerProps = () => { const { selectedComp, tc, updateProp } =
               key={ms}
               type="button"
               onClick={() => updateProp({ timerDelayMs: ms })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.timerDelayMs ?? 1000) === ms
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -42,7 +42,7 @@ export const renderTimerProps = () => { const { selectedComp, tc, updateProp } =
       </Label>
       <Label text="Contact state">
         <span
-          className={`text-xs font-medium ${
+          className={`es-typo-body font-medium ${
             selectedComp!.state === 'on' ? 'text-green-400' : tc.textMuted
           }`}
         >
@@ -51,7 +51,7 @@ export const renderTimerProps = () => { const { selectedComp, tc, updateProp } =
             : 'NC closed, NO open — waiting for coil + delay'}
         </span>
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Wire <strong>A1/A2</strong> as timer coil supply. Use{' '}
         <strong>COM↔NO</strong> for delayed make and <strong>COM↔NC</strong> for
         delayed break behavior. The timer resets instantly when coil drops.
@@ -75,7 +75,7 @@ export const renderInterposingRelayProps = () => { const { selectedComp, tc, upd
                     v === 230 ? '230ac' : v === 110 ? '110dc' : '24dc',
                 })
               }
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.relayCoilVoltage ?? 24) === v
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -115,7 +115,7 @@ export const renderInterposingRelayProps = () => { const { selectedComp, tc, upd
           min={0}
         />
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Coil A1/A2 picked up → IN/OUT NO contact closes. Use one between any
         BMS digital output and a contactor coil so the BMS never lands
         directly on a heavy AC coil.
@@ -174,7 +174,7 @@ export const renderAuxContactBlockProps = () => {
             ))}
           </select>
         </Label>
-        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
           For a <strong>seal-in</strong> path wired to this block’s{' '}
           <strong>13–14</strong>, choose the same contactor/relay whose coil is{' '}
           <strong>A1/A2</strong>. Otherwise 13–14 stays open unless you set the

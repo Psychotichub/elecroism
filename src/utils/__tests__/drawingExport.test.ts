@@ -6,7 +6,10 @@ import {
   buildTitleBlock,
   resolveDrawingSheets,
   safeDrawingFileBase,
+  titleBlockHeight,
 } from '../drawingExport';
+import { applyProjectTitleBlock } from '../projectTitleBlock';
+import { createEmptyProject } from '../projectPersistence';
 import { makeCircuit, makeComponent } from '../../simulation/__tests__/testHelpers';
 
 describe('drawingExport', () => {
@@ -95,5 +98,34 @@ describe('drawingExport', () => {
 
   it('sanitizes PDF filenames', () => {
     expect(safeDrawingFileBase('MCC / Panel #1')).toBe('MCC_Panel_1');
+  });
+
+  it('extends title block height when revision history is present', () => {
+    const base = buildTitleBlock(makeCircuit([], []));
+    const withHistory = buildTitleBlock(makeCircuit([], []), {
+      titleBlock: {
+        revisionHistory: [
+          { revision: 'A', date: '2026-01-01', description: 'First issue' },
+          { revision: 'B', date: '2026-02-01', description: 'Update' },
+        ],
+      },
+      name: 'Proj',
+    });
+    expect(titleBlockHeight(withHistory)).toBeGreaterThan(titleBlockHeight(base));
+  });
+
+  it('prefers project title block over circuit fields', () => {
+    const project = applyProjectTitleBlock(createEmptyProject('Site'), {
+      client: 'Global client',
+      drawingNumber: 'G-1',
+    });
+    const circuit: Circuit = {
+      ...makeCircuit([], []),
+      drawingProject: 'Local only',
+      drawingNumber: 'L-1',
+    };
+    const tb = buildTitleBlock(circuit, project);
+    expect(tb.project).toBe('Global client');
+    expect(tb.drawingNumber).toBe('G-1');
   });
 });

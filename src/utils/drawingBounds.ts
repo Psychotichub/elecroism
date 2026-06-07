@@ -1,4 +1,4 @@
-import type { Circuit } from '../types';
+import type { Circuit, Wire } from '../types';
 
 export type WorldBounds = {
   minX: number;
@@ -16,6 +16,28 @@ export function mergeBounds(a: WorldBounds, b: WorldBounds): WorldBounds {
     minY: Math.min(a.minY, b.minY),
     maxX: Math.max(a.maxX, b.maxX),
     maxY: Math.max(a.maxY, b.maxY),
+  };
+}
+
+export function boundsForWire(wire: Wire, pad = WIRE_PAD): WorldBounds | null {
+  if (wire.points.length < 2) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < wire.points.length; i += 2) {
+    const x = wire.points[i] ?? 0;
+    const y = wire.points[i + 1] ?? 0;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  return {
+    minX: minX - pad,
+    maxX: maxX + pad,
+    minY: minY - pad,
+    maxY: maxY + pad,
   };
 }
 

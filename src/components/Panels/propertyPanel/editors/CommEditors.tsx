@@ -109,12 +109,12 @@ export const renderModbusTcpGatewayProps = () => { const { selectedComp, tc, upd
           max={247}
         />
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Bridges Modbus TCP to Modbus RTU. Keep all downstream RTU devices on matching
         serial settings (baud/parity/stop/data bits). Map TCP requests to RTU via slave ID.
       </p>
       <Label text="Terminal number map">
-        <div className={`text-[10px] ${tc.textMuted} space-y-0.5`}>
+        <div className={`es-typo-caption ${tc.textMuted} space-y-0.5`}>
           {selectedComp!.connectionPoints.map((cp, idx) => (
             <div key={cp.id}>
               <strong>{idx + 1}</strong> = {cp.label}
@@ -245,12 +245,12 @@ export const renderBacnetIpGatewayProps = () => { const { selectedComp, tc, upda
           max={127}
         />
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         BACnet/IP bridge for BMS. Typical wiring uses Ethernet (`ETH0_RJ45`) and
         RS-485 MS/TP (`MSTP_A`, `MSTP_B`, `MSTP_GND`) with optional shield grounding.
       </p>
       <Label text="Terminal number map">
-        <div className={`text-[10px] ${tc.textMuted} space-y-0.5`}>
+        <div className={`es-typo-caption ${tc.textMuted} space-y-0.5`}>
           {selectedComp!.connectionPoints.map((cp, idx) => (
             <div key={cp.id}>
               <strong>{idx + 1}</strong> = {cp.label}
@@ -293,7 +293,7 @@ export const renderBmsIOModuleProps = () => { const { selectedComp, tc, updatePr
                     ? updateProp({ aiSignalType: sig })
                     : updateProp({ aoSignalType: sig })
                 }
-                className={`px-2 py-1 rounded text-xs ${
+                className={`px-2 py-1 rounded es-typo-body ${
                   (selectedComp!.type === 'ai_module'
                     ? selectedComp!.properties.aiSignalType ?? '0_10v'
                     : selectedComp!.properties.aoSignalType ?? '0_10v') === sig
@@ -307,13 +307,13 @@ export const renderBmsIOModuleProps = () => { const { selectedComp, tc, updatePr
           </div>
         </Label>
       )}
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Use DI/DO for status/command points and AI/AO for analog process values.
         Wire module power on <strong>PWR_L / PWR_N</strong>; channel points are
         represented as properties for planning-level diagrams.
       </p>
       <Label text="Terminal number map">
-        <div className={`text-[10px] ${tc.textMuted} space-y-0.5`}>
+        <div className={`es-typo-caption ${tc.textMuted} space-y-0.5`}>
           {selectedComp!.connectionPoints.map((cp, idx) => (
             <div key={cp.id}>
               <strong>{idx + 1}</strong> = {cp.label}
@@ -515,12 +515,12 @@ export const renderCommInfraProps = () => { const { selectedComp, tc, updateProp
           max={64}
         />
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Use interface cards/converters/switches to isolate field devices and
         bridge BMS networks. Power terminals are optional and diagrammatic.
       </p>
       <Label text="Terminal number map">
-        <div className={`text-[10px] ${tc.textMuted} space-y-0.5`}>
+        <div className={`es-typo-caption ${tc.textMuted} space-y-0.5`}>
           {selectedComp!.connectionPoints.map((cp, idx) => (
             <div key={cp.id}>
               <strong>{idx + 1}</strong> = {cp.label}
@@ -554,7 +554,7 @@ export const renderSignalIsolationProps = () => { const { selectedComp, tc, upda
                 key={sig}
                 type="button"
                 onClick={() => updateProp({ aiSignalType: sig })}
-                className={`px-2 py-1 rounded text-xs ${
+                className={`px-2 py-1 rounded es-typo-body ${
                   (selectedComp!.properties.aiSignalType ?? '4_20ma') === sig
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-600 text-gray-300'
@@ -566,12 +566,12 @@ export const renderSignalIsolationProps = () => { const { selectedComp, tc, upda
           </div>
         </Label>
       )}
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Isolation modules break ground loops and protect BMS I/O from field-side
         transients and common-mode noise.
       </p>
       <Label text="Terminal number map">
-        <div className={`text-[10px] ${tc.textMuted} space-y-0.5`}>
+        <div className={`es-typo-caption ${tc.textMuted} space-y-0.5`}>
           {selectedComp!.connectionPoints.map((cp, idx) => (
             <div key={cp.id}>
               <strong>{idx + 1}</strong> = {cp.label}

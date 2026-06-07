@@ -14,6 +14,8 @@ import type {
 import { v4 as uuid } from 'uuid';
 import { clampComponentScale } from '../../utils/geometry';
 import { attachConnectionPointToWireIfHit } from '../../utils/wireTapPlacement';
+import { useDrawingLayerStore } from '../drawingLayerStore';
+import { resolveComponentDrawingLayer } from '../../utils/drawingLayers';
 import {
   loadComponentMacros,
   type ComponentMacro,
@@ -169,6 +171,7 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
           busbarRightCount: busbarRightCountForCp,
         }),
         properties,
+        drawingLayer: useDrawingLayerStore.getState().activeLayer,
       };
       if (type === 'connection_point') {
         const base = {
@@ -364,6 +367,10 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       const circuit = get().circuit;
       const prev = circuit.components.find((c: CircuitComponent) => c.id === id);
       if (!prev) return;
+      const layerStore = useDrawingLayerStore.getState();
+      if (!layerStore.isLayerSelectable(resolveComponentDrawingLayer(prev))) {
+        return;
+      }
       const dx = snappedX - prev.x;
       const dy = snappedY - prev.y;
       if (dx === 0 && dy === 0) return;

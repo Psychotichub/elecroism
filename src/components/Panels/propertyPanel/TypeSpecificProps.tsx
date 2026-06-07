@@ -1,5 +1,7 @@
 import React from 'react';
+import type { ComponentType } from '../../../types';
 import { usePPCtx } from './PropertyPanelContext';
+import { BMS_PANEL_TYPES } from './bmsTypes';
 import * as SwitchEditors from './editors/SwitchEditors';
 import * as ProtectionEditors from './editors/ProtectionEditors';
 import * as MotorizedBreakerEditors from './editors/MotorizedBreakerEditors';
@@ -10,10 +12,32 @@ import * as ControlEditors from './editors/ControlEditors';
 import * as CommEditors from './editors/CommEditors';
 import * as MeteringEditors from './editors/MeteringEditors';
 import * as TerminalBlockEditors from './editors/TerminalBlockEditors';
+import { PluginTypeSpecificProps } from './PluginTypeSpecificProps';
 
-export const TypeSpecificProps: React.FC = () => {
+type TypeSpecificPropsOptions = {
+  onlyTypes?: readonly ComponentType[];
+  excludeTypes?: readonly ComponentType[];
+};
+
+function matchesTypeFilter(
+  type: ComponentType,
+  onlyTypes?: readonly ComponentType[],
+  excludeTypes?: readonly ComponentType[]
+): boolean {
+  if (onlyTypes && !onlyTypes.includes(type)) return false;
+  if (excludeTypes?.includes(type)) return false;
+  return true;
+}
+
+export const TypeSpecificProps: React.FC<TypeSpecificPropsOptions> = ({
+  onlyTypes,
+  excludeTypes,
+}) => {
   const { selectedComp } = usePPCtx();
   if (!selectedComp) return null;
+  if (!matchesTypeFilter(selectedComp.type, onlyTypes, excludeTypes)) {
+    return null;
+  }
   switch (selectedComp.type) {
     case 'switch': return <SwitchEditors.renderSwitchProps />;
     case 'two_way_switch': return <SwitchEditors.renderTwoWaySwitchProps />;
@@ -101,6 +125,11 @@ export const TypeSpecificProps: React.FC = () => {
     case 'energy_meter':
     case 'digital_multifunction_meter': return <MeteringEditors.renderEnergyMeterProps />;
     case 'multimeter': return <MeteringEditors.renderMultimeterProps />;
+    case 'plugin_component': return <PluginTypeSpecificProps />;
     default: return null;
   }
 };
+
+export const BmsTypeSpecificProps: React.FC = () => (
+  <TypeSpecificProps onlyTypes={BMS_PANEL_TYPES} />
+);

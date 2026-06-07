@@ -11,6 +11,11 @@ import {
   saveComponentMacros,
   type ComponentMacro,
 } from '../../utils/componentMacros';
+import type { LibraryPackRegistryEntry } from '../../utils/libraryPackRegistry';
+import {
+  checkPackRegistryCompatibility,
+  fetchLibraryPackForEntry,
+} from '../../utils/libraryPackRegistry';
 import type { CircuitStoreGet, CircuitStoreSet } from './sliceTypes';
 
 function syncLibraryToStorage(library: ComponentMacro[]): void {
@@ -154,6 +159,20 @@ export function createLibraryActions(
       );
       get().setProjectLibrary(merged);
       return true;
+    },
+
+    installRegistryLibraryPack: async (
+      entry: LibraryPackRegistryEntry,
+      mode: LibraryMergeMode = 'merge'
+    ): Promise<string | null> => {
+      const compat = checkPackRegistryCompatibility(entry);
+      if (!compat.compatible) {
+        return compat.reason ?? 'Pack is not compatible with this app version.';
+      }
+      const pack = await fetchLibraryPackForEntry(entry);
+      if (!pack) return 'Could not download or parse the library pack.';
+      const ok = get().importProjectLibraryPack(pack, mode);
+      return ok ? null : 'Pack file was invalid.';
     },
   };
 }

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import {
@@ -17,31 +17,55 @@ import {
   type PowerQualityRow,
 } from '../../utils/circuitDesignValidation';
 import { learningHintForIssue } from '../../utils/learningHints';
+import { validateCrossSheetReferences } from '../../utils/crossSheetNavigation';
+import { downloadCoordinationStudyPdf } from '../../utils/coordinationStudyReport';
 import DesignatorToolsSection from './DesignatorToolsSection';
 import DrawingExportSection from './DrawingExportSection';
+import PanelScheduleSection from './PanelScheduleSection';
+import SldViewSection from './SldViewSection';
+import ReviewCommentsSection from './ReviewCommentsSection';
 import ProjectSnapshotsSection from './ProjectSnapshotsSection';
 import ComponentLibrarySection from './ComponentLibrarySection';
+import PluginsSection from './PluginsSection';
 import { useUiStore } from '../../store/uiStore';
-import { FiAlertCircle, FiAlertTriangle, FiInfo, FiDownload } from 'react-icons/fi';
+import type { Circuit } from '../../types';
+import {
+  AppIcon,
+  Button,
+  PanelDataTable,
+  PanelExportFooter,
+  ValidationIssueRow,
+} from '../ui';
 
-function severityIcon(
-  severity: CircuitValidationIssue['severity']
-): React.ReactNode {
-  if (severity === 'error')
-    return <FiAlertCircle className="inline shrink-0 text-red-400" aria-hidden />;
-  if (severity === 'warning')
-    return (
-      <FiAlertTriangle className="inline shrink-0 text-amber-400" aria-hidden />
-    );
-  return <FiInfo className="inline shrink-0 text-sky-400" aria-hidden />;
+function issueFocusLabel(
+  issue: CircuitValidationIssue,
+  circuit: Circuit
+): string | undefined {
+  const canFocus =
+    issue.componentIds.length > 0 ||
+    (issue.wireIds?.length ?? 0) > 0 ||
+    issue.navigateRef;
+  if (!canFocus) return undefined;
+  if (issue.componentIds.length > 0) {
+    const names = issue.componentIds
+      .map((cid) => circuit.components.find((c) => c.id === cid)?.label)
+      .filter(Boolean)
+      .join(', ');
+    return `Focus ${names}`;
+  }
+  if (issue.wireIds?.length) return 'Focus wire';
+  if (issue.navigateRef) return 'Focus reference';
+  return 'Focus';
 }
 
 const CircuitValidationPanel: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
   const circuit = useCircuitStore((s) => s.circuit);
+  const project = useCircuitStore((s) => s.project);
   const simulationResult = useCircuitStore((s) => s.simulationResult);
   const setSelected = useCircuitStore((s) => s.setSelected);
+  const focusValidationIssue = useCircuitStore((s) => s.focusValidationIssue);
   const setPhaseImbalanceWarningPercent = useCircuitStore(
     (s) => s.setPhaseImbalanceWarningPercent
   );
@@ -50,10 +74,24 @@ const CircuitValidationPanel: React.FC = () => {
   );
   const learningMode = useUiStore((s) => s.learningMode);
   const toggleLearningMode = useUiStore((s) => s.toggleLearningMode);
+  const [coordExportMsg, setCoordExportMsg] = useState<string | null>(null);
+
+  const handleCoordinationPdf = useCallback(() => {
+    setCoordExportMsg(null);
+    try {
+      downloadCoordinationStudyPdf(circuit, simulationResult);
+      setCoordExportMsg('Coordination study PDF downloaded.');
+    } catch (e) {
+      setCoordExportMsg(e instanceof Error ? e.message : 'Export failed.');
+    }
+  }, [circuit, simulationResult]);
 
   const issues = useMemo(
-    () => runCircuitDesignValidation(circuit, simulationResult),
-    [circuit, simulationResult]
+    (): CircuitValidationIssue[] => [
+      ...runCircuitDesignValidation(circuit, simulationResult),
+      ...validateCrossSheetReferences(project),
+    ],
+    [circuit, simulationResult, project]
   );
 
   const coordination = useMemo(
@@ -86,10 +124,10 @@ const CircuitValidationPanel: React.FC = () => {
       className={`flex min-h-0 flex-1 flex-col overflow-hidden ${tc.panel} ${tc.text}`}
     >
       <div className={`shrink-0 border-b px-3 py-3 ${tc.border}`}>
-        <h2 className={`text-sm font-bold ${tc.textBright}`}>
+        <h2 className={`es-typo-title-sm ${tc.textBright}`}>
           Circuit validation
         </h2>
-        <p className={`mt-1 text-[11px] leading-snug ${tc.textMuted}`}>
+        <p className={`mt-1 es-typo-body-sm leading-snug ${tc.textMuted}`}>
           Static checks before you rely on the last simulation: supply topology,
           motor phases, PE vs N, BMS control readiness, comms addressing,
           protection coordination, cable vs breaker hints, and short-circuit
@@ -97,7 +135,7 @@ const CircuitValidationPanel: React.FC = () => {
           incident energy estimates.
         </p>
         <label
-          className={`mt-2 flex cursor-pointer items-center gap-2 text-[11px] ${tc.text}`}
+          className={`mt-2 flex cursor-pointer items-center gap-2 es-typo-body-sm ${tc.text}`}
         >
           <input
             type="checkbox"
@@ -112,7 +150,7 @@ const CircuitValidationPanel: React.FC = () => {
         >
           <label
             htmlFor="imbalance-warn-pct"
-            className={`text-[10px] ${tc.textMuted}`}
+            className={`es-typo-caption ${tc.textMuted}`}
           >
             3φ motor imbalance warning over mean (%)
           </label>
@@ -126,11 +164,11 @@ const CircuitValidationPanel: React.FC = () => {
             onChange={(e) =>
               setPhaseImbalanceWarningPercent(Number(e.target.value) || 0)
             }
-            className="input-field w-16 py-1 text-xs"
+            className="input-field w-16 py-1 es-tabular-nums"
           />
           <label
             htmlFor="continuity-thresh-w"
-            className={`ml-3 text-[10px] ${tc.textMuted}`}
+            className={`ml-3 es-typo-caption ${tc.textMuted}`}
           >
             Continuity “closed” min. (W)
           </label>
@@ -144,455 +182,378 @@ const CircuitValidationPanel: React.FC = () => {
             onChange={(e) =>
               setContinuityPowerThresholdW(Number(e.target.value) || 0.5)
             }
-            className="input-field w-20 py-1 text-xs"
+            className="input-field w-20 py-1 es-tabular-nums"
           />
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-4">
+      <div className="es-density-pad es-density-stack-loose min-h-0 flex-1 overflow-y-auto">
         <ComponentLibrarySection />
+        <PluginsSection />
         <ProjectSnapshotsSection />
         <DrawingExportSection />
+        <PanelScheduleSection />
+        <ReviewCommentsSection />
+        <SldViewSection />
         <DesignatorToolsSection />
         {coordination.rows.length > 0 && (
           <div>
             <h3
-              className={`mb-1.5 text-[11px] font-bold uppercase tracking-wide ${tc.textMuted}`}
+              className={`mb-1.5 es-typo-section ${tc.textMuted}`}
             >
               Protection coordination
             </h3>
-            <p className={`mb-2 text-[10px] leading-snug ${tc.textMuted}`}>
+            <p className={`mb-2 es-typo-caption leading-snug ${tc.textMuted}`}>
               Order is by shortest path (hops) from a supply live terminal to
               each device&apos;s line-side IN — parallel feeders may look odd.
-              Trip labels are indicative (full I²t curves are not plotted).
+              Export a PDF with TCC curves, device settings, fault levels, and
+              margin notes.
             </p>
-            <div className={`overflow-x-auto rounded-md border ${tc.border}`}>
-              <table className="w-full min-w-[280px] border-collapse text-left text-[10px]">
-                <thead>
-                  <tr className={theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.03]'}>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Device
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Iₙ (A)
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Trip / type
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Hops
-                    </th>
+            <PanelDataTable minWidth={280}>
+              <thead className="es-table-sticky-head">
+                <tr>
+                  <th>Device</th>
+                  <th className="es-table-num">Iₙ (A)</th>
+                  <th>Trip / type</th>
+                  <th className="es-table-num">Hops</th>
+                </tr>
+              </thead>
+              <tbody>
+                {coordination.rows.map((r: ProtectionCoordinationRow) => (
+                  <tr key={r.componentId}>
+                    <td>
+                      <button
+                        type="button"
+                        className="text-left font-medium text-es-bright underline-offset-2 hover:underline es-focus-ring"
+                        onClick={() => setSelected(r.componentId)}
+                      >
+                        {r.label}
+                      </button>
+                      <span className="block font-normal text-es-secondary">
+                        {r.deviceType.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td className="es-table-num">
+                      {r.ratedAmps != null ? r.ratedAmps : '—'}
+                    </td>
+                    <td>{r.tripOrFamily ?? '—'}</td>
+                    <td className="es-table-num">
+                      {r.minHopsFromLive != null ? r.minHopsFromLive : '—'}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {coordination.rows.map((r: ProtectionCoordinationRow) => (
-                    <tr key={r.componentId}>
-                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
-                        <button
-                          type="button"
-                          className={`text-left font-medium underline-offset-2 hover:underline ${tc.textBright}`}
-                          onClick={() => setSelected(r.componentId)}
-                        >
-                          {r.label}
-                        </button>
-                        <span className={`block font-normal ${tc.textMuted}`}>
-                          {r.deviceType.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {r.ratedAmps != null ? r.ratedAmps : '—'}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
-                        {r.tripOrFamily ?? '—'}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {r.minHopsFromLive != null ? r.minHopsFromLive : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </PanelDataTable>
           </div>
         )}
 
         {powerQuality.length > 0 && (
           <div>
             <h3
-              className={`mb-1.5 text-[11px] font-bold uppercase tracking-wide ${tc.textMuted}`}
+              className={`mb-1.5 es-typo-section ${tc.textMuted}`}
             >
               Power quality / harmonics
             </h3>
-            <p className={`mb-2 text-[10px] leading-snug ${tc.textMuted}`}>
+            <p className={`mb-2 es-typo-caption leading-snug ${tc.textMuted}`}>
               Nonlinear loads (SMPS, VFD) with configurable THD. Triplen (3rd-order)
               harmonics add in the neutral on 3φ + N — Σ I_N shown per load.
             </p>
             {simulationResult?.powerQualityNeutralHarmonicA != null &&
             simulationResult.powerQualityNeutralHarmonicA > 0 ? (
-              <p className={`mb-2 text-[10px] font-medium text-amber-400`}>
+              <p className={`mb-2 es-typo-caption font-medium text-amber-400`}>
                 Board Σ neutral harmonic ≈{' '}
                 {simulationResult.powerQualityNeutralHarmonicA.toFixed(1)} A
               </p>
             ) : null}
-            <div className={`overflow-x-auto rounded-md border ${tc.border}`}>
-              <table className="w-full min-w-[300px] border-collapse text-left text-[10px]">
-                <thead>
-                  <tr className={theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.03]'}>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Load
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      THD %
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      I₁ (A)
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      I_rms (A)
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      I_N h3 (A)
-                    </th>
+            <PanelDataTable minWidth={300}>
+              <thead className="es-table-sticky-head">
+                <tr>
+                  <th>Load</th>
+                  <th className="es-table-num">THD %</th>
+                  <th className="es-table-num">I₁ (A)</th>
+                  <th className="es-table-num">I_rms (A)</th>
+                  <th className="es-table-num">I_N h3 (A)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {powerQuality.map((r: PowerQualityRow) => (
+                  <tr key={r.componentId}>
+                    <td>
+                      <button
+                        type="button"
+                        className="text-left font-medium text-es-bright underline-offset-2 hover:underline es-focus-ring"
+                        onClick={() => setSelected(r.componentId)}
+                      >
+                        {r.label}
+                      </button>
+                      <span className="block text-es-secondary">{r.deviceType}</span>
+                    </td>
+                    <td className="es-table-num">{r.thdPercent.toFixed(0)}</td>
+                    <td className="es-table-num">
+                      {r.fundamentalCurrentA.toFixed(2)}
+                    </td>
+                    <td className="es-table-num">{r.rmsCurrentA.toFixed(2)}</td>
+                    <td className="es-table-num">
+                      {r.triplenNeutralA.toFixed(2)}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {powerQuality.map((r: PowerQualityRow) => (
-                    <tr key={r.componentId}>
-                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
-                        <button
-                          type="button"
-                          className={`text-left font-medium underline-offset-2 hover:underline ${tc.textBright}`}
-                          onClick={() => setSelected(r.componentId)}
-                        >
-                          {r.label}
-                        </button>
-                        <span className={`block ${tc.textMuted}`}>
-                          {r.deviceType}
-                        </span>
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {r.thdPercent.toFixed(0)}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {r.fundamentalCurrentA.toFixed(2)}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {r.rmsCurrentA.toFixed(2)}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {r.triplenNeutralA.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </PanelDataTable>
           </div>
         )}
 
         {faultLevels.length > 0 && (
           <div>
             <h3
-              className={`mb-1.5 text-[11px] font-bold uppercase tracking-wide ${tc.textMuted}`}
+              className={`mb-1.5 es-typo-section ${tc.textMuted}`}
             >
               Prospective fault levels
             </h3>
-            <p className={`mb-2 text-[10px] leading-snug ${tc.textMuted}`}>
+            <p className={`mb-2 es-typo-caption leading-snug ${tc.textMuted}`}>
               Bolted short-circuit current from source impedance (Ze + feeder R)
               at each protection device. Used for breaking-capacity checks and
               arc-flash estimates.
             </p>
-            <div className={`overflow-x-auto rounded-md border ${tc.border}`}>
-              <table className="w-full min-w-[280px] border-collapse text-left text-[10px]">
-                <thead>
-                  <tr className={theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.03]'}>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Device
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Zs (Ω)
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Isc (kA)
-                    </th>
+            <PanelDataTable minWidth={280}>
+              <thead className="es-table-sticky-head">
+                <tr>
+                  <th>Device</th>
+                  <th className="es-table-num">Zs (Ω)</th>
+                  <th className="es-table-num">Isc (kA)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {faultLevels.map((r: FaultLevelRow) => (
+                  <tr key={r.deviceId}>
+                    <td>
+                      <button
+                        type="button"
+                        className="text-left font-medium text-es-bright underline-offset-2 hover:underline es-focus-ring"
+                        onClick={() => setSelected(r.deviceId)}
+                      >
+                        {r.label}
+                      </button>
+                      <span className="block text-es-secondary">{r.deviceType}</span>
+                    </td>
+                    <td className="es-table-num">
+                      {r.sourceImpedanceOhms.toFixed(3)}
+                    </td>
+                    <td className="es-table-num font-semibold">
+                      {(r.faultCurrentA / 1000).toFixed(2)}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {faultLevels.map((r: FaultLevelRow) => (
-                    <tr key={r.deviceId}>
-                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
-                        <button
-                          type="button"
-                          className={`text-left font-medium underline-offset-2 hover:underline ${tc.textBright}`}
-                          onClick={() => setSelected(r.deviceId)}
-                        >
-                          {r.label}
-                        </button>
-                        <span className={`block ${tc.textMuted}`}>
-                          {r.deviceType}
-                        </span>
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {r.sourceImpedanceOhms.toFixed(3)}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums font-semibold ${tc.border}`}>
-                        {(r.faultCurrentA / 1000).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </PanelDataTable>
           </div>
         )}
 
         {earthFaultLoops.length > 0 && (
           <div>
             <h3
-              className={`mb-1.5 text-[11px] font-bold uppercase tracking-wide ${tc.textMuted}`}
+              className={`mb-1.5 es-typo-section ${tc.textMuted}`}
             >
               Earth-fault loop (Zs)
             </h3>
-            <p className={`mb-2 text-[10px] leading-snug ${tc.textMuted}`}>
+            <p className={`mb-2 es-typo-caption leading-snug ${tc.textMuted}`}>
               Zs = Ze + R₁ + R₂ from wire length and cross-section. Compared to
               max Zs for the upstream MCB/fuse (0.4 s / 5 s rules, simplified).
             </p>
-            <div className={`overflow-x-auto rounded-md border ${tc.border}`}>
-              <table className="w-full min-w-[320px] border-collapse text-left text-[10px]">
-                <thead>
-                  <tr className={theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.03]'}>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Load
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Protector
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Zs (Ω)
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Max
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Iₐ (A)
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Rule
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {earthFaultLoops.map((r: EarthFaultLoopRow) => (
-                    <tr key={r.loadId}>
-                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
+            <PanelDataTable minWidth={320}>
+              <thead className="es-table-sticky-head">
+                <tr>
+                  <th>Load</th>
+                  <th>Protector</th>
+                  <th className="es-table-num">Zs (Ω)</th>
+                  <th className="es-table-num">Max</th>
+                  <th className="es-table-num">Iₐ (A)</th>
+                  <th>Rule</th>
+                </tr>
+              </thead>
+              <tbody>
+                {earthFaultLoops.map((r: EarthFaultLoopRow) => (
+                  <tr key={r.loadId}>
+                    <td>
+                      <button
+                        type="button"
+                        className="text-left font-medium text-es-bright underline-offset-2 hover:underline es-focus-ring"
+                        onClick={() => setSelected(r.loadId)}
+                      >
+                        {r.loadLabel}
+                      </button>
+                    </td>
+                    <td>
+                      {r.protectorLabel ? (
                         <button
                           type="button"
-                          className={`text-left font-medium underline-offset-2 hover:underline ${tc.textBright}`}
-                          onClick={() => setSelected(r.loadId)}
+                          className="underline-offset-2 hover:underline es-focus-ring"
+                          onClick={() =>
+                            r.protectorId && setSelected(r.protectorId)
+                          }
                         >
-                          {r.loadLabel}
+                          {r.protectorLabel}
                         </button>
-                      </td>
-                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
-                        {r.protectorLabel ? (
-                          <button
-                            type="button"
-                            className="underline-offset-2 hover:underline"
-                            onClick={() =>
-                              r.protectorId && setSelected(r.protectorId)
-                            }
-                          >
-                            {r.protectorLabel}
-                          </button>
-                        ) : (
-                          '—'
-                        )}
-                        {r.ratedAmps != null ? (
-                          <span className={`block ${tc.textMuted}`}>
-                            {r.ratedAmps} A {r.tripCurve ?? ''}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td
-                        className={`border-b px-2 py-1.5 tabular-nums ${tc.border} ${
-                          r.ok ? tc.text : 'text-red-400 font-semibold'
-                        }`}
-                      >
-                        {r.zsOhms.toFixed(2)}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {r.maxZsOhms != null ? r.maxZsOhms.toFixed(2) : '—'}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {r.faultCurrentA.toFixed(0)}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
-                        {r.disconnectionRule}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      ) : (
+                        '—'
+                      )}
+                      {r.ratedAmps != null ? (
+                        <span className="block text-es-secondary">
+                          {r.ratedAmps} A {r.tripCurve ?? ''}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td
+                      className={`es-table-num ${
+                        r.ok ? '' : 'font-semibold text-es-error'
+                      }`}
+                    >
+                      {r.zsOhms.toFixed(2)}
+                    </td>
+                    <td className="es-table-num">
+                      {r.maxZsOhms != null ? r.maxZsOhms.toFixed(2) : '—'}
+                    </td>
+                    <td className="es-table-num">
+                      {r.faultCurrentA.toFixed(0)}
+                    </td>
+                    <td>{r.disconnectionRule}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </PanelDataTable>
           </div>
         )}
 
         {arcFlashRows.length > 0 && (
           <div>
             <h3
-              className={`mb-1.5 text-[11px] font-bold uppercase tracking-wide ${tc.textMuted}`}
+              className={`mb-1.5 es-typo-section ${tc.textMuted}`}
             >
               Arc-flash (simplified)
             </h3>
-            <p className={`mb-2 text-[10px] leading-snug ${tc.textMuted}`}>
+            <p className={`mb-2 es-typo-caption leading-snug ${tc.textMuted}`}>
               Lee-equation estimate from bolted fault current, arc factor 50%,
               device clearing time, and 18 in working distance. Download a
               printable label per device.
             </p>
-            <div className={`overflow-x-auto rounded-md border ${tc.border}`}>
-              <table className="w-full min-w-[340px] border-collapse text-left text-[10px]">
-                <thead>
-                  <tr className={theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.03]'}>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Device
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Ibf (kA)
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      t (ms)
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      E (cal/cm²)
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      AFB (m)
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      PPE
-                    </th>
-                    <th className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}>
-                      Label
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {arcFlashRows.map((r: ArcFlashRow) => (
-                    <tr key={r.deviceId}>
-                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
-                        <button
-                          type="button"
-                          className={`text-left font-medium underline-offset-2 hover:underline ${tc.textBright}`}
-                          onClick={() => setSelected(r.deviceId)}
-                        >
-                          {r.label}
-                        </button>
-                        <span className={`block ${tc.textMuted}`}>
-                          {r.deviceType}
-                        </span>
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {(r.boltedFaultCurrentA / 1000).toFixed(2)}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {(r.clearingTimeS * 1000).toFixed(0)}
-                      </td>
-                      <td
-                        className={`border-b px-2 py-1.5 tabular-nums font-semibold ${tc.border} ${
-                          r.ppeCategory >= '3'
-                            ? 'text-red-400'
-                            : r.ppeCategory === '2'
-                              ? 'text-amber-400'
-                              : tc.text
-                        }`}
+            <PanelDataTable minWidth={340}>
+              <thead className="es-table-sticky-head">
+                <tr>
+                  <th>Device</th>
+                  <th className="es-table-num">Ibf (kA)</th>
+                  <th className="es-table-num">t (ms)</th>
+                  <th className="es-table-num">E (cal/cm²)</th>
+                  <th className="es-table-num">AFB (m)</th>
+                  <th>PPE</th>
+                  <th>Label</th>
+                </tr>
+              </thead>
+              <tbody>
+                {arcFlashRows.map((r: ArcFlashRow) => (
+                  <tr key={r.deviceId}>
+                    <td>
+                      <button
+                        type="button"
+                        className="text-left font-medium text-es-bright underline-offset-2 hover:underline es-focus-ring"
+                        onClick={() => setSelected(r.deviceId)}
                       >
-                        {r.incidentEnergyCalCm2.toFixed(1)}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}>
-                        {r.arcFlashBoundaryM.toFixed(1)}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
-                        Cat {r.ppeCategory}
-                      </td>
-                      <td className={`border-b px-2 py-1.5 ${tc.border}`}>
-                        <button
-                          type="button"
-                          title="Download printable arc-flash label"
-                          className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 ${tc.btnBg} ${tc.btnHover}`}
-                          onClick={() =>
-                            downloadArcFlashLabel(r, circuit.name || 'circuit')
-                          }
-                        >
-                          <FiDownload size={11} />
-                          <span>.txt</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        {r.label}
+                      </button>
+                      <span className="block text-es-secondary">{r.deviceType}</span>
+                    </td>
+                    <td className="es-table-num">
+                      {(r.boltedFaultCurrentA / 1000).toFixed(2)}
+                    </td>
+                    <td className="es-table-num">
+                      {(r.clearingTimeS * 1000).toFixed(0)}
+                    </td>
+                    <td
+                      className={`es-table-num font-semibold ${
+                        r.ppeCategory >= '3'
+                          ? 'text-es-error'
+                          : r.ppeCategory === '2'
+                            ? 'text-es-warning'
+                            : ''
+                      }`}
+                    >
+                      {r.incidentEnergyCalCm2.toFixed(1)}
+                    </td>
+                    <td className="es-table-num">
+                      {r.arcFlashBoundaryM.toFixed(1)}
+                    </td>
+                    <td>Cat {r.ppeCategory}</td>
+                    <td>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        title="Download printable arc-flash label"
+                        onClick={() =>
+                          downloadArcFlashLabel(r, circuit.name || 'circuit')
+                        }
+                      >
+                        <AppIcon id="download" size="inline" />
+                        .txt
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </PanelDataTable>
           </div>
         )}
 
         {issues.length === 0 ? (
           <p
-            className={`rounded-md border px-3 py-4 text-center text-xs ${tc.border} ${theme === 'dark' ? 'border-emerald-900/50 bg-emerald-950/30 text-emerald-200' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}
+            className={`rounded-md border px-3 py-4 text-center es-typo-body ${tc.border} ${theme === 'dark' ? 'border-emerald-900/50 bg-emerald-950/30 text-emerald-200' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}
           >
             No issues detected for the current checks. Run simulation after
             edits to refresh current-based wire warnings.
           </p>
         ) : (
-          <ul className="space-y-2">
-            {issues.map((issue) => (
-              <li key={issue.id}>
-                <button
-                  type="button"
-                  disabled={issue.componentIds.length === 0}
-                  onClick={() => {
-                    const id = issue.componentIds[0];
-                    if (id) setSelected(id);
-                  }}
-                  className={`w-full rounded-md border px-2.5 py-2 text-left text-[11px] leading-snug transition-colors disabled:cursor-default ${tc.border} ${
-                    issue.componentIds.length > 0
-                      ? theme === 'dark'
-                        ? 'hover:bg-white/5'
-                        : 'hover:bg-black/[0.04]'
-                      : 'opacity-95'
-                  } ${theme === 'dark' ? 'bg-black/20' : 'bg-white/80'}`}
-                >
-                  <span className="mr-1.5 align-middle">
-                    {severityIcon(issue.severity)}
-                  </span>
-                  <span className={`align-middle ${tc.text}`}>{issue.message}</span>
-                  {learningMode && learningHintForIssue(issue) && (
-                    <span
-                      className={`mt-1.5 block rounded px-2 py-1.5 text-[10px] leading-snug ${
-                        theme === 'dark'
-                          ? 'bg-sky-950/40 text-sky-200'
-                          : 'bg-sky-50 text-sky-900'
-                      }`}
-                    >
-                      {learningHintForIssue(issue)}
-                    </span>
-                  )}
-                  {issue.componentIds.length > 0 && (
-                    <span
-                      className={`mt-1 block text-[10px] ${tc.textMuted}`}
-                    >
-                      Click to select:{' '}
-                      {issue.componentIds
-                        .map((cid) => circuit.components.find((c) => c.id === cid)?.label)
-                        .filter(Boolean)
-                        .join(', ')}
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
+          <ul className="space-y-2" data-testid="validation-issue-list">
+            {issues.map((issue) => {
+              const canFocus =
+                issue.componentIds.length > 0 ||
+                (issue.wireIds?.length ?? 0) > 0 ||
+                !!issue.navigateRef;
+              const hint =
+                learningMode && learningHintForIssue(issue)
+                  ? learningHintForIssue(issue)
+                  : undefined;
+              return (
+                <li key={issue.id}>
+                  <ValidationIssueRow
+                    severity={issue.severity}
+                    message={issue.message}
+                    focusLabel={issueFocusLabel(issue, circuit)}
+                    disabled={!canFocus}
+                    onFocus={() => focusValidationIssue(issue)}
+                    hint={hint}
+                  />
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
+
+      {coordination.rows.length > 0 ? (
+        <PanelExportFooter>
+          <Button
+            type="button"
+            variant="primary"
+            className="w-full"
+            onClick={handleCoordinationPdf}
+          >
+            <AppIcon id="export" size="inline" />
+            Download coordination study PDF
+          </Button>
+          {coordExportMsg ? (
+            <p className="es-typo-caption text-es-secondary">{coordExportMsg}</p>
+          ) : null}
+        </PanelExportFooter>
+      ) : null}
     </div>
   );
 };

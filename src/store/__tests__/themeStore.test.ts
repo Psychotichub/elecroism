@@ -46,7 +46,8 @@ describe('themeStore', () => {
     expect(useThemeStore.getState().theme).toBe('high-contrast')
   })
 
-  it('exposes high-contrast palette tokens', () => {
+  it('exposes semantic palette tokens', () => {
+    expect(themeColors.dark.toolbar).toContain('es-chrome1')
     expect(themeColors['high-contrast'].canvasHex).toBe('#000000')
     expect(themeLabel('high-contrast')).toBe('High contrast')
   })

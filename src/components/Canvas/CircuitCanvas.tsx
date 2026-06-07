@@ -16,12 +16,20 @@ import {
 } from '../../utils/viewportCull';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import GridLayer from './GridLayer';
+import DrawingLayerFrame from './DrawingLayerFrame';
 import WireLayer from './WireLayer';
 import WireGripLayer from './WireGripLayer';
 import WireToolOverlay from './WireToolOverlay';
 import ConnectionIntegrityOverlay from './ConnectionIntegrityOverlay';
+import ValidationHintsOverlay from './ValidationHintsOverlay';
 import ArcFlashBadgeLayer from './ArcFlashBadgeLayer';
+import SnapshotDiffOverlay from './SnapshotDiffOverlay';
+import ReviewCommentsLayer from './ReviewCommentsLayer';
+import SldWireLayer from './SldWireLayer';
+import SldComponentBlock from './SldComponentBlock';
 import { useUiStore } from '../../store/uiStore';
+import { runCircuitDesignValidation } from '../../utils/circuitDesignValidation';
+import { validateCrossSheetReferences } from '../../utils/crossSheetNavigation';
 import { FiMaximize, FiZoomIn, FiZoomOut } from 'react-icons/fi';
 import SwitchSymbol from '../Components/SwitchSymbol';
 import TwoWaySwitchSymbol from '../Components/TwoWaySwitchSymbol';
@@ -62,6 +70,8 @@ import CommInfraSymbol from '../Components/CommInfraSymbol';
 import SignalIsolationSymbol from '../Components/SignalIsolationSymbol';
 import PowerAuxSymbol from '../Components/PowerAuxSymbol';
 import TerminalBlockSymbol from '../Components/TerminalBlockSymbol';
+import PluginSymbol from '../Components/PluginSymbol';
+import { resolvePluginTypeForComponent } from '../../utils/pluginComponents';
 import type { CircuitComponent, ComponentType, WireColor } from '../../types';
 import { createConnectionPoints } from '../../store/circuitConnectionGeometry';
 import {
@@ -89,6 +99,11 @@ import {
   getDragComponentType,
 } from '../../utils/dragState';
 import { findClosestSegmentIndexOnWire } from '../../utils/wireEditOps';
+import { useDrawingLayerStore } from '../../store/drawingLayerStore';
+import {
+  resolveComponentDrawingLayer,
+  resolveWireDrawingLayer,
+} from '../../utils/drawingLayers';
 
 /**
  * Read component type from a palette drag. Custom MIME is not always readable
@@ -272,6 +287,10 @@ const CircuitCanvas: React.FC = () => {
 
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
+  const drawingLayers = useDrawingLayerStore((s) => s.layers);
+  const isLayerSelectable = useDrawingLayerStore((s) => s.isLayerSelectable);
+
+  const project = useCircuitStore((s) => s.project);
 
   const {
     circuit,
@@ -307,6 +326,28 @@ const CircuitCanvas: React.FC = () => {
     (s) => s.connectionIntegrityOverlay
   );
   const arcFlashBadges = useUiStore((s) => s.arcFlashBadges);
+  const snapshotDiffOverlay = useUiStore((s) => s.snapshotDiffOverlay);
+  const sldViewMode = useUiStore((s) => s.sldViewMode);
+  const reviewCommentPlacementMode = useUiStore(
+    (s) => s.reviewCommentPlacementMode
+  );
+  const activeReviewCommentId = useUiStore((s) => s.activeReviewCommentId);
+  const setActiveReviewCommentId = useUiStore((s) => s.setActiveReviewCommentId);
+  const setReviewCommentPlacementMode = useUiStore(
+    (s) => s.setReviewCommentPlacementMode
+  );
+  const setPendingReviewComment = useUiStore((s) => s.setPendingReviewComment);
+  const learningMode = useUiStore((s) => s.learningMode);
+  const validationFocusIssueId = useUiStore((s) => s.validationFocusIssueId);
+  const addReviewCommentAtPoint = useCircuitStore((s) => s.addReviewCommentAtPoint);
+
+  const validationIssues = useMemo(
+    () => [
+      ...runCircuitDesignValidation(circuit, simulationResult),
+      ...validateCrossSheetReferences(project),
+    ],
+    [circuit, simulationResult, project]
+  );
 
   const tryCacheSchematicLayer = useCallback(() => {
     if (circuit.components.length < CANVAS_CULL_MIN_COMPONENTS) return;
@@ -326,6 +367,7 @@ const CircuitCanvas: React.FC = () => {
   useEffect(() => {
     clearSchematicLayerCache();
   }, [
+    sldViewMode,
     circuit.components,
     circuit.wires,
     selectedId,
@@ -369,10 +411,19 @@ const CircuitCanvas: React.FC = () => {
   );
 
   const { components: visibleComponents, wires: visibleWires } = useMemo(() => {
+    const visibleById = new Map(
+      drawingLayers.map((layer) => [layer.id, layer.visible])
+    );
+    const layerVisibleComponents = circuit.components.filter((c) =>
+      visibleById.get(resolveComponentDrawingLayer(c)) !== false
+    );
+    const layerVisibleWires = circuit.wires.filter((w) =>
+      visibleById.get(resolveWireDrawingLayer(w)) !== false
+    );
     if (!cullingActive) {
       return {
-        components: circuit.components,
-        wires: circuit.wires,
+        components: layerVisibleComponents,
+        wires: layerVisibleWires,
       };
     }
     const pinComp = new Set<string>();
@@ -388,8 +439,8 @@ const CircuitCanvas: React.FC = () => {
       if (c.selected) pinComp.add(c.id);
     }
     return pickVisibleCanvasElements(
-      circuit.components,
-      circuit.wires,
+      layerVisibleComponents,
+      layerVisibleWires,
       viewportBounds,
       { pinComponentIds: pinComp, pinWireIds: pinWire }
     );
@@ -399,11 +450,21 @@ const CircuitCanvas: React.FC = () => {
     circuit.wires,
     viewportBounds,
     selectedId,
+    drawingLayers,
   ]);
 
   const handleSelectWire = useCallback(
     (id: string, world?: { x: number; y: number }) => {
       const st = useCircuitStore.getState();
+      const wire = st.circuit.wires.find((w) => w.id === id);
+      if (
+        wire &&
+        !useDrawingLayerStore
+          .getState()
+          .isLayerSelectable(resolveWireDrawingLayer(wire))
+      ) {
+        return;
+      }
       if (st.tool === 'delete') {
         removeWire(id);
         return;
@@ -916,6 +977,30 @@ const CircuitCanvas: React.FC = () => {
         suppressStageClickRef.current = false;
         return;
       }
+      if (
+        reviewCommentPlacementMode &&
+        e.target === stageRef.current
+      ) {
+        const pos = getStagePointerPosition();
+        const ui = useUiStore.getState();
+        const body = ui.pendingReviewCommentBody?.trim();
+        if (!pos || !body) {
+          setReviewCommentPlacementMode(false);
+          setPendingReviewComment(null);
+          return;
+        }
+        const id = addReviewCommentAtPoint(
+          pos.x,
+          pos.y,
+          body,
+          ui.pendingReviewCommentAuthor ?? undefined
+        );
+        setReviewCommentPlacementMode(false);
+        setPendingReviewComment(null);
+        if (id) setActiveReviewCommentId(id);
+        setCanvasStatusMessage('Review comment pinned.');
+        return;
+      }
       if (pendingInsertType && e.target === stageRef.current) {
         const pos = getStagePointerPosition();
         if (!pos) return;
@@ -968,6 +1053,11 @@ const CircuitCanvas: React.FC = () => {
       }
     },
     [
+      reviewCommentPlacementMode,
+      addReviewCommentAtPoint,
+      setReviewCommentPlacementMode,
+      setPendingReviewComment,
+      setActiveReviewCommentId,
       pendingInsertType,
       addComponent,
       circuit.gridSize,
@@ -1081,6 +1171,11 @@ const CircuitCanvas: React.FC = () => {
     const selectedIds = new Set(
       circuit.components
         .filter((comp) => {
+          if (
+            !isLayerSelectable(resolveComponentDrawingLayer(comp))
+          ) {
+            return false;
+          }
           const worldPoints = comp.connectionPoints.map((cp) =>
             connectionPointWorld(comp, cp)
           );
@@ -1114,7 +1209,7 @@ const CircuitCanvas: React.FC = () => {
     });
     suppressStageClickRef.current = true;
     setSelectionRect(null);
-  }, [tool, selectionRect, circuit]);
+  }, [tool, selectionRect, circuit, isLayerSelectable]);
 
   const handleWheel = useCallback(
     (e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -1218,6 +1313,17 @@ const CircuitCanvas: React.FC = () => {
 
   const handleComponentSelect = useCallback(
     (id: string) => {
+      const comp = useCircuitStore
+        .getState()
+        .circuit.components.find((c) => c.id === id);
+      if (
+        comp &&
+        !useDrawingLayerStore
+          .getState()
+          .isLayerSelectable(resolveComponentDrawingLayer(comp))
+      ) {
+        return;
+      }
       if (tool === 'delete') {
         removeComponent(id);
       } else if (ctrlOrMetaPressedRef.current) {
@@ -1571,6 +1677,21 @@ const CircuitCanvas: React.FC = () => {
       case 'ip_rated_enclosure':
       case 'power_quality_analyzer':
         return <PowerAuxSymbol key={comp.id} {...commonProps} />;
+      case 'plugin_component': {
+        const typeDef = resolvePluginTypeForComponent(project.plugins ?? [], comp);
+        if (!typeDef) return null;
+        return (
+          <PluginSymbol
+            key={comp.id}
+            {...commonProps}
+            typeDef={typeDef}
+            tool={tool}
+            onToggle={
+              typeDef.toggleable ? () => toggleComponent(comp.id) : undefined
+            }
+          />
+        );
+      }
       default:
         return null;
     }
@@ -1928,7 +2049,8 @@ const CircuitCanvas: React.FC = () => {
           aria-live="polite"
           aria-atomic="true"
         >
-          {toolLabel} · {(circuit.zoom * 100).toFixed(0)}%
+          {toolLabel}
+          {sldViewMode ? ' · SLD' : ''} · {(circuit.zoom * 100).toFixed(0)}%
         </span>
       </div>
       <Stage
@@ -1968,39 +2090,110 @@ const CircuitCanvas: React.FC = () => {
           Interaction layer above: grips, previews, overlays (not cached).
         */}
         <Layer ref={schematicLayerRef} perfectDrawEnabled={false}>
-          <WireLayer
-            wires={visibleWires}
-            selectedId={selectedId}
-            panX={circuit.panX}
-            panY={circuit.panY}
-            zoom={circuit.zoom}
-            onSelectWire={handleSelectWire}
-            wireInProgress={!!wireInProgress}
-            wirePoints={wirePoints}
-            cursorPos={cursorPos}
-            wireOrientation={wireOrientation}
-            wireOrthoEnabled={wireOrthoEnabled}
-            draftWireColor={wireDraftColor}
-            wireSnapHud={wireSnapHud}
-            wireFullPreviewPolyline={wireSmartPreview.fullPolyline}
-            wireTerminalPreview={wireSmartPreview.terminalHud}
-            wireTypeTag={wireSmartPreview.typeTag}
-            wireRuleMessage={wireSmartPreview.ruleMessage}
-            wireLabelsMasterVisible={circuit.wireLabelsVisible !== false}
-          />
+          {sldViewMode ? (
+            <>
+              <SldWireLayer
+                wires={visibleWires}
+                selectedId={selectedId}
+                onSelectWire={(id) => handleSelectWire(id)}
+              />
+              <Group listening>
+                {visibleComponents.map((comp) => (
+                  <DrawingLayerFrame
+                    key={comp.id}
+                    layerId={resolveComponentDrawingLayer(comp)}
+                    component={comp}
+                  >
+                    <SldComponentBlock
+                      component={comp}
+                      selected={selectedId === comp.id || comp.selected}
+                      draggable={tool === 'select'}
+                      onSelect={() => handleComponentSelect(comp.id)}
+                      onDragEnd={(x, y) => moveComponent(comp.id, x, y)}
+                    />
+                  </DrawingLayerFrame>
+                ))}
+              </Group>
+            </>
+          ) : (
+            <>
+              <WireLayer
+                wires={visibleWires}
+                selectedId={selectedId}
+                panX={circuit.panX}
+                panY={circuit.panY}
+                zoom={circuit.zoom}
+                onSelectWire={handleSelectWire}
+                wireInProgress={!!wireInProgress}
+                wirePoints={wirePoints}
+                cursorPos={cursorPos}
+                wireOrientation={wireOrientation}
+                wireOrthoEnabled={wireOrthoEnabled}
+                draftWireColor={wireDraftColor}
+                wireSnapHud={wireSnapHud}
+                wireFullPreviewPolyline={wireSmartPreview.fullPolyline}
+                wireTerminalPreview={wireSmartPreview.terminalHud}
+                wireTypeTag={wireSmartPreview.typeTag}
+                wireRuleMessage={wireSmartPreview.ruleMessage}
+                wireLabelsMasterVisible={circuit.wireLabelsVisible !== false}
+              />
 
-          <Group listening>
-            {visibleComponents.map(renderComponent)}
-          </Group>
-          <Group listening>
-            {visibleComponents.map(renderMultimeterLeads)}
-          </Group>
+              <Group listening>
+                {visibleComponents.map((comp) => (
+                  <DrawingLayerFrame
+                    key={comp.id}
+                    layerId={resolveComponentDrawingLayer(comp)}
+                    component={comp}
+                  >
+                    {renderComponent(comp)}
+                  </DrawingLayerFrame>
+                ))}
+              </Group>
+              <Group listening>
+                {visibleComponents.map((comp) => (
+                  <DrawingLayerFrame
+                    key={`leads-${comp.id}`}
+                    layerId={resolveComponentDrawingLayer(comp)}
+                    component={comp}
+                  >
+                    {renderMultimeterLeads(comp)}
+                  </DrawingLayerFrame>
+                ))}
+              </Group>
+            </>
+          )}
         </Layer>
 
         <Layer>
-          <WireGripLayer phases={['segments']} />
+          {!sldViewMode ? (
+            <>
+              <WireGripLayer phases={['segments']} />
+              <WireGripLayer phases={['vertices']} />
+            </>
+          ) : null}
 
-          <WireGripLayer phases={['vertices']} />
+          {sldViewMode && wireInProgress ? (
+            <WireLayer
+              wires={[]}
+              selectedId={selectedId}
+              panX={circuit.panX}
+              panY={circuit.panY}
+              zoom={circuit.zoom}
+              onSelectWire={handleSelectWire}
+              wireInProgress
+              wirePoints={wirePoints}
+              cursorPos={cursorPos}
+              wireOrientation={wireOrientation}
+              wireOrthoEnabled={wireOrthoEnabled}
+              draftWireColor={wireDraftColor}
+              wireSnapHud={wireSnapHud}
+              wireFullPreviewPolyline={wireSmartPreview.fullPolyline}
+              wireTerminalPreview={wireSmartPreview.terminalHud}
+              wireTypeTag={wireSmartPreview.typeTag}
+              wireRuleMessage={wireSmartPreview.ruleMessage}
+              wireLabelsMasterVisible={false}
+            />
+          ) : null}
 
           {pendingPreviewComponent && (
             <Group opacity={0.7} listening={false}>
@@ -2035,6 +2228,19 @@ const CircuitCanvas: React.FC = () => {
             />
           )}
 
+          {(learningMode || validationFocusIssueId) &&
+          validationIssues.length > 0 ? (
+            <ValidationHintsOverlay
+              circuit={circuit}
+              issues={validationIssues}
+              focusedIssueId={validationFocusIssueId}
+              learningMode={learningMode}
+              panX={circuit.panX}
+              panY={circuit.panY}
+              zoom={circuit.zoom}
+            />
+          ) : null}
+
           {arcFlashBadges && (
             <ArcFlashBadgeLayer
               circuit={circuit}
@@ -2049,6 +2255,16 @@ const CircuitCanvas: React.FC = () => {
               }
             />
           )}
+
+          <ReviewCommentsLayer
+            circuit={circuit}
+            activeThreadId={activeReviewCommentId}
+            onSelectThread={setActiveReviewCommentId}
+          />
+
+          {snapshotDiffOverlay ? (
+            <SnapshotDiffOverlay overlay={snapshotDiffOverlay} />
+          ) : null}
 
           {tool === 'wire' && (
             <WireToolOverlay

@@ -1,22 +1,40 @@
-import { TypeSpecificProps } from './propertyPanel/TypeSpecificProps';
 import * as WireEditor from './propertyPanel/editors/WireEditor';
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
-import { useUiStore } from '../../store/uiStore';
 import type { ComponentProperties, PhaseSystem } from '../../types';
 import { clampComponentScale } from '../../utils/geometry';
 import {
-  COMPONENT_PANEL_DESCRIPTIONS,
-  formatComponentPanelHelpText,
+  getComponentPanelDescription,
+  WIRE_PANEL_DESCRIPTION,
 } from '../../utils/componentPanelInfo';
+import {
+  DRAWING_LAYER_LABELS,
+  resolveComponentDrawingLayer,
+  resolveWireDrawingLayer,
+} from '../../utils/drawingLayers';
+import PropertySection from './propertyPanel/PropertySection';
+import SelectionHeaderCard from './propertyPanel/SelectionHeaderCard';
+import SimulationDetailsSection from './propertyPanel/SimulationDetailsSection';
+import {
+  BmsTypeSpecificProps,
+  TypeSpecificProps,
+} from './propertyPanel/TypeSpecificProps';
+import {
+  BMS_PANEL_TYPES,
+  isBmsPanelType,
+  showBmsPropertySection,
+} from './propertyPanel/bmsTypes';
 import { defaultPhaseSystemForType } from './propertyPanel/constants';
-import { explainWhyDeenergized } from '../../utils/whyIsOff';
 import {
   defaultFunctionLetter,
   isRenumberableComponent,
 } from '../../utils/designatorRules';
 import { Label } from './propertyPanel/PropertyPanelLabel';
+import { DrawingLayerField } from './propertyPanel/DrawingLayerField';
+import CrossSheetBacklinksSection from './CrossSheetBacklinksSection';
+import type { DrawingLayerId } from '../../types';
+import { parseCrossSheetReference } from '../../utils/crossSheetNavigation';
 import {
   PropertyPanelProvider,
   type PropertyPanelContextValue,
@@ -25,10 +43,6 @@ import {
 const PropertyPanel: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
-  const activeChallengeId = useUiStore((s) => s.activeChallengeId);
-  const challengeSubmitted = useUiStore((s) => s.challengeSubmitted);
-  const hideWhyOffHint = Boolean(activeChallengeId && !challengeSubmitted);
-
   const {
     circuit,
     selectedId,
@@ -42,6 +56,7 @@ const PropertyPanel: React.FC = () => {
     removeComponent,
     rotateComponent,
     duplicateComponent,
+    navigateCrossSheetRef,
     acbBmsClosePulse,
     acbBmsShuntOpen,
     mccbBmsMotorClosePulse,
@@ -124,10 +139,12 @@ const PropertyPanel: React.FC = () => {
       ? simulationResult.nodes[selectedComp.id]
       : null;
 
-  const whyOffMessage = useMemo(() => {
-    if (!selectedComp) return null;
-    return explainWhyDeenergized(circuit, selectedComp.id, simulationResult);
-  }, [circuit, selectedComp, simulationResult]);
+  const faultCount = useMemo(() => {
+    if (!selectedId || !simulationResult) return 0;
+    return simulationResult.faults.filter(
+      (f) => f.affectedComponentId === selectedId
+    ).length;
+  }, [selectedId, simulationResult]);
 
   const updateProp = useCallback(
     (
@@ -192,30 +209,62 @@ const PropertyPanel: React.FC = () => {
 
   if (!selectedComp && !selectedWire) {
     return (
-      <div
-        className={`flex w-full min-w-0 flex-col items-center justify-center p-4 ${tc.text}`}
-      >
-        <p className={`text-sm ${tc.textMuted}`}>Select a component</p>
+      <div className={`flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden ${tc.text}`}>
+        <div className={`border-b px-3 py-3 ${tc.border}`}>
+          <h2 className={`es-typo-title-sm ${tc.textBright}`}>Properties</h2>
+        </div>
+        <div className="es-density-pad es-density-stack flex-1 overflow-y-auto">
+          <CrossSheetBacklinksSection />
+          <p className={`es-typo-body-sm ${tc.textMuted}`}>
+            Select a component or wire
+          </p>
+        </div>
       </div>
     );
   }
 
   const componentPanelInfo = selectedComp
-    ? COMPONENT_PANEL_DESCRIPTIONS[selectedComp.type]
+    ? getComponentPanelDescription(selectedComp.type)
     : null;
+
+  const headerLabel = selectedComp
+    ? selectedComp.label.trim() || componentPanelInfo?.displayName || 'Component'
+    : selectedWire?.wireLabel?.trim() ||
+      selectedWire?.wireNumber ||
+      'Wire';
+  const headerType = selectedComp
+    ? (componentPanelInfo?.displayName ?? selectedComp.type.replace(/_/g, ' '))
+    : WIRE_PANEL_DESCRIPTION.displayName;
+  const headerLayer = selectedComp
+    ? DRAWING_LAYER_LABELS[resolveComponentDrawingLayer(selectedComp)]
+    : selectedWire
+      ? DRAWING_LAYER_LABELS[resolveWireDrawingLayer(selectedWire)]
+      : '—';
 
   return (
     <PropertyPanelProvider value={panelCtx}>
     <div
       className={`flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden ${tc.text}`}
     >
-      <div className={`px-3 py-3 border-b ${tc.border}`}>
-        <h2 className={`text-xs font-bold ${tc.textBright}`}>Properties</h2>
-      </div>
+      <SelectionHeaderCard
+        label={headerLabel}
+        typeName={headerType}
+        layerLabel={headerLayer}
+        helpInfo={componentPanelInfo ?? (selectedWire ? WIRE_PANEL_DESCRIPTION : null)}
+        status={{
+          energized: selectedComp
+            ? nodeResult?.energized
+            : selectedWire?.energized,
+          faultCount,
+          tripped: selectedComp?.state === 'tripped',
+        }}
+      />
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="es-density-pad flex-1 overflow-y-auto">
+        <CrossSheetBacklinksSection />
         {selectedComp && (
           <>
+            <PropertySection title="Documentation" defaultOpen>
             <Label text="Label">
               <input
                 type="text"
@@ -227,6 +276,46 @@ const PropertyPanel: React.FC = () => {
                 }
                 className="input-field"
               />
+            </Label>
+            <DrawingLayerField
+              component={selectedComp}
+              tc={tc}
+              onChange={(layer: DrawingLayerId) =>
+                updateComponent(selectedComp.id, { drawingLayer: layer })
+              }
+            />
+            <Label text="Cross-sheet reference">
+              <div className="flex gap-1">
+                <input
+                  type="text"
+                  placeholder="=Sheet2!Q1"
+                  value={selectedComp.properties.crossSheetRef ?? ''}
+                  onChange={(e) =>
+                    updateProp({ crossSheetRef: e.target.value })
+                  }
+                  className="input-field flex-1"
+                />
+                <button
+                  type="button"
+                  className="rounded bg-blue-600 px-2 text-white hover:bg-blue-500 disabled:opacity-40 es-typo-caption"
+                  disabled={
+                    !parseCrossSheetReference(
+                      selectedComp.properties.crossSheetRef ?? ''
+                    )
+                  }
+                  onClick={() => {
+                    const raw = selectedComp.properties.crossSheetRef?.trim();
+                    if (raw) navigateCrossSheetRef(raw);
+                  }}
+                >
+                  Go
+                </button>
+              </div>
+              <p className={`mt-1 es-typo-caption ${tc.textMuted}`}>
+                Use <code className="es-typo-caption">=SheetName!</code> or{' '}
+                <code className="es-typo-caption">=Sheet2!Q1</code> to link across
+                project sheets. Clickable on the canvas when the label matches.
+              </p>
             </Label>
             {isRenumberableComponent(selectedComp) ? (
               <Label text="Function letter (IEC)">
@@ -244,6 +333,39 @@ const PropertyPanel: React.FC = () => {
                 />
               </Label>
             ) : null}
+            </PropertySection>
+
+            <PropertySection title="Electrical" defaultOpen>
+            <Label text="Phase system">
+              <select
+                value={
+                  (selectedComp.properties.phaseSystem ??
+                    defaultPhaseSystemForType(selectedComp.type))
+                }
+                onChange={(e) =>
+                  setComponentPhaseSystem(
+                    selectedComp.id,
+                    e.target.value as PhaseSystem
+                  )
+                }
+                className="input-field"
+              >
+                <option value="single_phase">Single-phase</option>
+                <option value="three_phase">Three-phase</option>
+              </select>
+            </Label>
+            <p className={`leading-snug es-typo-caption ${tc.textMuted}`}>
+              Supply / MCB / contactor: switching phase may replace the symbol
+              and remap L1/N (extra phase wires removed). Motors: with
+              three-phase set, line current uses P/(√3·U<sub>L-L</sub>·PF); a
+              1φ motor symbol uses ×1.25. A 3φ motor set to single-phase uses
+              P/(U<sub>L-N</sub>·PF)·1.25.
+            </p>
+            <TypeSpecificProps excludeTypes={BMS_PANEL_TYPES} />
+            <SimulationDetailsSection />
+            </PropertySection>
+
+            <PropertySection title="Mechanical">
             <Label text="Label text size">
               <input
                 type="number"
@@ -283,51 +405,6 @@ const PropertyPanel: React.FC = () => {
                 />
               </Label>
             </div>
-
-            <Label text="Type">
-              <span className={`text-xs ${tc.textMuted} capitalize`}>
-                {selectedComp.type.replace(/_/g, ' ')}
-              </span>
-            </Label>
-
-            {componentPanelInfo && (
-              <div
-                className={`rounded-md border p-2.5 space-y-2 ${tc.border} ${theme === 'dark' ? 'bg-black/25' : 'bg-gray-50'}`}
-                aria-label={formatComponentPanelHelpText(componentPanelInfo)}
-              >
-                <h3 className={`text-xs font-semibold ${tc.textBright}`}>
-                  {componentPanelInfo.displayName}
-                </h3>
-                <p className={`text-[11px] leading-snug ${tc.text}`}>
-                  {componentPanelInfo.description}
-                </p>
-                <div>
-                  <p
-                    className={`text-[10px] uppercase tracking-wide ${tc.textMuted} mb-1`}
-                  >
-                    Features
-                  </p>
-                  <ul
-                    className={`text-[11px] leading-snug list-disc list-inside space-y-0.5 ${tc.text}`}
-                  >
-                    {componentPanelInfo.features.map((f) => (
-                      <li key={f}>{f}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <p
-                    className={`text-[10px] uppercase tracking-wide ${tc.textMuted} mb-0.5`}
-                  >
-                    Purpose
-                  </p>
-                  <p className={`text-[11px] leading-snug ${tc.text}`}>
-                    {componentPanelInfo.purpose}
-                  </p>
-                </div>
-              </div>
-            )}
-
             <Label text="Visual scale">
               <div className="flex items-center gap-2">
                 <input
@@ -343,272 +420,51 @@ const PropertyPanel: React.FC = () => {
                   }
                   className="flex-1 min-w-0 accent-blue-600"
                 />
-                <span className={`text-xs font-mono w-11 shrink-0 ${tc.textMuted}`}>
+                <span
+                  className={`w-11 shrink-0 font-mono es-typo-body-sm es-tabular-nums ${tc.textMuted}`}
+                >
                   {(selectedComp.scale ?? 1).toFixed(2)}×
                 </span>
               </div>
             </Label>
-
-            <Label text="Phase system">
-              <select
-                value={
-                  (selectedComp.properties.phaseSystem ??
-                    defaultPhaseSystemForType(selectedComp.type))
-                }
-                onChange={(e) =>
-                  setComponentPhaseSystem(
-                    selectedComp.id,
-                    e.target.value as PhaseSystem
-                  )
-                }
-                className="input-field"
-              >
-                <option value="single_phase">Single-phase</option>
-                <option value="three_phase">Three-phase</option>
-              </select>
-            </Label>
-            <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
-              Supply / MCB / contactor: switching phase may replace the symbol
-              and remap L1/N (extra phase wires removed). Motors: with
-              three-phase set, line current uses P/(√3·U<sub>L-L</sub>·PF); a
-              1φ motor symbol uses ×1.25. A 3φ motor set to single-phase uses
-              P/(U<sub>L-N</sub>·PF)·1.25.
-            </p>
-
-            <TypeSpecificProps />
-
             <div className="flex gap-1 pt-2">
               <button
                 onClick={() => rotateComponent(selectedComp.id)}
-                className={`flex-1 px-2 py-1.5 ${tc.btnBg} ${tc.btnText} rounded text-xs ${tc.btnHover}`}
+                className={`flex-1 rounded px-2 py-1.5 es-typo-body ${tc.btnBg} ${tc.btnText} ${tc.btnHover}`}
               >
                 Rotate
               </button>
               <button
                 onClick={() => duplicateComponent(selectedComp.id)}
-                className={`flex-1 px-2 py-1.5 ${tc.btnBg} ${tc.btnText} rounded text-xs ${tc.btnHover}`}
+                className={`flex-1 rounded px-2 py-1.5 es-typo-body ${tc.btnBg} ${tc.btnText} ${tc.btnHover}`}
               >
                 Duplicate
               </button>
               <button
                 onClick={() => removeComponent(selectedComp.id)}
-                className="flex-1 px-2 py-1.5 bg-red-700 text-white rounded text-xs hover:bg-red-600"
+                className="flex-1 rounded bg-red-700 px-2 py-1.5 text-white hover:bg-red-600 es-typo-body"
               >
                 Delete
               </button>
             </div>
+            </PropertySection>
+
+            {showBmsPropertySection(selectedComp.type) ? (
+              <PropertySection title="BMS">
+                <BmsTypeSpecificProps />
+                {!isBmsPanelType(selectedComp.type) ? (
+                  <p className={`es-typo-caption leading-snug ${tc.textMuted}`}>
+                    Motor, shunt, and auxiliary BMS settings for this breaker are
+                    under Electrical with the device ratings.
+                  </p>
+                ) : null}
+              </PropertySection>
+            ) : null}
           </>
         )}
 
         {selectedWire && <WireEditor.WirePropsContent />}
       </div>
-
-      {nodeResult && (
-        <div className={`p-3 border-t ${tc.border} space-y-1`}>
-          <h3 className={`text-xs font-semibold ${tc.textMuted} uppercase`}>
-            Simulation
-          </h3>
-          <div className="grid grid-cols-2 gap-1 text-xs">
-            {selectedComp && (
-              <>
-                <span className={tc.textMuted}>Phase (set):</span>
-                <span>
-                  {(selectedComp.properties.phaseSystem ??
-                    defaultPhaseSystemForType(selectedComp.type)) ===
-                    'three_phase'
-                    ? 'Three-phase'
-                    : 'Single-phase'}
-                </span>
-              </>
-            )}
-            <span className={tc.textMuted}>Voltage:</span>
-            <span>{nodeResult.voltageV.toFixed(1)}V</span>
-            <span className={tc.textMuted}>Current:</span>
-            <span>{nodeResult.currentA.toFixed(2)}A</span>
-            <span className={tc.textMuted}>Power:</span>
-            <span>{nodeResult.powerW.toFixed(1)}W</span>
-            {nodeResult.powerFactor !== undefined && (
-              <>
-                <span className={tc.textMuted}>PF:</span>
-                <span>{nodeResult.powerFactor.toFixed(2)}</span>
-              </>
-            )}
-            {nodeResult.lineVoltageRmsV !== undefined && (
-              <>
-                <span className={tc.textMuted}>U_L-L:</span>
-                <span>{nodeResult.lineVoltageRmsV.toFixed(1)}V</span>
-              </>
-            )}
-            {nodeResult.phaseVoltageRmsV !== undefined && (
-              <>
-                <span className={tc.textMuted}>U_L-N:</span>
-                <span>{nodeResult.phaseVoltageRmsV.toFixed(1)}V</span>
-              </>
-            )}
-            {nodeResult.lineCurrentRmsA !== undefined && (
-              <>
-                <span className={tc.textMuted}>I_line:</span>
-                <span>{nodeResult.lineCurrentRmsA.toFixed(2)}A</span>
-              </>
-            )}
-            {nodeResult.voltageL1NV !== undefined && (
-              <>
-                <div className={`col-span-2 mt-2 border-t pt-2 ${tc.border}`}>
-                  <p
-                    className={`mb-1.5 text-[10px] font-semibold uppercase tracking-wide ${tc.textMuted}`}
-                  >
-                    Three-phase results
-                  </p>
-                  <p className={`mb-2 text-[10px] leading-snug ${tc.textMuted}`}>
-                    Symmetric supply by default. On 3φ motors set per-phase power (W)
-                    for uneven 4-wire loads, or use current factors; I_N uses phasor
-                    sum with per-phase PF angles. Validation warns if imbalance
-                    exceeds the threshold set under the Validation tab.
-                  </p>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px]">
-                    <span className={tc.textMuted}>I_L1:</span>
-                    <span>{(nodeResult.currentL1A ?? 0).toFixed(2)} A</span>
-                    <span className={tc.textMuted}>I_L2:</span>
-                    <span>{(nodeResult.currentL2A ?? 0).toFixed(2)} A</span>
-                    <span className={tc.textMuted}>I_L3:</span>
-                    <span>{(nodeResult.currentL3A ?? 0).toFixed(2)} A</span>
-                    <span className={tc.textMuted}>I_N:</span>
-                    <span>{(nodeResult.currentNeutralA ?? 0).toFixed(2)} A</span>
-                    <span className={tc.textMuted}>U_L1-N:</span>
-                    <span>{(nodeResult.voltageL1NV ?? 0).toFixed(1)} V</span>
-                    <span className={tc.textMuted}>U_L2-N:</span>
-                    <span>{(nodeResult.voltageL2NV ?? 0).toFixed(1)} V</span>
-                    <span className={tc.textMuted}>U_L3-N:</span>
-                    <span>{(nodeResult.voltageL3NV ?? 0).toFixed(1)} V</span>
-                    <span className={tc.textMuted}>U_L1-L2:</span>
-                    <span>{(nodeResult.voltageL1L2V ?? 0).toFixed(1)} V</span>
-                    <span className={tc.textMuted}>U_L2-L3:</span>
-                    <span>{(nodeResult.voltageL2L3V ?? 0).toFixed(1)} V</span>
-                    <span className={tc.textMuted}>U_L3-L1:</span>
-                    <span>{(nodeResult.voltageL3L1V ?? 0).toFixed(1)} V</span>
-                  </div>
-                </div>
-              </>
-            )}
-            <span className={tc.textMuted}>Status:</span>
-            <span
-              className={
-                nodeResult.energized
-                  ? 'text-green-400 font-medium'
-                  : tc.textMuted
-              }
-            >
-              {nodeResult.energized ? 'ENERGIZED' : 'DE-ENERGIZED'}
-            </span>
-            {!nodeResult.energized && whyOffMessage && !hideWhyOffHint ? (
-              <div className="col-span-2 mt-1 rounded border border-amber-600/40 bg-amber-950/40 px-2 py-1.5 text-[11px] leading-snug text-amber-200">
-                <span className="font-semibold text-amber-400">Why off? </span>
-                {whyOffMessage}
-              </div>
-            ) : null}
-            {selectedComp?.type === 'air_circuit_breaker' && (
-              <>
-                <span className={tc.textMuted}>ACB overload ∫:</span>
-                <span>
-                  {(selectedComp.acbSimState?.thermalExcess ?? 0).toFixed(1)} /{' '}
-                  {selectedComp.properties.acbThermalTripIntegral ?? 80}
-                </span>
-                {(selectedComp.properties.acbBmsEnabled ?? false) &&
-                  (() => {
-                    const p = selectedComp.properties;
-                    const trip = selectedComp.state === 'tripped';
-                    const uvrOff = p.acbBmsUvrEnergized === false;
-                    const aux52a =
-                      !trip && selectedComp.state === 'on' && !uvrOff;
-                    const aux52b =
-                      selectedComp.state === 'off' || trip || uvrOff;
-                    const proto = p.acbBmsProtocol ?? 'none';
-                    return (
-                      <>
-                        <span className={tc.textMuted}>BMS 52a (closed):</span>
-                        <span
-                          className={
-                            aux52a ? 'text-green-400 font-medium' : tc.textMuted
-                          }
-                        >
-                          {aux52a ? 'HI' : 'LO'}
-                        </span>
-                        <span className={tc.textMuted}>BMS 52b (open):</span>
-                        <span
-                          className={
-                            aux52b ? 'text-amber-400 font-medium' : tc.textMuted
-                          }
-                        >
-                          {aux52b ? 'HI' : 'LO'}
-                        </span>
-                        <span className={tc.textMuted}>BMS TRIP:</span>
-                        <span
-                          className={
-                            trip ? 'text-red-400 font-medium' : tc.textMuted
-                          }
-                        >
-                          {trip ? 'HI' : 'LO'}
-                        </span>
-                        <span className={tc.textMuted}>BMS bus:</span>
-                        <span className={tc.textMuted}>
-                          {proto === 'none' ? '—' : proto.replace(/_/g, ' ')}
-                        </span>
-                      </>
-                    );
-                  })()}
-              </>
-            )}
-            {(selectedComp?.type === 'motorized_mccb' ||
-              selectedComp?.type === 'four_pole_motorized_mccb') &&
-              (selectedComp.properties.mccbBmsEnabled ?? false) &&
-              (() => {
-                const p = selectedComp.properties;
-                const trip = selectedComp.state === 'tripped';
-                const interlockOpen =
-                  p.mccbBmsCtrlVoltageOk === false ||
-                  p.mccbBmsMotorReady === false;
-                const closed =
-                  selectedComp.state === 'on' && !trip && !interlockOpen;
-                const auxNoHi = closed;
-                const auxNcHi = !closed;
-                const tripDiHi = trip;
-                const proto = p.mccbBmsProtocol ?? 'none';
-                return (
-                  <>
-                    <span className={tc.textMuted}>BMS AUX NO (closed):</span>
-                    <span
-                      className={
-                        auxNoHi ? 'text-green-400 font-medium' : tc.textMuted
-                      }
-                    >
-                      {auxNoHi ? 'HI' : 'LO'}
-                    </span>
-                    <span className={tc.textMuted}>BMS AUX NC:</span>
-                    <span
-                      className={
-                        auxNcHi ? 'text-amber-400 font-medium' : tc.textMuted
-                      }
-                    >
-                      {auxNcHi ? 'HI' : 'LO'}
-                    </span>
-                    <span className={tc.textMuted}>BMS TRIP:</span>
-                    <span
-                      className={
-                        tripDiHi ? 'text-red-400 font-medium' : tc.textMuted
-                      }
-                    >
-                      {tripDiHi ? 'HI' : 'LO'}
-                    </span>
-                    <span className={tc.textMuted}>BMS bus:</span>
-                    <span className={tc.textMuted}>
-                      {proto === 'none' ? '—' : proto.replace(/_/g, ' ')}
-                    </span>
-                  </>
-                );
-              })()}
-          </div>
-        </div>
-      )}
     </div>
     </PropertyPanelProvider>
   );

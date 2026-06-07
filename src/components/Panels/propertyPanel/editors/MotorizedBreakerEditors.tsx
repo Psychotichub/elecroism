@@ -20,7 +20,7 @@ export const renderMultipoleMcbProps = () => {
               key={v}
               type="button"
               onClick={() => updateProp({ lineVoltage: v })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp.properties.lineVoltage ?? 400) === v
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -54,7 +54,7 @@ export const renderMotorizedMccbProps = () => {
               key={v}
               type="button"
               onClick={() => updateProp({ lineVoltage: v })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp.properties.lineVoltage ?? 400) === v
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -66,10 +66,10 @@ export const renderMotorizedMccbProps = () => {
         </div>
       </Label>
       <div className={`rounded border ${tc.border} p-2 space-y-2`}>
-        <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+        <p className={`es-typo-caption font-semibold ${tc.textBright}`}>
           BMS (motor ON / shunt / aux / trip)
         </p>
-        <p className={`text-[9px] ${tc.textMuted} leading-snug`}>
+        <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
           Wire the <strong>power</strong> poles (1–6) like a 3P MCB.
           On the <strong>left</strong> of the symbol: MOT_A1/A2 (motor close),
           ST_A1/A2 (shunt trip), AUX_COM / AUX_NO / AUX_NC (status changeover),
@@ -78,7 +78,7 @@ export const renderMotorizedMccbProps = () => {
           as-built tags.
         </p>
         <Label text="BMS enabled">
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <label className="flex items-center gap-2 es-typo-body cursor-pointer">
             <input
               type="checkbox"
               checked={selectedComp.properties.mccbBmsEnabled ?? false}
@@ -109,7 +109,7 @@ export const renderMotorizedMccbProps = () => {
               </select>
             </Label>
             <Label text="Control supply present">
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <label className="flex items-center gap-2 es-typo-body cursor-pointer">
                 <input
                   type="checkbox"
                   checked={
@@ -141,7 +141,7 @@ export const renderMotorizedMccbProps = () => {
               </label>
             </Label>
             <Label text="Mechanism ready (spring / motor ready)">
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <label className="flex items-center gap-2 es-typo-body cursor-pointer">
                 <input
                   type="checkbox"
                   checked={
@@ -160,20 +160,20 @@ export const renderMotorizedMccbProps = () => {
               <button
                 type="button"
                 onClick={() => mccbBmsMotorClosePulse(selectedComp.id)}
-                className="w-full px-2 py-1.5 rounded text-xs font-medium bg-emerald-700 text-white hover:bg-emerald-600"
+                className="w-full px-2 py-1.5 rounded es-typo-body font-medium bg-emerald-700 text-white hover:bg-emerald-600"
               >
                 BMS DO — motor close (remote ON)
               </button>
               <button
                 type="button"
                 onClick={() => mccbBmsShuntOpen(selectedComp.id)}
-                className="w-full px-2 py-1.5 rounded text-xs font-medium bg-amber-700 text-white hover:bg-amber-600"
+                className="w-full px-2 py-1.5 rounded es-typo-body font-medium bg-amber-700 text-white hover:bg-amber-600"
               >
                 BMS DO — shunt trip (remote OFF)
               </button>
             </div>
             <div className={`space-y-2 rounded border ${tc.border} bg-black/10 p-2`}>
-              <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+              <p className={`es-typo-caption font-semibold ${tc.textBright}`}>
                 Panel schedule — control wiring
               </p>
               <Label text="Control supply">
@@ -257,11 +257,11 @@ export const renderMotorizedMccbProps = () => {
                   />
                 </Label>
               </div>
-              <p className={`text-[9px] ${tc.textMuted}`}>
+              <p className={`es-typo-caption ${tc.textMuted}`}>
                 Use interposing relays per manufacturer — do not land BMS DOs
                 directly on motor or shunt coils.
               </p>
-              <div className="grid grid-cols-1 gap-1 text-[9px]">
+              <div className="grid grid-cols-1 gap-1 es-typo-caption">
                 <Label text="BMS DO tags">
                   <div className="flex gap-1">
                     <input
@@ -395,7 +395,7 @@ export const renderMotorizedMccbProps = () => {
                 return (
                   <div className="overflow-x-auto">
                     <table
-                      className={`w-full text-left text-[9px] border-collapse ${tc.text}`}
+                      className={`w-full text-left es-typo-caption border-collapse ${tc.text}`}
                     >
                       <thead>
                         <tr className={tc.textMuted}>
@@ -429,7 +429,7 @@ export const renderMotorizedMccbProps = () => {
                   </div>
                 );
               })()}
-              <p className={`text-[9px] ${tc.textMuted} leading-snug`}>
+              <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
                 Motor is pulsed to close; shunt is energised to trip. Thermal /
                 magnetic protection still trips the MCCB independently of BMS.
               </p>
@@ -462,10 +462,10 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
         </select>
       </Label>
       <div className={`rounded border ${tc.border} p-2 space-y-2`}>
-        <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+        <p className={`es-typo-caption font-semibold ${tc.textBright}`}>
           BMS (CC / shunt / UVR / aux)
         </p>
-        <p className={`text-[9px] ${tc.textMuted} leading-snug`}>
+        <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
           Wiring: choose the Wire tool, then click the terminals on the ACB.
           Main power stays on the pole terminals (1–8). BMS control uses
           the extra terminals on the left of the symbol: CC_A1/A2, ST_A1/A2,
@@ -475,7 +475,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
           close/open and the table below for as-built labels.
         </p>
         <Label text="BMS motor pack">
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <label className="flex items-center gap-2 es-typo-body cursor-pointer">
             <input
               type="checkbox"
               checked={selectedComp!.properties.acbBmsEnabled ?? false}
@@ -506,7 +506,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
               </select>
             </Label>
             <Label text="UVR energized (must hold to close)">
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <label className="flex items-center gap-2 es-typo-body cursor-pointer">
                 <input
                   type="checkbox"
                   checked={
@@ -538,7 +538,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
               </label>
             </Label>
             <Label text="Spring charged (motor)">
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <label className="flex items-center gap-2 es-typo-body cursor-pointer">
                 <input
                   type="checkbox"
                   checked={
@@ -555,20 +555,20 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
               <button
                 type="button"
                 onClick={() => acbBmsClosePulse(selectedComp!.id)}
-                className="w-full px-2 py-1.5 rounded text-xs font-medium bg-emerald-700 text-white hover:bg-emerald-600"
+                className="w-full px-2 py-1.5 rounded es-typo-body font-medium bg-emerald-700 text-white hover:bg-emerald-600"
               >
                 BMS DO — closing coil (CC pulse)
               </button>
               <button
                 type="button"
                 onClick={() => acbBmsShuntOpen(selectedComp!.id)}
-                className="w-full px-2 py-1.5 rounded text-xs font-medium bg-amber-700 text-white hover:bg-amber-600"
+                className="w-full px-2 py-1.5 rounded es-typo-body font-medium bg-amber-700 text-white hover:bg-amber-600"
               >
                 BMS DO — shunt trip (remote OFF)
               </button>
             </div>
             <div className={`space-y-2 rounded border ${tc.border} bg-black/10 p-2`}>
-              <p className={`text-[10px] font-semibold ${tc.textBright}`}>
+              <p className={`es-typo-caption font-semibold ${tc.textBright}`}>
                 Panel schedule — control wiring (as-built)
               </p>
               <Label text="Control supply">
@@ -652,13 +652,13 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
                   />
                 </Label>
               </div>
-              <p className={`text-[9px] ${tc.textMuted}`}>
+              <p className={`es-typo-caption ${tc.textMuted}`}>
                 Never land BMS DO directly on ACB coils — use NO contacts of{' '}
                 {selectedComp!.properties.acbRelayCcId ?? 'K1'} /{' '}
                 {selectedComp!.properties.acbRelayStId ?? 'K2'} per manufacturer
                 data sheet.
               </p>
-              <div className="grid grid-cols-1 gap-1 text-[9px]">
+              <div className="grid grid-cols-1 gap-1 es-typo-caption">
                 <Label text="BMS DO tags (labels)">
                   <div className="flex gap-1">
                     <input
@@ -787,7 +787,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
                 return (
                   <div className="overflow-x-auto">
                     <table
-                      className={`w-full text-left text-[9px] border-collapse ${tc.text}`}
+                      className={`w-full text-left es-typo-caption border-collapse ${tc.text}`}
                     >
                       <thead>
                         <tr className={tc.textMuted}>
@@ -821,7 +821,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
                   </div>
                 );
               })()}
-              <p className={`text-[9px] ${tc.textMuted} leading-snug`}>
+              <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
                 CC: short pulse only (≈0.5–1 s). Do not hold energised. Shunt:
                 energise to trip open. Trip unit (LSIG) operates independently
                 of BMS. Terminal lettering follows common IEC-style A1/A2
@@ -839,7 +839,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
               key={m}
               type="button"
               onClick={() => updateProp({ acbInstantaneousMult: m })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.acbInstantaneousMult ?? 10) === m
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -857,7 +857,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
               key={m}
               type="button"
               onClick={() => updateProp({ acbShortTimeMult: m })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.acbShortTimeMult ?? 6) === m
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -869,7 +869,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
         </div>
       </Label>
       <Label text="Earth-fault G">
-        <label className="flex items-center gap-2 text-xs cursor-pointer">
+        <label className="flex items-center gap-2 es-typo-body cursor-pointer">
           <input
             type="checkbox"
             checked={
@@ -906,7 +906,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
               key={f}
               type="button"
               onClick={() => updateProp({ acbLineFrequencyHz: f })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.acbLineFrequencyHz ?? 50) === f
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -969,7 +969,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
               key={b}
               type="button"
               onClick={() => updateProp({ breakingCapacity: b })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 selectedComp!.properties.breakingCapacity === b
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -987,7 +987,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
               key={v}
               type="button"
               onClick={() => updateProp({ lineVoltage: v })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.lineVoltage ?? 400) === v
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -998,7 +998,7 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
           ))}
         </div>
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Simulation: inverse-time long-time (∫ below ST pickup); definite
         short-time and earth delays; instantaneous pickup with ~½-cycle
         current-zero / arc-chute wording in trip text. Re-run simulation as
@@ -1008,14 +1008,14 @@ export const renderAirCircuitBreakerProps = () => { const { selectedComp, tc, up
         <button
           type="button"
           onClick={() => resetTripped(selectedComp!.id)}
-          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+          className="w-full px-3 py-2 bg-red-600 text-white rounded es-typo-body font-medium hover:bg-red-700"
         >
           RESET ACB
         </button>
       )}
       <Label text="State">
         <span
-          className={`text-xs font-medium ${
+          className={`es-typo-body font-medium ${
             selectedComp!.state === 'tripped'
               ? 'text-red-400'
               : selectedComp!.state === 'on'

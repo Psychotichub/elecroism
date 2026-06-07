@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiBook, FiChevronDown } from 'react-icons/fi';
+import { AppIcon } from '../ui';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import { useUiStore } from '../../store/uiStore';
+import CatalogMetaChips from '../Catalog/CatalogMetaChips';
 import { listGuidedTutorials } from '../../utils/guidedTutorials';
 
 const TutorialDropdown: React.FC<{ inactiveClassName: string }> = ({
@@ -13,6 +14,7 @@ const TutorialDropdown: React.FC<{ inactiveClassName: string }> = ({
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
   const clearCircuit = useCircuitStore((s) => s.clearCircuit);
+  const loadCircuit = useCircuitStore((s) => s.loadCircuit);
   const startTutorial = useUiStore((s) => s.startTutorial);
   const setLearningMode = useUiStore((s) => s.setLearningMode);
   const activeTutorialId = useUiStore((s) => s.activeTutorialId);
@@ -29,15 +31,19 @@ const TutorialDropdown: React.FC<{ inactiveClassName: string }> = ({
   }, [open]);
 
   const handleStart = useCallback(
-    (tutorialId: string, clearOnStart: boolean) => {
-      if (clearOnStart) {
+    (tutorialId: string) => {
+      const tutorial = listGuidedTutorials().find((t) => t.id === tutorialId);
+      if (!tutorial) return;
+      if (tutorial.initialCircuit) {
+        loadCircuit(tutorial.initialCircuit());
+      } else if (tutorial.clearOnStart) {
         clearCircuit();
       }
       setLearningMode(true);
       startTutorial(tutorialId);
       setOpen(false);
     },
-    [clearCircuit, setLearningMode, startTutorial]
+    [clearCircuit, loadCircuit, setLearningMode, startTutorial]
   );
 
   const grouped = listGuidedTutorials().reduce(
@@ -62,9 +68,13 @@ const TutorialDropdown: React.FC<{ inactiveClassName: string }> = ({
             : inactiveClassName
         }`}
       >
-        <FiBook aria-hidden />
+        <span className="es-icon-toolbar">
+          <AppIcon id="tutorial" />
+        </span>
         <span className="hidden lg:inline">Tutorials</span>
-        <FiChevronDown className="opacity-70" aria-hidden />
+        <span className="es-icon-inline opacity-70">
+          <AppIcon id="chevron-down" size="inline" />
+        </span>
       </button>
       {open && (
         <div
@@ -83,11 +93,19 @@ const TutorialDropdown: React.FC<{ inactiveClassName: string }> = ({
                   key={t.id}
                   type="button"
                   role="menuitem"
-                  onClick={() => handleStart(t.id, t.clearOnStart)}
+                  onClick={() => handleStart(t.id)}
                   className={`block w-full px-3 py-2 text-left text-xs ${tc.text} ${tc.itemHover} focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500`}
                 >
                   <span className="font-semibold">{t.title}</span>
-                  <span className={`mt-0.5 block text-[10px] ${tc.textMuted}`}>
+                  <CatalogMetaChips
+                    meta={{
+                      difficulty: t.difficulty,
+                      estimatedMinutes: t.estimatedMinutes,
+                      prerequisites: t.prerequisites,
+                    }}
+                    className="mt-1"
+                  />
+                  <span className={`mt-1 block text-[10px] ${tc.textMuted}`}>
                     {t.description}
                   </span>
                 </button>

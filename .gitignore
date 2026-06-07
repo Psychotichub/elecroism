@@ -13,6 +13,7 @@ dist-ssr
 coverage
 release
 *.local
+scripts/.sim-measure.json
 
 # Editor directories and files
 .vscode/*

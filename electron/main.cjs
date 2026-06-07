@@ -5,6 +5,14 @@ const {
   hardenWebContents,
 } = require("./security.cjs");
 const { setupAutoUpdater, promptInstallUpdate } = require("./updater.cjs");
+const {
+  setApplicationMenu,
+  showAboutDialog,
+  checkForUpdates,
+  setRecentMenuItems,
+  showOpenProjectDialog,
+  readProjectFile,
+} = require("./appMenu.cjs");
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
@@ -41,6 +49,7 @@ function createWindow() {
   }
 
   setupAutoUpdater(win);
+  setApplicationMenu(win, { isPackaged: app.isPackaged });
 }
 
 app.whenReady().then(() => {
@@ -56,7 +65,38 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle("show-about", async () => {
+    await showAboutDialog(mainWindow);
+  });
+
+  ipcMain.handle("check-for-updates", async () => {
+    await checkForUpdates(mainWindow, app.isPackaged);
+  });
+
+  ipcMain.handle("show-open-project-dialog", async () => {
+    return showOpenProjectDialog(mainWindow);
+  });
+
+  ipcMain.handle("read-project-file", async (_event, filePath) => {
+    if (typeof filePath !== "string" || !filePath) return null;
+    return readProjectFile(filePath);
+  });
+
+  ipcMain.on("sync-recent-menu", (_event, items) => {
+    setRecentMenuItems(items);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      setApplicationMenu(mainWindow, { isPackaged: app.isPackaged });
+    }
+  });
+
   createWindow();
+
+  app.on("open-file", (event, filePath) => {
+    event.preventDefault();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("open-project-path", filePath);
+    }
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

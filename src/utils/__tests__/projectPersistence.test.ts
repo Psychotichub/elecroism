@@ -27,6 +27,22 @@ describe('projectPersistence', () => {
     expect(loaded?.sheets[0].circuit.components).toHaveLength(1);
   });
 
+  it('round-trips project title block in file document', () => {
+    const project = createEmptyProject('Title block');
+    project.titleBlock = {
+      client: 'Client Co',
+      drawingNumber: 'DWG-1',
+      revision: 'A',
+      scale: '1:50',
+      revisionHistory: [
+        { revision: 'A', date: '2026-06-07', description: 'First issue' },
+      ],
+    };
+    const loaded = deserializeProjectFile(serializeProject(project));
+    expect(loaded?.titleBlock?.client).toBe('Client Co');
+    expect(loaded?.titleBlock?.revisionHistory).toHaveLength(1);
+  });
+
   it('imports legacy esim v1 documents', () => {
     const circuit = makeCircuit([makeComponent('mcb', { label: 'Q1' })], []);
     const legacy = {

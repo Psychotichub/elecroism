@@ -33,7 +33,7 @@ function buildContentSecurityPolicy(isDev) {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    "connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
     "worker-src 'self' blob:",
     "media-src 'self' blob:",
     "object-src 'none'",

@@ -9,7 +9,7 @@ const PqaLiveReadings: React.FC = () => {
 
   if (!node?.energized) {
     return (
-      <p className={`text-[10px] ${tc.textMuted}`}>
+      <p className={`es-typo-caption ${tc.textMuted}`}>
         Run simulation with the analyzer on a live 3φ + N feeder to read THD and
         neutral harmonic estimates.
       </p>
@@ -17,13 +17,13 @@ const PqaLiveReadings: React.FC = () => {
   }
 
   return (
-    <div className={`rounded border px-2 py-1.5 text-[10px] ${tc.border}`}>
+    <div className={`rounded border px-2 py-1.5 es-typo-caption ${tc.border}`}>
       <div className={`font-semibold ${tc.textBright}`}>Last simulation</div>
-      <div className="mt-1 tabular-nums">
+      <div className="mt-1 es-tabular-nums">
         Max THD:{' '}
         {(node.thdPercent ?? simulationResult?.powerQualityMaxThdPct ?? 0).toFixed(0)}%
       </div>
-      <div className="tabular-nums">
+      <div className="es-tabular-nums">
         Σ I_N (triplen est.):{' '}
         {(
           node.currentNeutralA ??

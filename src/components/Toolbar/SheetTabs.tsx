@@ -1,12 +1,13 @@
 import React, { useCallback, useState } from 'react';
-import { FiPlus, FiCopy, FiX } from 'react-icons/fi';
+import { AppIcon } from '../ui';
+import { cn } from '../ui/cn';
 import { useCircuitStore } from '../../store/circuitStore';
-import { useThemeStore, themeColors } from '../../store/themeStore';
+import { isSheetDirty } from '../../utils/sheetDirtyState';
 
 const SheetTabs: React.FC = () => {
-  const theme = useThemeStore((s) => s.theme);
-  const tc = themeColors[theme];
   const project = useCircuitStore((s) => s.project);
+  const circuit = useCircuitStore((s) => s.circuit);
+  const baselines = useCircuitStore((s) => s.sheetSaveBaselines);
   const switchProjectSheet = useCircuitStore((s) => s.switchProjectSheet);
   const addProjectSheet = useCircuitStore((s) => s.addProjectSheet);
   const duplicateProjectSheet = useCircuitStore((s) => s.duplicateProjectSheet);
@@ -31,80 +32,93 @@ const SheetTabs: React.FC = () => {
   }, [renamingId, renameValue, renameProjectSheet]);
 
   return (
-    <div
-      className={`flex h-8 shrink-0 items-center gap-0.5 border-b px-2 ${tc.border} ${tc.toolbar}`}
-    >
-      <span
-        className={`mr-1 hidden text-[10px] font-semibold uppercase tracking-wide sm:inline ${tc.textMuted}`}
-      >
-        {project.name}
-      </span>
-      {sheets.map((sheet) => {
-        const active = sheet.id === project.activeSheetId;
-        return (
-          <div
-            key={sheet.id}
-            className={`group flex max-w-[140px] items-center rounded-t border px-1.5 text-xs transition-colors ${
-              active
-                ? 'border-b-0 bg-blue-600 text-white border-blue-600'
-                : `${tc.border} ${tc.btnText} ${tc.itemHover}`
-            }`}
-          >
-            {renamingId === sheet.id ? (
-              <input
-                type="text"
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onBlur={commitRename}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitRename();
-                  if (e.key === 'Escape') setRenamingId(null);
-                }}
-                className="w-full min-w-0 bg-transparent text-xs outline-none"
-                autoFocus
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => switchProjectSheet(sheet.id)}
-                onDoubleClick={() => startRename(sheet.id, sheet.name)}
-                className="truncate py-1 pr-0.5 text-left"
-                title={`${sheet.name} (double-click to rename)`}
-              >
-                {sheet.name}
-              </button>
-            )}
-            {sheets.length > 1 ? (
-              <button
-                type="button"
-                onClick={() => removeProjectSheet(sheet.id)}
-                className={`shrink-0 rounded p-0.5 opacity-60 hover:opacity-100 ${
-                  active ? 'hover:bg-blue-500' : tc.itemHover
-                }`}
-                title="Remove sheet"
-              >
-                <FiX size={12} />
-              </button>
-            ) : null}
-          </div>
-        );
-      })}
-      <button
-        type="button"
-        onClick={() => addProjectSheet()}
-        className={`rounded p-1 ${tc.btnText} ${tc.itemHover}`}
-        title="Add sheet"
-      >
-        <FiPlus size={14} />
-      </button>
-      <button
-        type="button"
-        onClick={() => duplicateProjectSheet(project.activeSheetId)}
-        className={`rounded p-1 ${tc.btnText} ${tc.itemHover}`}
-        title="Duplicate active sheet"
-      >
-        <FiCopy size={14} />
-      </button>
+    <div className="es-sheet-tabs">
+      <div className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto px-2 pt-1">
+        {sheets.map((sheet) => {
+          const active = sheet.id === project.activeSheetId;
+          const dirty = isSheetDirty(
+            sheet.id,
+            project,
+            circuit,
+            baselines
+          );
+          return (
+            <div
+              key={sheet.id}
+              className={cn(
+                'group flex max-w-[9.5rem] shrink-0 items-center rounded-t-es-sm border border-b-0 px-1.5 es-typo-body-sm transition-colors duration-[var(--es-motion-fast)] motion-reduce:transition-none',
+                active
+                  ? 'es-sheet-tab-active -mb-px z-[1]'
+                  : 'es-sheet-tab-inactive'
+              )}
+            >
+              {dirty ? (
+                <span
+                  className="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-es-warning"
+                  title="Unsaved changes"
+                  aria-label="Unsaved changes"
+                />
+              ) : null}
+              {renamingId === sheet.id ? (
+                <input
+                  type="text"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitRename();
+                    if (e.key === 'Escape') setRenamingId(null);
+                  }}
+                  className="w-full min-w-0 bg-transparent outline-none es-focus-ring"
+                  autoFocus
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => switchProjectSheet(sheet.id)}
+                  onDoubleClick={() => startRename(sheet.id, sheet.name)}
+                  className="min-w-0 truncate py-1 pr-0.5 text-left es-focus-ring"
+                  title={`${sheet.name} (double-click to rename)`}
+                >
+                  {sheet.name}
+                </button>
+              )}
+              {sheets.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => removeProjectSheet(sheet.id)}
+                  className="shrink-0 rounded-es-sm p-0.5 text-es-secondary opacity-60 transition-opacity hover:opacity-100 es-focus-ring hover:bg-es-hover"
+                  title="Remove sheet"
+                >
+                  <AppIcon id="close" size="inline" />
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5 px-2">
+        <button
+          type="button"
+          onClick={() => addProjectSheet()}
+          className="rounded-es-sm p-1 text-es-secondary es-focus-ring hover:bg-es-hover hover:text-es-primary"
+          title="Add sheet"
+        >
+          <span className="es-icon-toolbar">
+            <AppIcon id="add" />
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => duplicateProjectSheet(project.activeSheetId)}
+          className="rounded-es-sm p-1 text-es-secondary es-focus-ring hover:bg-es-hover hover:text-es-primary"
+          title="Duplicate active sheet"
+        >
+          <span className="es-icon-inline">
+            <AppIcon id="copy" size="inline" />
+          </span>
+        </button>
+      </div>
     </div>
   );
 };

@@ -5,10 +5,8 @@ export const Label: React.FC<{
   text: string;
   children: React.ReactNode;
 }> = ({ text, children }) => (
-  <div className="space-y-1">
-    <label className="text-[11px] text-gray-500 uppercase tracking-wider">
-      {text}
-    </label>
+  <div className="es-form-field">
+    <label className="es-typo-label uppercase text-es-label">{text}</label>
     <div>{children}</div>
   </div>
 );

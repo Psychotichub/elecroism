@@ -679,6 +679,14 @@ export const COMPONENT_PANEL_DESCRIPTIONS = {
   },
 } satisfies Record<ComponentType, ComponentPanelDescription>;
 
+export function getComponentPanelDescription(
+  type: ComponentType
+): ComponentPanelDescription | undefined {
+  const descriptions: Record<string, ComponentPanelDescription> =
+    COMPONENT_PANEL_DESCRIPTIONS;
+  return Object.hasOwn(descriptions, type) ? descriptions[type] : undefined;
+}
+
 export const WIRE_PANEL_DESCRIPTION: ComponentPanelDescription = {
   displayName: 'Wire segment',
   description:

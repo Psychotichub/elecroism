@@ -1,0 +1,116 @@
+/**
+ * ElectroSim design tokens — set per theme on the app root (`data-theme`).
+ * Tailwind maps these via `tailwind.config.js` (`es-*` colours).
+ */
+
+:root {
+  --es-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --es-radius-sm: 4px;
+  --es-radius-md: 6px;
+  --es-radius-lg: 8px;
+  --es-shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --es-motion-fast: 100ms;
+  --es-motion-normal: 150ms;
+  --es-motion-slow: 300ms;
+}
+
+[data-theme='dark'] {
+  --es-surface-app: #111118;
+  --es-surface-canvas: #1a1d24;
+  --es-surface-chrome-1: #16161e;
+  --es-surface-chrome-2: #1e1e2a;
+  --es-surface-raised: #252532;
+  --es-border-subtle: rgba(255, 255, 255, 0.08);
+  --es-border-strong: rgba(255, 255, 255, 0.16);
+  --es-text-primary: #e8eaed;
+  --es-text-secondary: #9aa0a6;
+  --es-text-bright: #ffffff;
+  --es-text-label: #a0a8b8;
+  --es-hover-overlay: rgba(255, 255, 255, 0.06);
+  --es-accent: #3b82f6;
+  --es-accent-muted: rgba(59, 130, 246, 0.18);
+  --es-accent-foreground: #ffffff;
+  --es-semantic-success: #34d399;
+  --es-semantic-warning: #fbbf24;
+  --es-semantic-error: #f87171;
+  --es-semantic-learning: #f59e0b;
+  --es-input-bg: #1a1d24;
+  --es-input-border: rgba(255, 255, 255, 0.14);
+  --es-btn-secondary-bg: #2a2a38;
+  --es-btn-secondary-hover: #353545;
+  --es-scroll-track: #16161e;
+  --es-scroll-thumb: #3d4450;
+  --es-scroll-thumb-hover: #4b5563;
+  --es-grid-dot: #4b5563;
+  --es-divider: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='light'] {
+  --es-surface-app: #e8eaef;
+  --es-surface-canvas: #f4f5f7;
+  --es-surface-chrome-1: #ffffff;
+  --es-surface-chrome-2: #ffffff;
+  --es-surface-raised: #ffffff;
+  --es-border-subtle: rgba(15, 23, 42, 0.1);
+  --es-border-strong: rgba(15, 23, 42, 0.18);
+  --es-text-primary: #334155;
+  --es-text-secondary: #64748b;
+  --es-text-bright: #0f172a;
+  --es-text-label: #64748b;
+  --es-hover-overlay: rgba(15, 23, 42, 0.05);
+  --es-accent: #2563eb;
+  --es-accent-muted: rgba(37, 99, 235, 0.12);
+  --es-accent-foreground: #ffffff;
+  --es-semantic-success: #059669;
+  --es-semantic-warning: #d97706;
+  --es-semantic-error: #dc2626;
+  --es-semantic-learning: #d97706;
+  --es-input-bg: #f8fafc;
+  --es-input-border: rgba(15, 23, 42, 0.15);
+  --es-btn-secondary-bg: #e2e8f0;
+  --es-btn-secondary-hover: #cbd5e1;
+  --es-scroll-track: #f1f5f9;
+  --es-scroll-thumb: #cbd5e1;
+  --es-scroll-thumb-hover: #94a3b8;
+  --es-grid-dot: #d1d5db;
+  --es-divider: rgba(15, 23, 42, 0.12);
+}
+
+[data-theme='high-contrast'] {
+  --es-surface-app: #000000;
+  --es-surface-canvas: #000000;
+  --es-surface-chrome-1: #000000;
+  --es-surface-chrome-2: #000000;
+  --es-surface-raised: #0a0a0a;
+  --es-border-subtle: #ffff00;
+  --es-border-strong: #ffffff;
+  --es-text-primary: #ffffff;
+  --es-text-secondary: #ffffcc;
+  --es-text-bright: #ffff00;
+  --es-text-label: #ffff00;
+  --es-hover-overlay: rgba(255, 255, 0, 0.15);
+  --es-accent: #ffff00;
+  --es-accent-muted: rgba(255, 255, 0, 0.2);
+  --es-accent-foreground: #000000;
+  --es-semantic-success: #00ff00;
+  --es-semantic-warning: #ffff00;
+  --es-semantic-error: #ff4444;
+  --es-semantic-learning: #ffaa00;
+  --es-input-bg: #000000;
+  --es-input-border: #ffff00;
+  --es-btn-secondary-bg: #ffff00;
+  --es-btn-secondary-hover: #ffffff;
+  --es-scroll-track: #000000;
+  --es-scroll-thumb: #ffff00;
+  --es-scroll-thumb-hover: #ffffff;
+  --es-grid-dot: #ffffff;
+  --es-divider: #ffff00;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --es-motion-fast: 0ms;
+    --es-motion-normal: 0ms;
+    --es-motion-slow: 0ms;
+  }
+}

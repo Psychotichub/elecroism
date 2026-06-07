@@ -5,42 +5,60 @@ import BmsSimulatorPanel from './BmsSimulatorPanel';
 import CableSizingWizardPanel from './CableSizingWizardPanel';
 import TccPlotterPanel from './TccPlotterPanel';
 import OscilloscopePanel from './OscilloscopePanel';
+import DrawingLayersPanel from './DrawingLayersPanel';
+import GlossaryLegendPanel from './GlossaryLegendPanel';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import { runCircuitDesignValidation } from '../../utils/circuitDesignValidation';
+import { getInspectorSelectionSummary } from '../../utils/inspectorSelectionSummary';
+import { MOTION_CLASS } from '../../design/motion';
+import { Tabs, type TabItem } from '../ui';
 
 const TAB_KEY = 'electroism.inspectorTab.v1';
+const COMPACT_TABLIST_WIDTH = 320;
 
-type TabId = 'properties' | 'validation' | 'tcc' | 'scope' | 'bms' | 'cable';
+type TabId =
+  | 'properties'
+  | 'layers'
+  | 'validation'
+  | 'tcc'
+  | 'scope'
+  | 'bms'
+  | 'cable'
+  | 'legend';
 
-const TABS: { id: TabId; label: string }[] = [
+const PRIMARY_TAB_DEFINITIONS: { id: TabId; label: string }[] = [
   { id: 'properties', label: 'Properties' },
   { id: 'validation', label: 'Validation' },
+  { id: 'layers', label: 'Layers' },
+];
+
+const OVERFLOW_TAB_DEFINITIONS: { id: TabId; label: string }[] = [
   { id: 'tcc', label: 'TCC' },
   { id: 'scope', label: 'Scope' },
   { id: 'bms', label: 'BMS sim' },
   { id: 'cable', label: 'Cable' },
+  { id: 'legend', label: 'Legend' },
+];
+
+const ALL_TAB_DEFINITIONS = [
+  ...PRIMARY_TAB_DEFINITIONS,
+  ...OVERFLOW_TAB_DEFINITIONS,
 ];
 
 const InspectorColumn: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
   const circuit = useCircuitStore((s) => s.circuit);
+  const selectedId = useCircuitStore((s) => s.selectedId);
   const simulationResult = useCircuitStore((s) => s.simulationResult);
   const tablistRef = useRef<HTMLDivElement>(null);
+  const [compactTabs, setCompactTabs] = useState(false);
 
   const [tab, setTab] = useState<TabId>(() => {
     try {
       const v = window.localStorage.getItem(TAB_KEY);
-      if (
-        v === 'validation' ||
-        v === 'tcc' ||
-        v === 'scope' ||
-        v === 'bms' ||
-        v === 'cable'
-      ) {
-        return v;
-      }
+      if (ALL_TAB_DEFINITIONS.some((t) => t.id === v)) return v as TabId;
       return 'properties';
     } catch {
       return 'properties';
@@ -55,45 +73,98 @@ const InspectorColumn: React.FC = () => {
     }
   }, [tab]);
 
+  useEffect(() => {
+    const node = tablistRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? node.clientWidth;
+      setCompactTabs(width < COMPACT_TABLIST_WIDTH);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const warnCount = React.useMemo(() => {
     return runCircuitDesignValidation(circuit, simulationResult).filter(
       (i) => i.severity === 'warning' || i.severity === 'error'
     ).length;
   }, [circuit, simulationResult]);
 
+  const selectionSummary = React.useMemo(
+    () => getInspectorSelectionSummary(circuit, selectedId),
+    [circuit, selectedId]
+  );
+
+  const mapTabItems = React.useCallback(
+    (defs: { id: TabId; label: string }[]): TabItem<TabId>[] =>
+      defs.map((t) => {
+        if (t.id === 'validation') {
+          return {
+            ...t,
+            badge: warnCount,
+            badgeVariant: 'warning' as const,
+            badgeBumpKey: warnCount,
+          };
+        }
+        if (t.id === 'properties' && selectionSummary) {
+          return { ...t, compactLabel: selectionSummary };
+        }
+        return t;
+      }),
+    [warnCount, selectionSummary]
+  );
+
+  const primaryTabItems = React.useMemo(
+    () => mapTabItems(PRIMARY_TAB_DEFINITIONS),
+    [mapTabItems]
+  );
+
+  const overflowTabItems = React.useMemo(
+    () => mapTabItems(OVERFLOW_TAB_DEFINITIONS),
+    [mapTabItems]
+  );
+
   const focusTabButton = (id: TabId) => {
+    if (OVERFLOW_TAB_DEFINITIONS.some((t) => t.id === id)) {
+      tablistRef.current
+        ?.querySelector<HTMLButtonElement>('[data-testid="tab-overflow-trigger"]')
+        ?.focus();
+      return;
+    }
     tablistRef.current
-      ?.querySelector<HTMLButtonElement>(`[data-tab-id="${id}"]`)
+      ?.querySelector<HTMLButtonElement>(`#tab-${id}`)
       ?.focus();
   };
 
   const onTabKeyDown = (e: React.KeyboardEvent, id: TabId) => {
-    const idx = TABS.findIndex((t) => t.id === id);
+    const idx = ALL_TAB_DEFINITIONS.findIndex((t) => t.id === id);
     if (idx < 0) return;
     if (e.key === 'ArrowRight') {
       e.preventDefault();
-      const next = TABS[(idx + 1) % TABS.length];
+      const next = ALL_TAB_DEFINITIONS[(idx + 1) % ALL_TAB_DEFINITIONS.length];
       if (next) {
         setTab(next.id);
         focusTabButton(next.id);
       }
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      const next = TABS[(idx - 1 + TABS.length) % TABS.length];
+      const next =
+        ALL_TAB_DEFINITIONS[(idx - 1 + ALL_TAB_DEFINITIONS.length) %
+          ALL_TAB_DEFINITIONS.length];
       if (next) {
         setTab(next.id);
         focusTabButton(next.id);
       }
     } else if (e.key === 'Home') {
       e.preventDefault();
-      const first = TABS[0];
+      const first = ALL_TAB_DEFINITIONS[0];
       if (first) {
         setTab(first.id);
         focusTabButton(first.id);
       }
     } else if (e.key === 'End') {
       e.preventDefault();
-      const last = TABS[TABS.length - 1];
+      const last = ALL_TAB_DEFINITIONS[ALL_TAB_DEFINITIONS.length - 1];
       if (last) {
         setTab(last.id);
         focusTabButton(last.id);
@@ -101,63 +172,38 @@ const InspectorColumn: React.FC = () => {
     }
   };
 
-  const tabBtn = (id: TabId, label: string, badge?: number) => (
-    <button
-      type="button"
-      role="tab"
-      id={`inspector-tab-${id}`}
-      data-tab-id={id}
-      aria-selected={tab === id}
-      aria-controls={`inspector-panel-${id}`}
-      tabIndex={tab === id ? 0 : -1}
-      onClick={() => setTab(id)}
-      onKeyDown={(e) => onTabKeyDown(e, id)}
-      className={`relative flex-1 px-2 py-2 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-        tab === id
-          ? `${tc.textBright} border-b-2 border-blue-500`
-          : `${tc.textMuted} border-b-2 border-transparent hover:opacity-90`
-      }`}
-    >
-      {label}
-      {id === 'validation' && badge !== undefined && badge > 0 ? (
-        <span
-          className="absolute right-1 top-1 min-w-[1rem] rounded-full bg-amber-600 px-1 text-center text-[9px] font-bold leading-4 text-white"
-          aria-label={`${badge} warnings or errors`}
-        >
-          {badge > 9 ? '9+' : badge}
-        </span>
-      ) : null}
-    </button>
-  );
-
-  const panelId = `inspector-panel-${tab}`;
-
   return (
     <div
       id="inspector-panel-root"
-      className={`flex h-full min-h-0 w-80 shrink-0 flex-col border-l ${tc.border} ${tc.panel}`}
+      className={`flex h-full min-h-0 w-full min-w-0 shrink-0 flex-col ${tc.panel}`}
     >
-      <div
-        ref={tablistRef}
-        role="tablist"
-        aria-label="Inspector panels"
-        className={`flex shrink-0 border-b ${tc.border}`}
-      >
-        {tabBtn('properties', 'Properties')}
-        {tabBtn('validation', 'Validation', warnCount)}
-        {tabBtn('tcc', 'TCC')}
-        {tabBtn('scope', 'Scope')}
-        {tabBtn('bms', 'BMS sim')}
-        {tabBtn('cable', 'Cable')}
+      <div ref={tablistRef}>
+        <Tabs
+          items={primaryTabItems}
+          overflowItems={overflowTabItems}
+          overflowMenuLabel="Analysis"
+          value={tab}
+          onChange={setTab}
+          ariaLabel="Inspector panels"
+          onTabKeyDown={onTabKeyDown}
+          compact={compactTabs}
+        />
       </div>
       <div
-        id={panelId}
+        key={tab}
+        id={`panel-${tab}`}
         role="tabpanel"
-        aria-labelledby={`inspector-tab-${tab}`}
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        aria-labelledby={
+          OVERFLOW_TAB_DEFINITIONS.some((t) => t.id === tab)
+            ? 'tab-overflow-trigger'
+            : `tab-${tab}`
+        }
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden ${MOTION_CLASS.tabCrossfade}`}
       >
         {tab === 'properties' ? (
           <PropertyPanel />
+        ) : tab === 'layers' ? (
+          <DrawingLayersPanel />
         ) : tab === 'validation' ? (
           <CircuitValidationPanel />
         ) : tab === 'tcc' ? (
@@ -166,6 +212,8 @@ const InspectorColumn: React.FC = () => {
           <OscilloscopePanel />
         ) : tab === 'cable' ? (
           <CableSizingWizardPanel />
+        ) : tab === 'legend' ? (
+          <GlossaryLegendPanel />
         ) : (
           <BmsSimulatorPanel />
         )}

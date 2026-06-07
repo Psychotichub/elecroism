@@ -121,7 +121,9 @@ export type ComponentType =
   | 'power_cables'
   | 'ms_gi_sheet_enclosure'
   | 'ip_rated_enclosure'
-  | 'power_quality_analyzer';
+  | 'power_quality_analyzer'
+  /** JSON-defined extension component (see plugin manifest). */
+  | 'plugin_component';
 
 export type ComponentState = 'on' | 'off' | 'tripped' | 'fault';
 
@@ -138,6 +140,9 @@ export type WireColor =
  * Layer-like drawing style for wires (documentation / readability).
  * Distinct from `wireCategory` (power/control/comm) used with the engine.
  */
+/** Schematic drawing layer for visibility, lock, and export filtering. */
+export type DrawingLayerId = 'power' | 'control' | 'instrumentation';
+
 export type WireStyleLayer =
   | 'power_ac'
   | 'power_dc'
@@ -186,11 +191,25 @@ export interface CircuitComponent {
   selected: boolean;
   connectionPoints: ConnectionPoint[];
   properties: ComponentProperties;
+  /** Drawing layer assignment; inferred from type when omitted. */
+  drawingLayer?: DrawingLayerId;
   /** Runtime integration for ACB time-current behaviour (cloned with circuit on simulate) */
   acbSimState?: AcbSimState;
 }
 
 export interface ComponentProperties {
+  /** Plugin manifest id when `type` is `plugin_component`. */
+  pluginId?: string;
+  pluginTypeId?: string;
+  /** Cached simulation model from plugin manifest (sandboxed JSON). */
+  pluginSimModel?: 'pass_through' | 'resistive_load' | 'open';
+  pluginSimLiveTerminal?: string;
+  pluginSimNeutralTerminal?: string;
+  pluginSimPowerProperty?: string;
+  /** Comma-separated conducting states for pass_through. */
+  pluginSimConductingStates?: string;
+  /** Free-form notes used by plugin property fields. */
+  notes?: string;
   switchType?: 'SPST' | 'SPDT' | 'DPST' | 'DPDT';
   poles?: number;
 
@@ -429,6 +448,8 @@ export interface ComponentProperties {
   labelOffsetX?: number;
   labelOffsetY?: number;
   labelFontSize?: number;
+  /** Off-page / cross-sheet navigation target (e.g. `=Sheet2!Q1`). */
+  crossSheetRef?: string;
 }
 
 /** Merged into `ComponentProperties` (declaration merge) for AC→DC converter faceplate fields. */
@@ -499,6 +520,8 @@ export interface Wire {
   destinationTag?: string;
   /** Layer-like stroke preset (color, width, dash). When set, overrides plain conductor look. */
   styleLayer?: WireStyleLayer;
+  /** Drawing layer assignment; inferred from style/category when omitted. */
+  drawingLayer?: DrawingLayerId;
   /** Persisted cable-sizing wizard result for schedule export. */
   cableSizing?: WireCableSizing;
 }
@@ -586,9 +609,39 @@ export interface Circuit {
   drawnBy?: string;
   /** Title block: checker initials / name. */
   checkedBy?: string;
+  /** Title block: approver / issue authority. */
+  approvedBy?: string;
+  /** Title block: scale label (e.g. `1:50`). */
+  drawingScale?: string;
+  /** Per-sheet revision log (mirrors project title block when synced). */
+  revisionHistory?: import('./project').RevisionHistoryEntry[];
   /** Multi-sheet export definitions; empty = single full-drawing sheet. */
   drawingSheets?: DrawingSheet[];
+  /** Canvas review comment threads pinned to components or coordinates. */
+  reviewComments?: ReviewCommentThread[];
 }
+
+export type ReviewCommentStatus = 'open' | 'resolved';
+
+export type ReviewCommentMessage = {
+  id: string;
+  body: string;
+  author?: string;
+  createdAt: string;
+};
+
+export type ReviewCommentThread = {
+  id: string;
+  anchorType: 'component' | 'point';
+  componentId?: string;
+  worldX: number;
+  worldY: number;
+  status: ReviewCommentStatus;
+  createdAt: string;
+  updatedAt: string;
+  author?: string;
+  messages: ReviewCommentMessage[];
+};
 
 export interface NodeResult {
   nodeId: string;

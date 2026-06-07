@@ -15,6 +15,11 @@ import {
 import { downloadCableScheduleCsv } from '../../utils/cableScheduleExport';
 import { FiCheck, FiX, FiZap, FiArrowRight } from 'react-icons/fi';
 import { wireLengthMeters } from '../../simulation/cableImpedance';
+import {
+  Button,
+  PanelDataTable,
+  PanelExportFooter,
+} from '../ui';
 
 // ---------------------------------------------------------------------------
 // Storage key for sticky wizard defaults
@@ -505,93 +510,6 @@ const CableSizingWizardPanel: React.FC = () => {
           )}
         </div>
 
-        {/* ─── Apply to wire ─── */}
-        {result.recommended && (
-          <div
-            className={`rounded-md border p-2.5 space-y-2 ${tc.border} ${
-              theme === 'dark' ? 'bg-black/20' : 'bg-gray-50'
-            }`}
-          >
-            <h3
-              className={`text-[11px] font-bold uppercase tracking-wide ${tc.textMuted}`}
-            >
-              Apply to wire
-            </h3>
-            <select
-              value={targetWireId}
-              onChange={(e) => setTargetWireId(e.target.value)}
-              className="input-field w-full py-1 text-xs"
-            >
-              <option value="">— Select a wire —</option>
-              {powerWires.map((w) => {
-                const name =
-                  w.wireLabel || w.wireNumber || `Wire ${w.id.slice(0, 8)}`;
-                return (
-                  <option key={w.id} value={w.id}>
-                    {name} ({w.crossSection} mm²)
-                  </option>
-                );
-              })}
-            </select>
-            <button
-              type="button"
-              disabled={!targetWireId}
-              onClick={applyRecommended}
-              className={`w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded text-xs font-semibold transition-colors ${
-                targetWireId
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                  : `${tc.btnBg} ${tc.textMuted} cursor-not-allowed`
-              }`}
-            >
-              <FiArrowRight aria-hidden />
-              Apply {result.recommended.crossSectionMm2} mm² to wire
-            </button>
-            <button
-              type="button"
-              disabled={!targetWireId}
-              onClick={saveSizingRecordOnly}
-              className={`w-full px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                targetWireId
-                  ? `${tc.btnBg} ${tc.btnHover} ${tc.text}`
-                  : `${tc.btnBg} ${tc.textMuted} cursor-not-allowed`
-              }`}
-            >
-              Save wizard result (keep current mm²)
-            </button>
-            <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
-              Apply updates cross-section and saves sizing data for the cable
-              schedule. {wiresWithSizing} wire
-              {wiresWithSizing === 1 ? '' : 's'} have saved wizard results.
-            </p>
-          </div>
-        )}
-
-        {/* ─── Cable schedule export ─── */}
-        <div
-          className={`rounded-md border p-2.5 space-y-2 ${tc.border} ${
-            theme === 'dark' ? 'bg-black/20' : 'bg-gray-50'
-          }`}
-        >
-          <h3
-            className={`text-[11px] font-bold uppercase tracking-wide ${tc.textMuted}`}
-          >
-            Cable schedule
-          </h3>
-          <p className={`text-[10px] leading-snug ${tc.textMuted}`}>
-            Export a CSV with wire endpoints, applied mm², and persisted wizard
-            fields (load, length, Iz, ΔV) per wire.
-          </p>
-          <button
-            type="button"
-            onClick={() =>
-              downloadCableScheduleCsv(circuit, circuit.name || 'circuit')
-            }
-            className="w-full rounded bg-indigo-700 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-600"
-          >
-            Download cable schedule CSV
-          </button>
-        </div>
-
         {/* ─── Full candidate table ─── */}
         <div>
           <h3
@@ -602,128 +520,86 @@ const CableSizingWizardPanel: React.FC = () => {
           <p className={`mb-2 text-[10px] leading-snug ${tc.textMuted}`}>
             Click a row to apply that size to the selected wire.
           </p>
-          <div className={`overflow-x-auto rounded-md border ${tc.border}`}>
-            <table className="w-full min-w-[340px] border-collapse text-left text-[10px]">
-              <thead>
-                <tr
-                  className={
-                    theme === 'dark' ? 'bg-white/5' : 'bg-black/[0.03]'
-                  }
-                >
-                  <th
-                    className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}
+          <PanelDataTable minWidth={340}>
+            <thead className="es-table-sticky-head">
+              <tr>
+                <th className="es-table-num">mm²</th>
+                <th className="es-table-num">Iz (A)</th>
+                <th className="es-table-num">ΔV (V)</th>
+                <th className="es-table-num">ΔV %</th>
+                <th className="text-center">OK</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.candidates.map((c) => {
+                const isRec =
+                  result.recommended?.crossSectionMm2 === c.crossSectionMm2;
+                return (
+                  <tr
+                    key={c.crossSectionMm2}
+                    className={`es-table-row-interactive ${
+                      isRec ? 'bg-es-success/10' : ''
+                    }`}
+                    onClick={() =>
+                      targetWireId && applyCandidate(c.crossSectionMm2)
+                    }
+                    title={
+                      targetWireId
+                        ? `Click to apply ${c.crossSectionMm2} mm²`
+                        : 'Select a wire first'
+                    }
                   >
-                    mm²
-                  </th>
-                  <th
-                    className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}
-                  >
-                    Iz (A)
-                  </th>
-                  <th
-                    className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}
-                  >
-                    ΔV (V)
-                  </th>
-                  <th
-                    className={`border-b px-2 py-1.5 font-semibold ${tc.border}`}
-                  >
-                    ΔV %
-                  </th>
-                  <th
-                    className={`border-b px-2 py-1.5 font-semibold text-center ${tc.border}`}
-                  >
-                    OK
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.candidates.map((c) => {
-                  const isRec =
-                    result.recommended?.crossSectionMm2 ===
-                    c.crossSectionMm2;
-                  return (
-                    <tr
-                      key={c.crossSectionMm2}
-                      className={`cursor-pointer transition-colors ${
-                        isRec
-                          ? theme === 'dark'
-                            ? 'bg-emerald-900/30 hover:bg-emerald-900/50'
-                            : 'bg-emerald-50 hover:bg-emerald-100'
-                          : theme === 'dark'
-                            ? 'hover:bg-white/5'
-                            : 'hover:bg-black/[0.03]'
+                    <td
+                      className={`es-table-num font-medium ${
+                        isRec ? 'text-es-success' : ''
                       }`}
-                      onClick={() =>
-                        targetWireId &&
-                        applyCandidate(c.crossSectionMm2)
-                      }
-                      title={
-                        targetWireId
-                          ? `Click to apply ${c.crossSectionMm2} mm²`
-                          : 'Select a wire first'
-                      }
                     >
-                      <td
-                        className={`border-b px-2 py-1.5 font-medium tabular-nums ${tc.border} ${
-                          isRec
-                            ? theme === 'dark'
-                              ? 'text-emerald-300'
-                              : 'text-emerald-700'
-                            : ''
-                        }`}
-                      >
-                        {c.crossSectionMm2}
-                        {isRec && (
-                          <span className="ml-1 text-[8px] font-bold opacity-70">
-                            ★
-                          </span>
-                        )}
-                      </td>
-                      <td
-                        className={`border-b px-2 py-1.5 tabular-nums ${tc.border} ${
-                          c.deratedAmpacity < c.loadCurrentA
-                            ? 'text-red-400'
-                            : ''
-                        }`}
-                      >
-                        {c.deratedAmpacity.toFixed(0)}
-                      </td>
-                      <td
-                        className={`border-b px-2 py-1.5 tabular-nums ${tc.border}`}
-                      >
-                        {c.voltageDropV.toFixed(1)}
-                      </td>
-                      <td
-                        className={`border-b px-2 py-1.5 tabular-nums ${tc.border} ${
-                          c.voltageDropPct > input.maxVoltageDropPct
-                            ? 'text-red-400'
-                            : ''
-                        }`}
-                      >
-                        {c.voltageDropPct.toFixed(1)}
-                      </td>
-                      <td
-                        className={`border-b px-2 py-1.5 text-center ${tc.border}`}
-                      >
-                        {c.ok ? (
-                          <FiCheck
-                            className="inline text-emerald-400"
-                            aria-label="Pass"
-                          />
-                        ) : (
-                          <FiX
-                            className="inline text-red-400"
-                            aria-label="Fail"
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      {c.crossSectionMm2}
+                      {isRec ? (
+                        <span className="ml-1 text-[8px] font-bold opacity-70">
+                          ★
+                        </span>
+                      ) : null}
+                    </td>
+                    <td
+                      className={`es-table-num ${
+                        c.deratedAmpacity < c.loadCurrentA
+                          ? 'text-es-error'
+                          : ''
+                      }`}
+                    >
+                      {c.deratedAmpacity.toFixed(0)}
+                    </td>
+                    <td className="es-table-num">
+                      {c.voltageDropV.toFixed(1)}
+                    </td>
+                    <td
+                      className={`es-table-num ${
+                        c.voltageDropPct > input.maxVoltageDropPct
+                          ? 'text-es-error'
+                          : ''
+                      }`}
+                    >
+                      {c.voltageDropPct.toFixed(1)}
+                    </td>
+                    <td className="text-center">
+                      {c.ok ? (
+                        <FiCheck
+                          className="inline text-es-success"
+                          aria-label="Pass"
+                        />
+                      ) : (
+                        <FiX
+                          className="inline text-es-error"
+                          aria-label="Fail"
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </PanelDataTable>
           <p className={`mt-1.5 text-[10px] ${tc.textMuted} leading-snug`}>
             Iz = derated ampacity; ΔV = voltage drop over {defs.distanceM} m
             run. Load current ≈ {result.loadCurrentA.toFixed(1)} A. Values are
@@ -731,6 +607,68 @@ const CableSizingWizardPanel: React.FC = () => {
           </p>
         </div>
       </div>
+
+      <PanelExportFooter>
+        <label
+          htmlFor="csw-target-wire"
+          className="es-typo-caption text-es-secondary"
+        >
+          Target wire
+        </label>
+        <select
+          id="csw-target-wire"
+          value={targetWireId}
+          onChange={(e) => setTargetWireId(e.target.value)}
+          className="input-field w-full py-1 es-typo-body-sm"
+        >
+          <option value="">— Select a wire —</option>
+          {powerWires.map((w) => {
+            const name =
+              w.wireLabel || w.wireNumber || `Wire ${w.id.slice(0, 8)}`;
+            return (
+              <option key={w.id} value={w.id}>
+                {name} ({w.crossSection} mm²)
+              </option>
+            );
+          })}
+        </select>
+        {result.recommended ? (
+          <Button
+            type="button"
+            variant="primary"
+            className="w-full"
+            disabled={!targetWireId}
+            onClick={applyRecommended}
+          >
+            <FiArrowRight aria-hidden />
+            Apply {result.recommended.crossSectionMm2} mm² to wire
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full"
+          disabled={!targetWireId || !result.recommended}
+          onClick={saveSizingRecordOnly}
+        >
+          Save wizard result (keep current mm²)
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full"
+          onClick={() =>
+            downloadCableScheduleCsv(circuit, circuit.name || 'circuit')
+          }
+        >
+          Download cable schedule CSV
+        </Button>
+        <p className="es-typo-caption leading-snug text-es-secondary">
+          Apply updates cross-section and saves sizing data for the cable
+          schedule. {wiresWithSizing} wire
+          {wiresWithSizing === 1 ? '' : 's'} have saved wizard results.
+        </p>
+      </PanelExportFooter>
     </div>
   );
 };

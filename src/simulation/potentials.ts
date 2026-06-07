@@ -14,6 +14,10 @@ import {
   splitTerminalKey,
 } from './engineTypes';
 import { collectDcSourceSeeds, extendDcPowerSeeds } from './dcPowerPaths';
+import {
+  calculatePluginCurrent,
+  pluginSimConfigFromComponent,
+} from './pluginSimulation';
 
 /* ------------------------------------------------------------------ */
 /*  Voltage defaults                                                  */
@@ -315,6 +319,10 @@ export function calculateCurrent(component: CircuitComponent, voltage: number): 
       return p.powerWatts ? p.powerWatts / (voltage * effectivePf) : 0;
     case 'indicator_lamp':
       return (p.powerWatts || 1) / (voltage * effectivePf);
+    case 'plugin_component': {
+      const cfg = pluginSimConfigFromComponent(component);
+      return cfg ? calculatePluginCurrent(component, cfg, voltage) : 0;
+    }
     default:
       return 0;
   }
@@ -503,6 +511,14 @@ export function getLoadLiveTerminalKey(component: CircuitComponent): string | nu
   }
   if (component.type === 'lamp' || component.type === 'heater' || component.type === 'motor' || component.type === 'generic_load') {
     const cp = component.connectionPoints.find((p) => p.label.toUpperCase() === 'T1');
+    return cp ? terminalKey(component.id, cp.id) : null;
+  }
+  if (component.type === 'plugin_component') {
+    const cfg = pluginSimConfigFromComponent(component);
+    if (!cfg) return null;
+    const cp = component.connectionPoints.find(
+      (p) => p.label.toUpperCase() === cfg.liveTerminal.toUpperCase()
+    );
     return cp ? terminalKey(component.id, cp.id) : null;
   }
   return null;

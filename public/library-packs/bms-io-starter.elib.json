@@ -1,0 +1,195 @@
+{
+  "version": "1.0",
+  "name": "BMS I/O Starter",
+  "exportedAt": "2026-06-07T17:43:53.926Z",
+  "author": "ElectroSim",
+  "description": "Digital and analog BMS I/O module templates.",
+  "macros": [
+    {
+      "id": "bms-di-8",
+      "name": "BMS DI module 8ch",
+      "createdAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "components": [
+        {
+          "id": "bms-di",
+          "type": "di_module",
+          "label": "DI-01",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "state": "on",
+          "selected": false,
+          "connectionPoints": [
+            {
+              "id": "bms-di-com",
+              "componentId": "bms-di",
+              "label": "COM",
+              "x": -24,
+              "y": 0
+            },
+            {
+              "id": "bms-di-in1",
+              "componentId": "bms-di",
+              "label": "IN1",
+              "x": 0,
+              "y": -12
+            },
+            {
+              "id": "bms-di-in2",
+              "componentId": "bms-di",
+              "label": "IN2",
+              "x": 0,
+              "y": 12
+            }
+          ],
+          "properties": {
+            "diCount": 8
+          }
+        }
+      ],
+      "wires": [],
+      "description": "Digital input module with COM and channel terminals",
+      "tags": [
+        "bms",
+        "di"
+      ]
+    },
+    {
+      "id": "bms-ai-4",
+      "name": "BMS AI module 4ch",
+      "createdAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "components": [
+        {
+          "id": "bms-ai",
+          "type": "ai_module",
+          "label": "AI-01",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "state": "on",
+          "selected": false,
+          "connectionPoints": [
+            {
+              "id": "bms-ai-pwr",
+              "componentId": "bms-ai",
+              "label": "24V",
+              "x": -24,
+              "y": 0
+            },
+            {
+              "id": "bms-ai-ai1",
+              "componentId": "bms-ai",
+              "label": "AI1",
+              "x": 8,
+              "y": -12
+            },
+            {
+              "id": "bms-ai-ai2",
+              "componentId": "bms-ai",
+              "label": "AI2",
+              "x": 8,
+              "y": 12
+            }
+          ],
+          "properties": {
+            "aiCount": 4
+          }
+        }
+      ],
+      "wires": [],
+      "description": "Analog input module for 0–10 V / 4–20 mA signals",
+      "tags": [
+        "bms",
+        "ai"
+      ]
+    },
+    {
+      "id": "bms-io-pair",
+      "name": "BMS I/O pair (DI + AI)",
+      "createdAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "components": [
+        {
+          "id": "pair-di",
+          "type": "di_module",
+          "label": "DI-02",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "state": "on",
+          "selected": false,
+          "connectionPoints": [
+            {
+              "id": "pair-di-com",
+              "componentId": "pair-di",
+              "label": "COM",
+              "x": -24,
+              "y": 0
+            },
+            {
+              "id": "pair-di-in1",
+              "componentId": "pair-di",
+              "label": "IN1",
+              "x": 0,
+              "y": -12
+            },
+            {
+              "id": "pair-di-in2",
+              "componentId": "pair-di",
+              "label": "IN2",
+              "x": 0,
+              "y": 12
+            }
+          ],
+          "properties": {
+            "diCount": 8
+          }
+        },
+        {
+          "id": "pair-ai",
+          "type": "ai_module",
+          "label": "AI-02",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "state": "on",
+          "selected": false,
+          "connectionPoints": [
+            {
+              "id": "pair-ai-pwr",
+              "componentId": "pair-ai",
+              "label": "24V",
+              "x": -24,
+              "y": 0
+            },
+            {
+              "id": "pair-ai-ai1",
+              "componentId": "pair-ai",
+              "label": "AI1",
+              "x": 8,
+              "y": -12
+            },
+            {
+              "id": "pair-ai-ai2",
+              "componentId": "pair-ai",
+              "label": "AI2",
+              "x": 8,
+              "y": 12
+            }
+          ],
+          "properties": {
+            "aiCount": 4
+          }
+        }
+      ],
+      "wires": [],
+      "description": "Typical field I/O pair for a BMS controller rack",
+      "tags": [
+        "bms",
+        "io"
+      ]
+    }
+  ]
+}

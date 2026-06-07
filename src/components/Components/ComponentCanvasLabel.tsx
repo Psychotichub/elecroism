@@ -1,6 +1,8 @@
 import React from 'react';
 import { Text } from 'react-konva';
+import Konva from 'konva';
 import { useCircuitStore } from '../../store/circuitStore';
+import { parseCrossSheetReference } from '../../utils/crossSheetNavigation';
 
 export interface ComponentCanvasLabelProps {
   componentId?: string;
@@ -30,8 +32,28 @@ export const ComponentCanvasLabel: React.FC<ComponentCanvasLabelProps> = ({
   const selectedId = useCircuitStore((s) => s.selectedId);
   const gridSize = useCircuitStore((s) => s.circuit.gridSize || 20);
   const updateComponent = useCircuitStore((s) => s.updateComponent);
+  const navigateCrossSheetRef = useCircuitStore((s) => s.navigateCrossSheetRef);
   const t = (label ?? '').trim();
   if (!t) return null;
+
+  const crossSheet =
+    parseCrossSheetReference(t) ??
+    (componentId
+      ? (() => {
+          const comp = useCircuitStore
+            .getState()
+            .circuit.components.find((c) => c.id === componentId);
+          const ref = comp?.properties.crossSheetRef?.trim();
+          return ref ? parseCrossSheetReference(ref) : null;
+        })()
+      : null);
+
+  const openCrossSheet = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (!crossSheet) return;
+    e.cancelBubble = true;
+    navigateCrossSheetRef(crossSheet.raw);
+  };
+
   return (
     <Text
       text={t}
@@ -40,15 +62,18 @@ export const ComponentCanvasLabel: React.FC<ComponentCanvasLabelProps> = ({
       width={width}
       align="center"
       fontSize={fontSize}
-      fill={fill}
+      fill={crossSheet ? '#2563EB' : fill}
       fontStyle="bold"
+      textDecoration={crossSheet ? 'underline' : undefined}
       stroke="#F9FAFB"
       strokeWidth={0.35}
       shadowColor="#111827"
       shadowBlur={1.5}
       shadowOpacity={0.2}
       shadowOffsetY={0.4}
-      draggable
+      draggable={!crossSheet}
+      onClick={crossSheet ? openCrossSheet : undefined}
+      onTap={crossSheet ? openCrossSheet : undefined}
       onDragStart={(e) => {
         e.cancelBubble = true;
       }}

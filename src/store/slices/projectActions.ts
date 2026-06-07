@@ -1,5 +1,10 @@
 import { v4 as uuid } from 'uuid';
-import type { ElectroProject, ProjectSheet } from '../../types/project';
+import type {
+  ElectroProject,
+  ProjectSheet,
+  ProjectTitleBlock,
+  RevisionHistoryEntry,
+} from '../../types/project';
 import {
   activeSheetCircuit,
   circuitToSheetData,
@@ -12,7 +17,6 @@ import {
   loadAutosave,
   projectFromSingleCircuit,
   saveAutosave,
-  touchRecentProject,
 } from '../../utils/projectPersistence';
 import { createEmptyCircuit } from '../circuitDefaults';
 import {
@@ -21,8 +25,11 @@ import {
   loadProjectSnapshot,
   maybeSavePeriodicSnapshot,
   saveProjectSnapshot,
+  updateProjectSnapshotLabel,
   type ProjectSnapshotSummary,
 } from '../../utils/projectSnapshots';
+import { diffProjects } from '../../utils/projectSnapshotDiff';
+import type { ProjectSnapshotCompareResult } from '../../utils/projectSnapshotDiff';
 import {
   addComponentMacro,
   saveComponentMacros,
@@ -30,6 +37,27 @@ import {
 } from '../../utils/componentMacros';
 import type { Circuit } from '../../types';
 import type { CircuitStoreGet, CircuitStoreSet } from './sliceTypes';
+import {
+  findProjectSheetByName,
+  parseCrossSheetReference,
+  resolveCrossSheetTargetBounds,
+} from '../../utils/crossSheetNavigation';
+import { computeDrawingContentBounds } from '../../utils/drawingBounds';
+import { recordRecentProject } from '../../utils/projectOpen';
+import type { RecentProjectMeta } from '../../types/project';
+import {
+  applyProjectTitleBlock,
+  appendRevisionHistoryEntry,
+  migrateProjectTitleBlock,
+} from '../../utils/projectTitleBlock';
+import { BUNDLED_ORGANIZATION_TEMPLATES } from '../../templates/bundledOrganizationTemplates';
+import {
+  buildProjectFromOrganizationTemplate,
+  checkOrgTemplateCompatibility,
+  parseOrganizationTemplate,
+  resolveOrganizationTemplate,
+} from '../../utils/organizationTemplates';
+import { establishSheetSaveBaselines } from '../../utils/sheetDirtyState';
 
 function syncProjectLibrary(project: ElectroProject): void {
   saveComponentMacros(project.library);
@@ -45,6 +73,41 @@ export function createProjectActions(
       const next = commitCircuitToProject(project, circuit);
       set({ project: next });
       return next;
+    },
+
+    navigateCrossSheetRef: (raw: string) => {
+      const ref = parseCrossSheetReference(raw.trim());
+      if (!ref) return false;
+
+      const committed = get().commitActiveSheet();
+      const targetSheet = findProjectSheetByName(committed, ref.sheetName);
+      if (!targetSheet) return false;
+
+      if (committed.activeSheetId !== targetSheet.id) {
+        const switched = get().switchProjectSheet(targetSheet.id);
+        if (!switched) return false;
+      }
+
+      const circuit = get().circuit;
+      if (ref.target) {
+        const bounds = resolveCrossSheetTargetBounds(circuit, ref.target);
+        if (!bounds) return false;
+        const comp = circuit.components.find(
+          (c) =>
+            c.label.trim().toLowerCase() ===
+            ref.target!.replace(/^=/, '').trim().toLowerCase()
+        );
+        if (comp) {
+          return get().focusComponents([comp.id]);
+        }
+        return get().frameViewport(bounds);
+      }
+
+      const bounds = computeDrawingContentBounds(circuit);
+      if (bounds) {
+        return get().frameViewport(bounds);
+      }
+      return true;
     },
 
     switchProjectSheet: (sheetId: string) => {
@@ -185,6 +248,7 @@ export function createProjectActions(
       if (!circuit) return;
       set({
         project,
+        sheetSaveBaselines: establishSheetSaveBaselines(project),
         simulationResult: null,
         selectedId: null,
         wireGripVertexIndex: null,
@@ -197,20 +261,94 @@ export function createProjectActions(
       clearAutosave();
     },
 
-    loadProject: (project: ElectroProject) => {
-      const circuit = activeSheetCircuit(project);
-      if (!circuit) return;
-      set({ project });
-      syncProjectLibrary(project);
-      get().hydrateCircuit(circuit);
-      touchRecentProject(project);
-      saveAutosave(project);
+    newProjectFromOrganizationTemplate: async (
+      templateId: string
+    ): Promise<string | null> => {
+      try {
+        const template = await resolveOrganizationTemplate(
+          templateId,
+          BUNDLED_ORGANIZATION_TEMPLATES
+        );
+        if (!template) return 'Organization template not found.';
+        const compat = checkOrgTemplateCompatibility(template);
+        if (!compat.compatible) return compat.reason ?? 'Template not compatible.';
+        const project = await buildProjectFromOrganizationTemplate(template);
+        const circuit = activeSheetCircuit(project);
+        if (!circuit) return 'Template produced an invalid project.';
+        set({
+          project,
+          sheetSaveBaselines: establishSheetSaveBaselines(project),
+          simulationResult: null,
+          selectedId: null,
+          wireGripVertexIndex: null,
+          history: [],
+          historyIndex: -1,
+          bmsSimLog: [],
+        });
+        syncProjectLibrary(project);
+        get().hydrateCircuit(circuit);
+        clearAutosave();
+        return null;
+      } catch (e) {
+        return e instanceof Error ? e.message : 'Could not create project from template.';
+      }
     },
 
-    loadProjectFromDocument: (data: unknown) => {
+    loadOrganizationTemplateFile: (data: unknown): string | null => {
+      const template = parseOrganizationTemplate(data);
+      if (!template) return 'Invalid organization template (.orgtemplate.json).';
+      const compat = checkOrgTemplateCompatibility(template);
+      if (!compat.compatible) return compat.reason ?? 'Template not compatible.';
+      const existing = BUNDLED_ORGANIZATION_TEMPLATES.findIndex(
+        (t) => t.id === template.id
+      );
+      if (existing >= 0) {
+        BUNDLED_ORGANIZATION_TEMPLATES[existing] = template;
+      } else {
+        BUNDLED_ORGANIZATION_TEMPLATES.push(template);
+      }
+      return null;
+    },
+
+    setProjectTitleBlock: (patch: Partial<ProjectTitleBlock>) => {
+      const committed = get().commitActiveSheet();
+      const next = applyProjectTitleBlock(committed, patch);
+      const circuit = activeSheetCircuit(next);
+      if (!circuit) return;
+      set({ project: next, circuit });
+      saveAutosave(next);
+    },
+
+    addRevisionHistoryEntry: (entry: RevisionHistoryEntry) => {
+      const committed = get().commitActiveSheet();
+      const next = appendRevisionHistoryEntry(committed, entry);
+      const circuit = activeSheetCircuit(next);
+      if (!circuit) return;
+      set({ project: next, circuit });
+      saveAutosave(next);
+    },
+
+    loadProject: (project: ElectroProject, recentMeta?: RecentProjectMeta) => {
+      const migrated = migrateProjectTitleBlock(project);
+      const circuit = activeSheetCircuit(migrated);
+      if (!circuit) return;
+      set({
+        project: migrated,
+        sheetSaveBaselines: establishSheetSaveBaselines(migrated),
+      });
+      syncProjectLibrary(migrated);
+      get().hydrateCircuit(circuit);
+      void recordRecentProject(migrated, recentMeta);
+      saveAutosave(migrated);
+    },
+
+    loadProjectFromDocument: (
+      data: unknown,
+      recentMeta?: RecentProjectMeta
+    ) => {
       const project = deserializeProjectFile(data);
       if (!project) return false;
-      get().loadProject(project);
+      get().loadProject(project, recentMeta);
       return true;
     },
 
@@ -221,7 +359,8 @@ export function createProjectActions(
     saveProject: () => {
       const project = get().commitActiveSheet();
       downloadProjectFile(project);
-      touchRecentProject(project);
+      set({ sheetSaveBaselines: establishSheetSaveBaselines(project) });
+      void recordRecentProject(project);
       saveAutosave(project);
     },
 
@@ -253,6 +392,26 @@ export function createProjectActions(
 
     deleteProjectSnapshot: async (snapshotId: string) => {
       return deleteProjectSnapshot(snapshotId);
+    },
+
+    renameProjectSnapshot: async (snapshotId: string, label: string) => {
+      return updateProjectSnapshotLabel(snapshotId, label);
+    },
+
+    compareProjectSnapshot: async (
+      snapshotId: string
+    ): Promise<ProjectSnapshotCompareResult | null> => {
+      const base = await loadProjectSnapshot(snapshotId);
+      if (!base) return null;
+      const compare = get().commitActiveSheet();
+      const record = await listProjectSnapshots(200).then((list) =>
+        list.find((s) => s.id === snapshotId)
+      );
+      const baseLabel = record?.label ?? 'Snapshot';
+      return {
+        diff: diffProjects(base, compare, baseLabel, 'Current project'),
+        baseProject: base,
+      };
     },
 
     restoreAutosavedProject: () => {

@@ -60,9 +60,13 @@ const AlignDropdown: React.FC<AlignDropdownProps> = ({ inactiveClassName }) => {
           open ? 'bg-blue-600 text-white' : inactiveClassName
         }`}
       >
-        <FiAlignLeft size={14} />
+        <span className="es-icon-toolbar">
+          <FiAlignLeft size={16} />
+        </span>
         <span className="hidden lg:inline">Align</span>
-        <FiChevronDown size={12} />
+        <span className="es-icon-inline">
+          <FiChevronDown size={14} />
+        </span>
       </button>
 
       {open && canAlign ? (

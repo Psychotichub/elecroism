@@ -28,3 +28,73 @@ jobs:
 
       - name: Unit tests with coverage gate
         run: npm run test:coverage
+
+  performance-budget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer
+        run: npm run build:renderer
+
+      - name: Performance budget (bundle + simulate stress)
+        run: npm run perf:budget
+
+  smoke-electron:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer for Electron
+        run: npm run build:renderer
+
+      - name: Install Playwright
+        run: npm run test:smoke:install
+
+      - name: Electron UI smoke tests
+        run: npm run test:smoke
+        env:
+          CI: true
+          SMOKE_SKIP_BUILD_CHECK: '1'
+
+  smoke-electron-mac:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer for Electron
+        run: npm run build:renderer
+
+      - name: Install Playwright
+        run: npm run test:smoke:install
+
+      - name: Electron UI smoke tests (macOS)
+        run: npm run test:smoke
+        env:
+          CI: true
+          SMOKE_SKIP_BUILD_CHECK: '1'

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiChevronDown, FiTarget } from 'react-icons/fi';
+import { AppIcon } from '../ui';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import { useUiStore } from '../../store/uiStore';
+import CatalogMetaChips from '../Catalog/CatalogMetaChips';
 import { getQuizChallenge, listQuizChallenges } from '../../utils/quizChallenges';
 import { resolveChallengeTarget } from '../../utils/quizChallengeRuntime';
 
@@ -69,9 +70,13 @@ const ChallengeDropdown: React.FC<{ inactiveClassName: string }> = ({
             : inactiveClassName
         }`}
       >
-        <FiTarget aria-hidden />
+        <span className="es-icon-toolbar">
+          <AppIcon id="challenge" />
+        </span>
         <span className="hidden lg:inline">Challenges</span>
-        <FiChevronDown className="opacity-70" aria-hidden />
+        <span className="es-icon-inline opacity-70">
+          <AppIcon id="chevron-down" size="inline" />
+        </span>
       </button>
       {open && (
         <div
@@ -94,7 +99,15 @@ const ChallengeDropdown: React.FC<{ inactiveClassName: string }> = ({
                   className={`block w-full px-3 py-2 text-left text-xs ${tc.text} ${tc.itemHover} focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500`}
                 >
                   <span className="font-semibold">{c.title}</span>
-                  <span className={`mt-0.5 block text-[10px] ${tc.textMuted}`}>
+                  <CatalogMetaChips
+                    meta={{
+                      difficulty: c.difficulty,
+                      estimatedMinutes: c.estimatedMinutes,
+                      prerequisites: c.prerequisites,
+                    }}
+                    className="mt-1"
+                  />
+                  <span className={`mt-1 block text-[10px] ${tc.textMuted}`}>
                     {c.scenario}
                   </span>
                 </button>

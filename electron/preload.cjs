@@ -25,4 +25,39 @@ contextBridge.exposeInMainWorld("electronAPI", {
   installUpdate() {
     return ipcRenderer.invoke("install-update");
   },
+  /** @param {(actionId: string) => void} callback */
+  onMenuAction(callback) {
+    const listener = (_event, actionId) => {
+      callback(actionId);
+    };
+    ipcRenderer.on("menu-action", listener);
+    return () => {
+      ipcRenderer.removeListener("menu-action", listener);
+    };
+  },
+  showAbout() {
+    return ipcRenderer.invoke("show-about");
+  },
+  checkForUpdates() {
+    return ipcRenderer.invoke("check-for-updates");
+  },
+  readProjectFile(filePath) {
+    return ipcRenderer.invoke("read-project-file", filePath);
+  },
+  showOpenProjectDialog() {
+    return ipcRenderer.invoke("show-open-project-dialog");
+  },
+  syncRecentMenu(items) {
+    ipcRenderer.send("sync-recent-menu", items);
+  },
+  /** @param {(filePath: string) => void} callback */
+  onOpenProjectPath(callback) {
+    const listener = (_event, filePath) => {
+      callback(filePath);
+    };
+    ipcRenderer.on("open-project-path", listener);
+    return () => {
+      ipcRenderer.removeListener("open-project-path", listener);
+    };
+  },
 });

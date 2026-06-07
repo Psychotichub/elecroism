@@ -1,0 +1,9 @@
+{
+  "updatedAt": "2026-06-07",
+  "stressComponentCount": 200,
+  "regressionThresholdPercent": 15,
+  "totalJsBytes": 2355378,
+  "totalJsGzipBytes": 663448,
+  "simulateStressMs": 165.9,
+  "jsFileCount": 15
+}

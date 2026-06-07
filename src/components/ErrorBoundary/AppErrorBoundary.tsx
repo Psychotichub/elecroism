@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { captureErrorReport } from '../../utils/errorReporting';
 
 export interface AppErrorBoundaryProps {
   children: ReactNode;
@@ -33,6 +34,13 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, State> {
     if (info.componentStack) {
       console.error(`${tag} component stack`, info.componentStack);
     }
+    void captureErrorReport({
+      kind: 'react',
+      message: error.message,
+      stack: error.stack,
+      area: this.props.areaName,
+      componentStack: info.componentStack ?? undefined,
+    });
   }
 
   private handleTryAgain = (): void => {

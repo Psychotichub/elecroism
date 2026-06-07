@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { FiLayers, FiPlus } from 'react-icons/fi';
+import { AppIcon } from '../ui';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import type { ComponentMacro } from '../../utils/componentMacros';
@@ -39,7 +39,9 @@ const MacroDropdown: React.FC = () => {
         className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs transition-colors ${tc.btnText} ${tc.btnHover}`}
         title="Reusable component groups (macros)"
       >
-        <FiLayers />
+        <span className="es-icon-toolbar">
+          <AppIcon id="macro" />
+        </span>
         <span className="hidden lg:inline">Macros</span>
       </button>
       {open && (
@@ -58,7 +60,9 @@ const MacroDropdown: React.FC = () => {
               onClick={onSave}
               className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${tc.text} ${tc.itemHover}`}
             >
-              <FiPlus className="shrink-0" />
+              <span className="es-icon-inline shrink-0">
+                <AppIcon id="add" size="inline" />
+              </span>
               Save selection as macro…
             </button>
             <p className={`border-t px-3 py-1.5 text-[9px] ${tc.border} ${tc.textMuted}`}>

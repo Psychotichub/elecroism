@@ -9,7 +9,7 @@ const PRODUCTION_CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  "connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
   "worker-src 'self' blob:",
   "media-src 'self' blob:",
   "object-src 'none'",
@@ -73,6 +73,8 @@ export default defineConfig({
     },
   },
   test: {
+    setupFiles: ['./src/test/setupDom.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**', '**/*.perf.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

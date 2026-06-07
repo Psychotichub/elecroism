@@ -34,7 +34,7 @@ export const renderMCBProps = (
                 onClick={() =>
                   setMcbPoleLayout(selectedComp!.id, p as 1 | 2)
                 }
-                className={`px-2 py-1 rounded text-xs ${
+                className={`px-2 py-1 rounded es-typo-body ${
                   Math.min(2, selectedComp!.properties.poles || 1) === p
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-600 text-gray-300'
@@ -44,7 +44,7 @@ export const renderMCBProps = (
               </button>
             ))}
           </div>
-          <p className={`text-[10px] ${tc.textMuted} mt-1`}>
+          <p className={`es-typo-caption ${tc.textMuted} mt-1`}>
             1P: line only · 2P: line + neutral. Three-pole use the 3P MCB device.
           </p>
         </Label>
@@ -54,7 +54,7 @@ export const renderMCBProps = (
         variant === 'motorized_mccb' ||
         variant === 'motorized_mccb_4p') && (
         <Label text="Poles">
-          <span className={`text-xs ${tc.textMuted}`}>
+          <span className={`es-typo-body ${tc.textMuted}`}>
             {variant === '4p' || variant === 'motorized_mccb_4p' ? '4' : '3'}{' '}
             (fixed)
           </span>
@@ -66,7 +66,7 @@ export const renderMCBProps = (
             <button
               key={t}
               onClick={() => updateProp({ tripCurve: t })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 selectedComp!.properties.tripCurve === t
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -83,7 +83,7 @@ export const renderMCBProps = (
             <button
               key={b}
               onClick={() => updateProp({ breakingCapacity: b })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 selectedComp!.properties.breakingCapacity === b
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -97,7 +97,7 @@ export const renderMCBProps = (
       {selectedComp!.state === 'tripped' && (
         <button
           onClick={() => resetTripped(selectedComp!.id)}
-          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+          className="w-full px-3 py-2 bg-red-600 text-white rounded es-typo-body font-medium hover:bg-red-700"
         >
           {variant === 'motorized_mccb_4p'
             ? 'RESET 4P mMCCB'
@@ -112,7 +112,7 @@ export const renderMCBProps = (
       )}
       <Label text="State">
         <span
-          className={`text-xs font-medium ${
+          className={`es-typo-body font-medium ${
             selectedComp!.state === 'tripped'
               ? 'text-red-400'
               : selectedComp!.state === 'on'
@@ -167,7 +167,7 @@ export const renderHrcFuseProps = () => { const { selectedComp, tc, updateProp, 
                     })),
                   });
                 }}
-                className={`px-2 py-1 rounded text-xs ${
+                className={`px-2 py-1 rounded es-typo-body ${
                   (selectedComp!.properties.poles ?? 1) === p
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-600 text-gray-300'
@@ -201,7 +201,7 @@ export const renderHrcFuseProps = () => { const { selectedComp, tc, updateProp, 
               key={b}
               type="button"
               onClick={() => updateProp({ breakingCapacity: b })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.breakingCapacity ?? 10000) === b
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -306,7 +306,7 @@ export const renderHrcFuseProps = () => { const { selectedComp, tc, updateProp, 
                   key={v}
                   type="button"
                   onClick={() => updateProp({ controlCircuitVoltage: v })}
-                  className={`px-2 py-1 rounded text-xs ${
+                  className={`px-2 py-1 rounded es-typo-body ${
                     (selectedComp!.properties.controlCircuitVoltage ?? 230) === v
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-600 text-gray-300'
@@ -317,7 +317,7 @@ export const renderHrcFuseProps = () => { const { selectedComp, tc, updateProp, 
               ))}
             </div>
           </Label>
-          <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+          <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
             In most panels control is single-phase (direct L-N or derived from
             3-phase via L-L/transformer). True 3-phase control is typically for
             phase-monitoring/protection relays.
@@ -339,12 +339,12 @@ export const renderHrcFuseProps = () => { const { selectedComp, tc, updateProp, 
       {selectedComp!.state === 'tripped' && (
         <button
           onClick={() => resetTripped(selectedComp!.id)}
-          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+          className="w-full px-3 py-2 bg-red-600 text-white rounded es-typo-body font-medium hover:bg-red-700"
         >
           Replace / reset fuse
         </button>
       )}
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Fast fault clearing is modeled with a higher instantaneous threshold than
         MCB curves. Use this on branch feeders where one-time cartridge fuses are
         specified.
@@ -454,7 +454,7 @@ export const renderRCDProps = () => { const { selectedComp, tc, updateProp, upda
                   })),
                 });
               }}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 selectedComp!.properties.poles === p
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -468,12 +468,12 @@ export const renderRCDProps = () => { const { selectedComp, tc, updateProp, upda
       {selectedComp!.state === 'tripped' && (
         <button
           onClick={() => resetTripped(selectedComp!.id)}
-          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium"
+          className="w-full px-3 py-2 bg-red-600 text-white rounded es-typo-body font-medium"
         >
           RESET RCD
         </button>
       )}
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         RCD compares line and neutral current continuously. Leakage imbalance
         above setting trips quickly for shock/fire protection. Terminals follow
         odd-in / even-out numbering: 2P uses <strong>1–4</strong> (line pair then
@@ -481,7 +481,7 @@ export const renderRCDProps = () => { const { selectedComp, tc, updateProp, upda
         <strong>7–8</strong> for N).
       </p>
       {selectedComp!.type === 'hrc_fuse' && (
-        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
           HRC fuse is a one-time high-speed fault interrupter. Select class and
           rupturing capacity above prospective short-circuit current for safe
           discrimination and cable/device protection.
@@ -515,7 +515,7 @@ export const renderOverloadRelayProps = () => { const { selectedComp, tc, update
               key={cls}
               type="button"
               onClick={() => updateProp({ overloadTripClass: cls })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.overloadTripClass ?? '10') === cls
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -541,12 +541,12 @@ export const renderOverloadRelayProps = () => { const { selectedComp, tc, update
       {selectedComp!.state === 'tripped' && (
         <button
           onClick={() => resetTripped(selectedComp!.id)}
-          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+          className="w-full px-3 py-2 bg-red-600 text-white rounded es-typo-body font-medium hover:bg-red-700"
         >
           RESET overload relay
         </button>
       )}
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Inverse-time thermal trip (IEC 60947-4-1). Used by the motor thermal
         integrator in the oscilloscope and Properties thermal readout.
       </p>
@@ -578,7 +578,7 @@ export const renderMpcbProps = () => { const { selectedComp, tc, updateProp, tog
               key={cls}
               type="button"
               onClick={() => updateProp({ mpcbTripClass: cls })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.mpcbTripClass ?? '10') === cls
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -604,12 +604,12 @@ export const renderMpcbProps = () => { const { selectedComp, tc, updateProp, tog
       {selectedComp!.state === 'tripped' && (
         <button
           onClick={() => resetTripped(selectedComp!.id)}
-          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+          className="w-full px-3 py-2 bg-red-600 text-white rounded es-typo-body font-medium hover:bg-red-700"
         >
           RESET MPCB
         </button>
       )}
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Motor protector with adjustable thermal pickup near motor FLA and
         magnetic short-circuit trip. Place ahead of contactor + overload loop.
       </p>
@@ -656,7 +656,7 @@ export const renderEarthLeakageRelayCbctProps = () => { const { selectedComp, tc
                   })),
                 });
               }}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.poles ?? 1) === p
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -721,7 +721,7 @@ export const renderEarthLeakageRelayCbctProps = () => { const { selectedComp, tc
             onClick={() => {
               if (selectedComp!.state !== 'on') toggleComponent(selectedComp!.id);
             }}
-            className={`flex-1 px-2 py-1 rounded text-xs font-medium ${
+            className={`flex-1 px-2 py-1 rounded es-typo-body font-medium ${
               selectedComp!.state === 'on'
                 ? 'bg-green-600 text-white'
                 : 'bg-gray-600 text-gray-300'
@@ -734,7 +734,7 @@ export const renderEarthLeakageRelayCbctProps = () => { const { selectedComp, tc
             onClick={() => {
               if (selectedComp!.state === 'on') toggleComponent(selectedComp!.id);
             }}
-            className={`flex-1 px-2 py-1 rounded text-xs font-medium ${
+            className={`flex-1 px-2 py-1 rounded es-typo-body font-medium ${
               selectedComp!.state !== 'on'
                 ? 'bg-red-600 text-white'
                 : 'bg-gray-600 text-gray-300'
@@ -747,12 +747,12 @@ export const renderEarthLeakageRelayCbctProps = () => { const { selectedComp, tc
       {selectedComp!.state === 'tripped' && (
         <button
           onClick={() => resetTripped(selectedComp!.id)}
-          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+          className="w-full px-3 py-2 bg-red-600 text-white rounded es-typo-body font-medium hover:bg-red-700"
         >
           RESET ELR
         </button>
       )}
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         ELR + CBCT trips on earth-fault path detection. Use for industrial
         feeder leakage protection where an RCD is not preferred. Pass all active
         conductors through CBCT core (L/N or L1/L2/L3), never earth conductor.

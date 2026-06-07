@@ -1,0 +1,153 @@
+{
+  "version": "1.0",
+  "name": "Motor Starters Starter",
+  "exportedAt": "2026-06-07T17:43:53.926Z",
+  "author": "ElectroSim",
+  "description": "DOL and motor protection macros for starter circuits.",
+  "macros": [
+    {
+      "id": "dol-starter",
+      "name": "DOL starter (MCB + K)",
+      "createdAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "components": [
+        {
+          "id": "dol-q",
+          "type": "mcb",
+          "label": "Q-M",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "state": "on",
+          "selected": false,
+          "connectionPoints": [
+            {
+              "id": "dol-q-p1",
+              "componentId": "dol-q",
+              "label": "1",
+              "x": -20,
+              "y": 0
+            },
+            {
+              "id": "dol-q-p2",
+              "componentId": "dol-q",
+              "label": "2",
+              "x": 20,
+              "y": 0
+            }
+          ],
+          "properties": {
+            "ratingAmps": 25,
+            "phaseSystem": "single_phase"
+          }
+        },
+        {
+          "id": "dol-k",
+          "type": "contactor",
+          "label": "K-M",
+          "x": 80,
+          "y": 0,
+          "rotation": 0,
+          "state": "off",
+          "selected": false,
+          "connectionPoints": [
+            {
+              "id": "dol-k-a1",
+              "componentId": "dol-k",
+              "label": "A1",
+              "x": -20,
+              "y": -8
+            },
+            {
+              "id": "dol-k-a2",
+              "componentId": "dol-k",
+              "label": "A2",
+              "x": 20,
+              "y": -8
+            },
+            {
+              "id": "dol-k-coil",
+              "componentId": "dol-k",
+              "label": "COIL",
+              "x": 0,
+              "y": 18
+            }
+          ],
+          "properties": {
+            "coilVoltageV": 230,
+            "phaseSystem": "single_phase"
+          }
+        }
+      ],
+      "wires": [
+        {
+          "id": "w-dol-1",
+          "fromComponentId": "dol-q",
+          "fromPointId": "dol-q-p2",
+          "toComponentId": "dol-k",
+          "toPointId": "dol-k-a1",
+          "points": [
+            20,
+            0,
+            60,
+            -8
+          ],
+          "color": "brown",
+          "crossSection": 2.5,
+          "energized": false,
+          "currentAmps": 0
+        }
+      ],
+      "description": "Direct-on-line motor feeder with breaker and contactor",
+      "tags": [
+        "motor",
+        "starter",
+        "dol"
+      ]
+    },
+    {
+      "id": "motor-mcb",
+      "name": "Motor circuit MCB",
+      "createdAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "components": [
+        {
+          "id": "mot-q",
+          "type": "mcb",
+          "label": "Q-MOT",
+          "x": 0,
+          "y": 0,
+          "rotation": 0,
+          "state": "on",
+          "selected": false,
+          "connectionPoints": [
+            {
+              "id": "mot-q-p1",
+              "componentId": "mot-q",
+              "label": "1",
+              "x": -20,
+              "y": 0
+            },
+            {
+              "id": "mot-q-p2",
+              "componentId": "mot-q",
+              "label": "2",
+              "x": 20,
+              "y": 0
+            }
+          ],
+          "properties": {
+            "ratingAmps": 40,
+            "phaseSystem": "single_phase"
+          }
+        }
+      ],
+      "wires": [],
+      "description": "Dedicated motor protection breaker",
+      "tags": [
+        "motor",
+        "protection"
+      ]
+    }
+  ]
+}

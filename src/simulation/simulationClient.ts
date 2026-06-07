@@ -7,7 +7,10 @@ import {
 } from './transientTimeline';
 import type { WorkerRequest, WorkerResponse } from './simulationWorker';
 
+export type SimulationRuntimeMode = 'worker' | 'main-thread';
+
 let worker: Worker | null = null;
+let workerDisabled = false;
 let seq = 0;
 const pending = new Map<
   number,
@@ -18,13 +21,39 @@ function workerAvailable(): boolean {
   return typeof Worker !== 'undefined';
 }
 
+/** Whether the browser exposes Web Workers at all. */
+export function supportsSimulationWorker(): boolean {
+  return workerAvailable();
+}
+
+/** Where simulation currently runs (worker thread vs main thread fallback). */
+export function getSimulationRuntimeMode(): SimulationRuntimeMode {
+  if (!workerAvailable() || workerDisabled) return 'main-thread';
+  return 'worker';
+}
+
+function markWorkerUnavailable(): void {
+  workerDisabled = true;
+  for (const [, p] of pending) {
+    p.reject(new Error('Simulation worker failed'));
+  }
+  pending.clear();
+  worker?.terminate();
+  worker = null;
+}
+
 function getWorker(): Worker | null {
-  if (!workerAvailable()) return null;
+  if (!workerAvailable() || workerDisabled) return null;
   if (!worker) {
-    worker = new Worker(
-      new URL('./simulationWorker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    try {
+      worker = new Worker(
+        new URL('./simulationWorker.ts', import.meta.url),
+        { type: 'module' }
+      );
+    } catch {
+      markWorkerUnavailable();
+      return null;
+    }
     worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const msg = event.data;
       const p = pending.get(msg.id);
@@ -38,12 +67,7 @@ function getWorker(): Worker | null {
       else if (msg.type === 'timeline') p.resolve(msg.samples);
     };
     worker.onerror = () => {
-      for (const [, p] of pending) {
-        p.reject(new Error('Simulation worker failed'));
-      }
-      pending.clear();
-      worker?.terminate();
-      worker = null;
+      markWorkerUnavailable();
     };
   }
   return worker;
@@ -113,4 +137,10 @@ export function terminateSimulationWorker(): void {
   worker?.terminate();
   worker = null;
   pending.clear();
+}
+
+/** Test helper — reset worker failure latch between cases. */
+export function resetSimulationRuntimeForTests(): void {
+  workerDisabled = false;
+  terminateSimulationWorker();
 }

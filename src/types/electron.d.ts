@@ -16,6 +16,18 @@ export interface UpdateStatus {
   message?: string;
 }
 
+export type OpenProjectDialogResult = {
+  ok: boolean;
+  error?: string;
+  filePath?: string;
+  text?: string;
+};
+
+export type RecentMenuItem = {
+  index: number;
+  label: string;
+};
+
 export interface ElectronAPI {
   platform: NodeJS.Platform;
   isPackaged: boolean;
@@ -26,6 +38,13 @@ export interface ElectronAPI {
   };
   onUpdateStatus: (callback: (status: UpdateStatus) => void) => () => void;
   installUpdate: () => Promise<void>;
+  onMenuAction: (callback: (actionId: string) => void) => () => void;
+  onOpenProjectPath: (callback: (filePath: string) => void) => () => void;
+  showAbout: () => Promise<void>;
+  checkForUpdates: () => Promise<void>;
+  readProjectFile: (filePath: string) => Promise<string | null>;
+  showOpenProjectDialog: () => Promise<OpenProjectDialogResult>;
+  syncRecentMenu: (items: RecentMenuItem[]) => void;
 }
 
 declare global {

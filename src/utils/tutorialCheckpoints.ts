@@ -102,3 +102,51 @@ export function motorEnergized(
       return node?.energized === true && (node.currentA ?? 0) > 0;
     });
 }
+
+export function threePhaseMotorEnergized(
+  circuit: Circuit,
+  simulationResult: SimulationResult | null
+): boolean {
+  if (!simulationResult?.success) return false;
+  return circuit.components
+    .filter((c) => c.type === 'three_phase_motor')
+    .some((m) => {
+      const node = simulationResult.nodes[m.id];
+      return node?.energized === true && (node.currentA ?? 0) > 0;
+    });
+}
+
+export function hasStarDeltaStarterKit(circuit: Circuit): boolean {
+  return (
+    hasComponentType(circuit, 'three_phase_source') &&
+    countComponents(circuit, 'three_phase_contactor') >= 3 &&
+    hasComponentType(circuit, 'three_phase_motor') &&
+    hasComponentType(circuit, 'timer')
+  );
+}
+
+export function hasAtsTransferPanel(circuit: Circuit): boolean {
+  const controller = circuit.components.find(
+    (c) => c.properties.atsController === true
+  );
+  return (
+    !!controller &&
+    countComponents(circuit, 'three_phase_source') >= 2 &&
+    countComponents(circuit, 'three_phase_contactor') >= 2 &&
+    hasComponentType(circuit, 'three_phase_motor')
+  );
+}
+
+/** Motor feeder wires meet a minimum copper cross-section (mm²). */
+export function motorFeederSized(circuit: Circuit, minMm2 = 2.5): boolean {
+  const motors = circuit.components.filter(
+    (c) => c.type === 'motor' || c.type === 'three_phase_motor'
+  );
+  if (motors.length === 0) return false;
+  const motorIds = new Set(motors.map((m) => m.id));
+  return circuit.wires.some(
+    (w) =>
+      (motorIds.has(w.toComponentId) || motorIds.has(w.fromComponentId)) &&
+      w.crossSection >= minMm2
+  );
+}

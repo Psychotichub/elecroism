@@ -1,4 +1,5 @@
 import type { CircuitComponent } from '../types';
+import { pluginSimConfigFromComponent, pluginIsLoadConfig } from './pluginSimulation';
 
 export function isSeriesPathComponent(c: CircuitComponent): boolean {
   return (
@@ -38,6 +39,10 @@ export function isSeriesPathComponent(c: CircuitComponent): boolean {
 }
 
 export function isLoadComponent(component: CircuitComponent): boolean {
+  if (component.type === 'plugin_component') {
+    const cfg = pluginSimConfigFromComponent(component);
+    return cfg != null && pluginIsLoadConfig(cfg);
+  }
   return (
     component.type === 'lamp' ||
     component.type === 'heater' ||

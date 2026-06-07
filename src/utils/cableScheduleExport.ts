@@ -91,6 +91,8 @@ export function buildCableScheduleRows(circuit: Circuit): CableScheduleRow[] {
       installation: cs ? installationLabel(cs.installationMethod) : '',
       conductor: cs ? cs.conductorMaterial : '',
       ambientTempC: cs ? String(cs.ambientTempC) : '',
+      circuitsInGroup: cs?.circuitsInGroup != null ? String(cs.circuitsInGroup) : '',
+      deratingCombinedK: cs?.deratingCombinedK != null ? String(cs.deratingCombinedK) : '',
       maxVoltageDropPct: cs ? String(cs.maxVoltageDropPct) : '',
       loadCurrentA: cs ? String(cs.loadCurrentA) : '',
       recommendedMm2:

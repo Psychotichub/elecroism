@@ -183,6 +183,27 @@ export async function loadProjectSnapshot(
   }
 }
 
+export async function updateProjectSnapshotLabel(
+  id: string,
+  label: string
+): Promise<boolean> {
+  if (typeof indexedDB === 'undefined') return false;
+  const trimmed = label.trim();
+  if (!trimmed) return false;
+  try {
+    const record = await withStore<ProjectSnapshotRecord | undefined>(
+      'readonly',
+      (store) => store.get(id) as IDBRequest<ProjectSnapshotRecord | undefined>
+    );
+    if (!record) return false;
+    const next = { ...record, label: trimmed };
+    await withStore('readwrite', (store) => store.put(next));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function deleteProjectSnapshot(id: string): Promise<boolean> {
   if (typeof indexedDB === 'undefined') return false;
   try {

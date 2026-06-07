@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FiBookOpen, FiChevronDown } from 'react-icons/fi';
+import { AppIcon } from '../ui';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import { EXAMPLE_CIRCUITS } from '../../examples/exampleCircuits';
@@ -60,9 +60,13 @@ const ExamplesDropdown: React.FC<{ inactiveClassName: string }> = ({
         }`}
         title="Load an example circuit"
       >
-        <FiBookOpen />
+        <span className="es-icon-toolbar">
+          <AppIcon id="examples" />
+        </span>
         <span className="hidden lg:inline">Examples</span>
-        <FiChevronDown size={10} />
+        <span className="es-icon-inline opacity-70">
+          <AppIcon id="chevron-down" size="inline" />
+        </span>
       </button>
 
       {open && (

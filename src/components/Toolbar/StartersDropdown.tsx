@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiZap } from 'react-icons/fi';
+import { AppIcon } from '../ui';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import { listCircuitTemplates } from '../../utils/circuitTemplates';
@@ -27,7 +27,9 @@ const StartersDropdown: React.FC<StartersDropdownProps> = ({
         }`}
         title="Insert starter templates at cursor (DOL, Y-Δ, VFD, ATS)"
       >
-        <FiZap />
+        <span className="es-icon-toolbar">
+          <AppIcon id="starter" />
+        </span>
         <span className="hidden lg:inline">Starters</span>
       </button>
       {open && (

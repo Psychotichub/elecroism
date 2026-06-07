@@ -48,7 +48,7 @@ export const renderAcDcConverterProps = () => {
                 key={preset}
                 type="button"
                 onClick={() => updateProp({ voltage: preset })}
-                className={`px-2 py-1 rounded text-xs ${
+                className={`px-2 py-1 rounded es-typo-body ${
                   (p.voltage ?? 24) === preset
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-600 text-gray-300'
@@ -129,7 +129,7 @@ export const renderAcDcConverterProps = () => {
             <option value="no">No (raw filtered bus — faceplate only)</option>
           </select>
         </Label>
-        <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
           Wire <strong>AC_L</strong> and <strong>AC_N</strong> to mains. The
           simulator energizes <strong>DC_PLUS</strong> / <strong>DC_MINUS</strong>{' '}
           when AC is present (same as before). Stages above are educational: they
@@ -140,12 +140,12 @@ export const renderAcDcConverterProps = () => {
           className={`rounded border ${tc.border} ${theme === 'dark' ? 'bg-black/20' : 'bg-gray-50'} px-2 py-1.5`}
         >
           <summary
-            className={`text-[11px] cursor-pointer select-none ${tc.textBright}`}
+            className={`es-typo-body-sm cursor-pointer select-none ${tc.textBright}`}
           >
             Theory: rectification and linear AC→DC
           </summary>
           <div
-            className={`mt-2 space-y-2 text-[10px] leading-snug ${tc.textMuted}`}
+            className={`mt-2 space-y-2 es-typo-caption leading-snug ${tc.textMuted}`}
           >
             <p>
               An AC→DC converter changes grid AC (which reverses direction) into DC
@@ -207,7 +207,7 @@ export const renderDcPowerSourceProps = () => { const { selectedComp, tc, update
               key={preset}
               type="button"
               onClick={() => updateProp({ voltage: preset })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.voltage ?? 24) === preset
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -218,7 +218,7 @@ export const renderDcPowerSourceProps = () => { const { selectedComp, tc, update
           ))}
         </div>
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Positive (DC_PLUS) and return (DC_MINUS) behave like L and N in the
         simulator for reachability and load current.
       </p>
@@ -250,7 +250,7 @@ export const renderThreePhaseSourceProps = () => { const { selectedComp, tc, upd
           />
         </Label>
         <Label text="Phase voltage U_L-N (V)">
-          <span className={`text-xs ${tc.text}`}>
+          <span className={`es-typo-body ${tc.text}`}>
             {(ll / Math.sqrt(3)).toFixed(1)} (balanced wye)
           </span>
         </Label>
@@ -294,7 +294,7 @@ export const renderSmpsProps = () => { const { selectedComp, tc, updateProp } = 
               key={p}
               type="button"
               onClick={() => updateProp({ voltage: p })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.voltage ?? 24) === p
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -305,7 +305,7 @@ export const renderSmpsProps = () => { const { selectedComp, tc, updateProp } = 
           ))}
         </div>
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Wire <strong>AC_L</strong> + <strong>AC_N</strong> to mains; the DC
         bus (<strong>V+ / V−</strong>) only energizes when both AC terminals
         are correctly placed (polarity respected). Same engine model as the
@@ -339,7 +339,7 @@ export const renderControlTransformerProps = () => { const { selectedComp, tc, u
               key={p}
               type="button"
               onClick={() => updateProp({ voltage: p })}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-2 py-1 rounded es-typo-body ${
                 (selectedComp!.properties.voltage ?? 24) === p
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
@@ -350,7 +350,7 @@ export const renderControlTransformerProps = () => { const { selectedComp, tc, u
           ))}
         </div>
       </Label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Primary is <strong>PRI_L / PRI_N</strong>; secondary is{' '}
         <strong>SEC_L / SEC_N</strong>. Use this when the control circuit needs
         isolation and a stepped-down AC control voltage.

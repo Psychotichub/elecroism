@@ -3,7 +3,7 @@ import { createConnectionPoints } from '../../../../store/circuitConnectionGeome
 
 export const RenderTerminalBlockProps = () => { const { tc } = usePPCtx(); return (
     <>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Terminal block provides a simple pass-through from <strong>IN</strong>{' '}
         to <strong>OUT</strong>. Use it to keep wiring organized in panel
         schematics and marshalling layouts.
@@ -54,7 +54,7 @@ export const RenderBusbarProps = () => {
 
   return (
     <>
-      <label className="block text-xs mb-1">
+      <label className="block es-typo-body mb-1">
         Left side terminals
         <input
           type="number"
@@ -65,7 +65,7 @@ export const RenderBusbarProps = () => {
           onChange={(e) => applyBusbarCounts(Number(e.target.value), rightCount)}
         />
       </label>
-      <label className="block text-xs mb-1">
+      <label className="block es-typo-body mb-1">
         Right side terminals
         <input
           type="number"
@@ -76,7 +76,7 @@ export const RenderBusbarProps = () => {
           onChange={(e) => applyBusbarCounts(leftCount, Number(e.target.value))}
         />
       </label>
-      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
         Increase left/right terminal counts to extend the busbar in that direction.
         New terminals are created automatically as the bar grows.
       </p>

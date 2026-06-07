@@ -2,6 +2,8 @@ import { v4 as uuid } from 'uuid';
 import type { CircuitComponent, DrawingSheet } from '../../types';
 import { boundsForComponents } from '../../utils/drawingBounds';
 import { downloadDrawingPdf } from '../../utils/drawingExport';
+import { downloadDocumentationPack } from '../../utils/documentationPackExport';
+import { downloadSldPdf, waitForCanvasRepaint } from '../../utils/sldExport';
 import { useUiStore } from '../uiStore';
 import type { DrawingMetadataPatch } from '../circuitStoreTypes';
 import type { CircuitStoreGet, CircuitStoreSet } from './sliceTypes';
@@ -127,11 +129,67 @@ export function createDrawingExportActions(
         return 'Nothing to export — add components or wires first.';
       }
       try {
-        await downloadDrawingPdf(stage, circuit, circuit.name || 'circuit');
+        await downloadDrawingPdf(
+          stage,
+          circuit,
+          circuit.name || 'circuit',
+          get().project
+        );
         return null;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return `PDF export failed: ${msg}`;
+      }
+    },
+
+    exportSldPdf: async () => {
+      const stage = useUiStore.getState().konvaStage;
+      if (!stage) {
+        return 'Canvas not ready — open the schematic view first.';
+      }
+      const circuit = get().circuit;
+      if (circuit.components.length === 0 && circuit.wires.length === 0) {
+        return 'Nothing to export — add components or wires first.';
+      }
+      const wasSld = useUiStore.getState().sldViewMode;
+      if (!wasSld) useUiStore.getState().setSldViewMode(true);
+      try {
+        await waitForCanvasRepaint();
+        await downloadSldPdf(
+          stage,
+          circuit,
+          circuit.name || 'circuit',
+          get().project
+        );
+        return null;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `SLD PDF export failed: ${msg}`;
+      } finally {
+        if (!wasSld) useUiStore.getState().setSldViewMode(false);
+      }
+    },
+
+    exportDocumentationPack: async () => {
+      const stage = useUiStore.getState().konvaStage;
+      if (!stage) {
+        return 'Canvas not ready — open the schematic view first.';
+      }
+      const { circuit, project, simulationResult } = get();
+      if (circuit.components.length === 0 && circuit.wires.length === 0) {
+        return 'Nothing to export — add components or wires first.';
+      }
+      try {
+        await downloadDocumentationPack(
+          stage,
+          circuit,
+          simulationResult,
+          project
+        );
+        return null;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return `Documentation pack export failed: ${msg}`;
       }
     },
   };

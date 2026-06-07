@@ -69,6 +69,10 @@ import { downloadBomCsv } from '../utils/bomExport';
 import { downloadTerminalScheduleCsv } from '../utils/terminalScheduleExport';
 import { downloadCableScheduleCsv } from '../utils/cableScheduleExport';
 import {
+  downloadPanelScheduleCsv,
+  downloadPanelSchedulePdf,
+} from '../utils/panelScheduleExport';
+import {
   appendHistoryEntry,
   initialHistorySnapshot,
   redoHistoryStep,
@@ -78,6 +82,8 @@ import {
   applyWireStyleLayerDefaults,
   suggestedCrossSectionForLayer,
 } from '../utils/wireStyleLayers';
+import { useDrawingLayerStore } from './drawingLayerStore';
+import { inferWireDrawingLayer } from '../utils/drawingLayers';
 import { createComponentActions } from './slices/componentActions';
 import { createFeederActions } from './slices/feederActions';
 import { createDesignatorActions } from './slices/designatorActions';
@@ -85,11 +91,14 @@ import { createSelectionActions } from './slices/selectionActions';
 import { createWireRoutingActions } from './slices/wireRoutingActions';
 import { createDrawingExportActions } from './slices/drawingExportActions';
 import { createProjectActions } from './slices/projectActions';
+import { createReviewCommentActions } from './slices/reviewCommentActions';
+import { createPluginActions } from './slices/pluginActions';
 import { createLibraryActions } from './slices/libraryActions';
 import {
   activeSheetCircuit,
   createEmptyProject,
 } from '../utils/projectPersistence';
+import { establishSheetSaveBaselines } from '../utils/sheetDirtyState';
 import {
   collectBundleDragSnapshot,
   translateBundleSegment,
@@ -166,6 +175,7 @@ const bootstrapCircuit =
 export const useCircuitStore = create<CircuitStore>((set, get) => ({
   project: bootstrapProject,
   circuit: bootstrapCircuit,
+  sheetSaveBaselines: establishSheetSaveBaselines(bootstrapProject),
   simulationResult: null,
   simulationPending: false,
   selectedId: null,
@@ -197,6 +207,8 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   ...createWireRoutingActions(set, get),
   ...createDrawingExportActions(set, get),
   ...createProjectActions(set, get),
+  ...createReviewCommentActions(set, get),
+  ...createPluginActions(set, get),
   ...createLibraryActions(set, get),
 
   // --- BMS actions (extracted to slices/bmsActions.ts) ---
@@ -221,6 +233,9 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         id,
         wireNumber,
         wireNumberAuto: auto ? true : false,
+        drawingLayer:
+          wire.drawingLayer ??
+          inferWireDrawingLayer({ ...wire, id, wireNumber }),
       };
       return {
         circuit: {
@@ -586,6 +601,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       energized: false,
       currentAmps: 0,
       wireNumberAuto: true,
+      drawingLayer: useDrawingLayerStore.getState().activeLayer,
     });
 
     set({ wireInProgress: null, wirePoints: [], wireOrientation: 'h' });
@@ -1498,6 +1514,21 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   exportCableScheduleCsv: () => {
     const c = get().circuit;
     downloadCableScheduleCsv(c, c.name || 'circuit');
+  },
+
+  exportPanelScheduleCsv: () => {
+    const c = get().circuit;
+    downloadPanelScheduleCsv(c, c.name || 'circuit');
+  },
+
+  exportPanelSchedulePdf: () => {
+    const { circuit, project } = get();
+    try {
+      downloadPanelSchedulePdf(circuit, project, circuit.name || 'circuit');
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Panel schedule PDF export failed.';
+    }
   },
 
   undo: () => {

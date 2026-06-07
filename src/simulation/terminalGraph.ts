@@ -23,6 +23,10 @@ import {
 } from './engineTypes';
 import { mcbLayoutPoles } from '../store/circuitConnectionGeometry';
 import {
+  applyPluginInternalBridges,
+  pluginSimConfigFromComponent,
+} from './pluginSimulation';
+import {
   BRIDGE_PAIRS_1P,
   BRIDGE_PAIRS_2P_LN,
   BRIDGE_PAIRS_3P_LLL,
@@ -482,6 +486,12 @@ export function applyInternalBridges(
           bridgeLabelPairs(graph, component, pairs);
         }
         break;
+      case 'plugin_component': {
+        if (skipInternalBridge) break;
+        const pluginSim = pluginSimConfigFromComponent(component);
+        if (pluginSim) applyPluginInternalBridges(graph, component, pluginSim);
+        break;
+      }
       default:
         break;
     }
