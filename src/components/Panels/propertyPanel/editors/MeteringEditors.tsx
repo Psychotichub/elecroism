@@ -1,6 +1,7 @@
 import { usePPCtx } from '../PropertyPanelContext';
 import { Label } from '../PropertyPanelLabel';
 import type { ComponentProperties } from '../../../../types';
+import PqaLiveReadings from './PqaLiveReadings';
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
 export const renderEnergyMeterProps = () => { const { selectedComp, tc, updateProp } = usePPCtx(); return (
@@ -219,6 +220,62 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
           />
         </Label>
       )}
+      {selectedComp!.type === 'dc_battery_backup' && (
+        <Label text="Battery capacity (Ah)">
+          <input
+            type="number"
+            value={selectedComp!.properties.batteryCapacityAh ?? 7}
+            onChange={(e) =>
+              updateProp({
+                batteryCapacityAh: Math.max(1, Number(e.target.value) || 1),
+              })
+            }
+            className="input-field"
+            min={1}
+          />
+        </Label>
+      )}
+      {selectedComp!.type === 'ups_module' && (
+        <>
+          <Label text="Static bypass">
+            <button
+              type="button"
+              onClick={() =>
+                updateProp({
+                  upsStaticBypass: !selectedComp!.properties.upsStaticBypass,
+                })
+              }
+              className={`w-full px-3 py-2 rounded text-xs font-semibold ${
+                selectedComp!.properties.upsStaticBypass
+                  ? 'bg-amber-600 text-white hover:bg-amber-700'
+                  : 'bg-gray-600 text-white hover:bg-gray-700'
+              }`}
+            >
+              {selectedComp!.properties.upsStaticBypass ? 'Enabled' : 'Disabled'}
+            </button>
+          </Label>
+          <Label text="Battery inverter">
+            <button
+              type="button"
+              onClick={() =>
+                updateProp({
+                  upsInverterEnabled:
+                    selectedComp!.properties.upsInverterEnabled === false,
+                })
+              }
+              className={`w-full px-3 py-2 rounded text-xs font-semibold ${
+                selectedComp!.properties.upsInverterEnabled !== false
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-gray-600 text-white hover:bg-gray-700'
+              }`}
+            >
+              {selectedComp!.properties.upsInverterEnabled !== false
+                ? 'Enabled'
+                : 'Disabled'}
+            </button>
+          </Label>
+        </>
+      )}
       {selectedComp!.type === 'key_interlock' && (
         <Label text="Interlock state">
           <button
@@ -274,20 +331,23 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
         </>
       )}
       {selectedComp!.type === 'power_quality_analyzer' && (
-        <Label text="Protocol tag">
-          <select
-            value={selectedComp!.properties.meterProtocol ?? 'modbus_tcp'}
-            onChange={(e) =>
-              updateProp({ meterProtocol: e.target.value as ComponentProperties['meterProtocol'] })
-            }
-            className="input-field"
-          >
-            <option value="none">None</option>
-            <option value="modbus_rtu">Modbus RTU</option>
-            <option value="modbus_tcp">Modbus TCP</option>
-            <option value="bacnet_ip">BACnet IP</option>
-          </select>
-        </Label>
+        <>
+          <Label text="Protocol tag">
+            <select
+              value={selectedComp!.properties.meterProtocol ?? 'modbus_tcp'}
+              onChange={(e) =>
+                updateProp({ meterProtocol: e.target.value as ComponentProperties['meterProtocol'] })
+              }
+              className="input-field"
+            >
+              <option value="none">None</option>
+              <option value="modbus_rtu">Modbus RTU</option>
+              <option value="modbus_tcp">Modbus TCP</option>
+              <option value="bacnet_ip">BACnet IP</option>
+            </select>
+          </Label>
+          <PqaLiveReadings />
+        </>
       )}
       <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
         Auxiliary infrastructure components are mostly planning/documentation

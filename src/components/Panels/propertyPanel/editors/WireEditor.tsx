@@ -15,6 +15,7 @@ import {
 } from '../../../../utils/componentPanelInfo';
 import { getWireColor } from '../../../../utils/geometry';
 import { useCircuitStore } from '../../../../store/circuitStore';
+import { wireLengthMeters } from '../../../../simulation/cableImpedance';
 
 export const WirePropsContent: React.FC = () => {
   const { selectedWire, tc, theme, updateWire, circuit } = usePPCtx();
@@ -133,6 +134,27 @@ export const WirePropsContent: React.FC = () => {
           panel control: flexible Cu such as H07V-K at about 0.5–1.5 mm²).
           Values drive line weight and rough Cu ampacity hints in validation.
         </p>
+        {(() => {
+          const lenM = wireLengthMeters(selectedWire.points, circuit.gridSize);
+          const drop = selectedWire.voltageDropV ?? 0;
+          if (lenM <= 0 && drop <= 0) return null;
+          return (
+            <p className={`text-[10px] mt-1 ${tc.textMuted} leading-snug`}>
+              {lenM > 0 ? (
+                <>
+                  Run length ≈ <strong>{lenM.toFixed(1)} m</strong>
+                  {drop > 0 ? ' · ' : ''}
+                </>
+              ) : null}
+              {drop > 0 ? (
+                <>
+                  load-flow drop ≈ <strong>{drop.toFixed(2)} V</strong> (per
+                  conductor)
+                </>
+              ) : null}
+            </p>
+          );
+        })()}
       </Label>
       <Label text="Wire ID (designator)">
         <label
@@ -267,10 +289,34 @@ export const WirePropsContent: React.FC = () => {
       >
         Normalize route
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          const msg = useCircuitStore
+            .getState()
+            .autoRerouteWire(selectedWire.id);
+          if (msg) window.alert(msg);
+        }}
+        className={`w-full px-3 py-2 rounded text-xs font-medium mt-1 ${tc.btnBg} ${tc.btnHover} ${tc.text}`}
+      >
+        Auto-reroute (avoid obstacles)
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          const ok = useCircuitStore
+            .getState()
+            .bundleParallelWires(selectedWire.id);
+          if (!ok) window.alert('No parallel bundle found for this wire');
+        }}
+        className={`w-full px-3 py-2 rounded text-xs font-medium mt-1 bg-slate-700 text-white hover:bg-slate-600`}
+      >
+        Space parallel bundle
+      </button>
       <p className={`text-[10px] ${tc.textMuted} -mt-1`}>
-        Dedupe vertices, straighten near-axis jogs, merge collinear bends
-        {circuit.gridSize > 0 ? '; grid-align when wire grid snap is on' : ''}.
-        Cmd: <span className="font-mono">normalize</span>
+        Normalize cleans vertices; auto-reroute uses A* around symbols. Space
+        bundle evens spacing on parallel trunks; drag a segment to nudge the
+        whole bundle.
       </p>
       <button
         type="button"

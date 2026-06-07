@@ -2,13 +2,42 @@ import { usePPCtx } from '../PropertyPanelContext';
 import { Label } from '../PropertyPanelLabel';
 import type { ComponentProperties } from '../../../../types';
 import { renderPhaseCurrentUnbalanceFields } from './ThreePhaseEditors';
+import ThdHarmonicFields from './ThdHarmonicFields';
+import { MotorThermalReadout } from './MotorThermalReadout';
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
-export const renderLoadProps = () => { const { selectedComp, updateProp } = usePPCtx(); return (
+export const renderLoadProps = () => { const { selectedComp, updateProp } = usePPCtx();
+  const isMotor = selectedComp?.type === 'motor';
+  return (
     <>
+      {isMotor ? <MotorThermalReadout /> : null}
+      {isMotor && selectedComp ? (
+        <Label text="Nameplate current (A)">
+          <input
+            type="number"
+            value={
+              selectedComp.properties.ratedLineAmps === undefined
+                ? ''
+                : selectedComp.properties.ratedLineAmps
+            }
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === '') {
+                updateProp({ ratedLineAmps: undefined });
+                return;
+              }
+              updateProp({ ratedLineAmps: Math.max(0, Number(raw)) });
+            }}
+            className="input-field"
+            min={0}
+            step={0.1}
+            placeholder="Optional (overload)"
+          />
+        </Label>
+      ) : null}
       <Label text="Load Type">
         <select
-          value={selectedComp!.properties.loadType || 'resistive'}
+          value={selectedComp?.properties.loadType || 'resistive'}
           onChange={(e) =>
             updateProp({
               loadType: e.target.value as ComponentProperties['loadType'],
@@ -69,6 +98,7 @@ export const renderLoadProps = () => { const { selectedComp, updateProp } = useP
         </div>
       </Label>
       {renderPhaseCurrentUnbalanceFields()}
+      <ThdHarmonicFields />
     </>
   );};
 

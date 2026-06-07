@@ -1,4 +1,5 @@
 import type { WireColor } from '../types';
+import { isDcPositiveLabel, isDcNegativeLabel } from '../simulation/dcPowerPaths';
 
 /** Neutral legs: explicit patterns before generic `L` rules (e.g. IN_L = line). */
 function labelImpliesNeutral(label: string): boolean {
@@ -40,6 +41,8 @@ function inferFromTokens(tokens: string[]): WireColor | null {
 
   if (has('DC') && has('PLUS')) return 'red';
   if (has('DC') && has('MINUS')) return 'black';
+  if (has('POS') || has('BAT') && has('POS')) return 'red';
+  if (has('NEG') || has('BAT') && has('NEG')) return 'black';
 
   if (has('L') || has('PHASE') || has('LINE')) return 'brown';
 
@@ -64,6 +67,9 @@ export function inferWireColor(
   if (labelImpliesNeutral(fromLabel) || labelImpliesNeutral(toLabel)) {
     return 'blue';
   }
+
+  if (isDcPositiveLabel(fromLabel) || isDcPositiveLabel(toLabel)) return 'red';
+  if (isDcNegativeLabel(fromLabel) || isDcNegativeLabel(toLabel)) return 'black';
 
   const tokens = [...tokenize(fromLabel), ...tokenize(toLabel)];
   const fromTokens = inferFromTokens(tokens);

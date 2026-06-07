@@ -8,11 +8,21 @@ import React, {
 import { Stage, Layer, Group, Circle, Line, Rect, Text } from 'react-konva';
 import Konva from 'konva';
 import { useCircuitStore, globalMouseContext } from '../../store/circuitStore';
+import {
+  CANVAS_CULL_MIN_COMPONENTS,
+  pickVisibleCanvasElements,
+  shouldCullCanvas,
+  worldViewportBounds,
+} from '../../utils/viewportCull';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import GridLayer from './GridLayer';
 import WireLayer from './WireLayer';
 import WireGripLayer from './WireGripLayer';
 import WireToolOverlay from './WireToolOverlay';
+import ConnectionIntegrityOverlay from './ConnectionIntegrityOverlay';
+import ArcFlashBadgeLayer from './ArcFlashBadgeLayer';
+import { useUiStore } from '../../store/uiStore';
+import { FiMaximize, FiZoomIn, FiZoomOut } from 'react-icons/fi';
 import SwitchSymbol from '../Components/SwitchSymbol';
 import TwoWaySwitchSymbol from '../Components/TwoWaySwitchSymbol';
 import MCBSymbol from '../Components/MCBSymbol';
@@ -160,6 +170,9 @@ const CircuitCanvas: React.FC = () => {
   }, []);
 
   const stageRef = useRef<Konva.Stage>(null);
+  const schematicLayerRef = useRef<Konva.Layer>(null);
+  const panCacheActiveRef = useRef(false);
+  const setKonvaStage = useUiStore((s) => s.setKonvaStage);
   const containerRef = useRef<HTMLDivElement>(null);
   const ctrlOrMetaPressedRef = useRef(false);
   const shiftPressedRef = useRef(false);
@@ -180,7 +193,9 @@ const CircuitCanvas: React.FC = () => {
   const [palettePos, setPalettePos] = useState({ x: 20, y: 20 });
   const [paletteSuggestionIndex, setPaletteSuggestionIndex] = useState(-1);
   const [isPointerInsideCanvas, setIsPointerInsideCanvas] = useState(false);
-  const [pendingInsertType, setPendingInsertType] = useState<ComponentType | null>(null);
+  const pendingInsertType = useUiStore((s) => s.pendingInsertType);
+  const setPendingInsertType = useUiStore((s) => s.setPendingInsertType);
+  const setCanvasStatusMessage = useUiStore((s) => s.setCanvasStatusMessage);
   const [insertCursor, setInsertCursor] = useState<{ x: number; y: number } | null>(null);
   const [dragPreviewType, setDragPreviewType] = useState<ComponentType | null>(null);
   const [dragPreviewCursor, setDragPreviewCursor] = useState<{ x: number; y: number } | null>(
@@ -250,6 +265,11 @@ const CircuitCanvas: React.FC = () => {
     paletteOpenRef.current = paletteOpen;
   }, [paletteOpen]);
 
+  useEffect(() => {
+    setKonvaStage(stageRef.current);
+    return () => setKonvaStage(null);
+  }, [setKonvaStage, dimensions.width, dimensions.height]);
+
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
 
@@ -276,11 +296,110 @@ const CircuitCanvas: React.FC = () => {
     wireAutoRouteEnabled,
     wireDraftDefaults,
     setPan,
+    setZoom,
     addComponent,
     setPushButtonPressed,
     updateComponent,
     runSimulation,
   } = useCircuitStore();
+
+  const connectionIntegrityOverlay = useUiStore(
+    (s) => s.connectionIntegrityOverlay
+  );
+  const arcFlashBadges = useUiStore((s) => s.arcFlashBadges);
+
+  const tryCacheSchematicLayer = useCallback(() => {
+    if (circuit.components.length < CANVAS_CULL_MIN_COMPONENTS) return;
+    const layer = schematicLayerRef.current;
+    if (!layer || panCacheActiveRef.current) return;
+    layer.cache({ pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
+    layer.getStage()?.batchDraw();
+    panCacheActiveRef.current = true;
+  }, [circuit.components.length]);
+
+  const clearSchematicLayerCache = useCallback(() => {
+    const layer = schematicLayerRef.current;
+    if (layer) layer.clearCache();
+    panCacheActiveRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    clearSchematicLayerCache();
+  }, [
+    circuit.components,
+    circuit.wires,
+    selectedId,
+    circuit.zoom,
+    clearSchematicLayerCache,
+  ]);
+
+  const cullingActive = useMemo(
+    () =>
+      shouldCullCanvas(circuit.components.length, {
+        tool,
+        wireInProgress: !!wireInProgress,
+        selectionActive: !!selectionRect,
+        integrityOverlay: connectionIntegrityOverlay,
+      }),
+    [
+      circuit.components.length,
+      tool,
+      wireInProgress,
+      selectionRect,
+      connectionIntegrityOverlay,
+    ]
+  );
+
+  const viewportBounds = useMemo(
+    () =>
+      worldViewportBounds(
+        dimensions.width,
+        dimensions.height,
+        circuit.panX,
+        circuit.panY,
+        circuit.zoom
+      ),
+    [
+      dimensions.width,
+      dimensions.height,
+      circuit.panX,
+      circuit.panY,
+      circuit.zoom,
+    ]
+  );
+
+  const { components: visibleComponents, wires: visibleWires } = useMemo(() => {
+    if (!cullingActive) {
+      return {
+        components: circuit.components,
+        wires: circuit.wires,
+      };
+    }
+    const pinComp = new Set<string>();
+    const pinWire = new Set<string>();
+    if (selectedId) {
+      if (circuit.wires.some((w) => w.id === selectedId)) {
+        pinWire.add(selectedId);
+      } else {
+        pinComp.add(selectedId);
+      }
+    }
+    for (const c of circuit.components) {
+      if (c.selected) pinComp.add(c.id);
+    }
+    return pickVisibleCanvasElements(
+      circuit.components,
+      circuit.wires,
+      viewportBounds,
+      { pinComponentIds: pinComp, pinWireIds: pinWire }
+    );
+  }, [
+    cullingActive,
+    circuit.components,
+    circuit.wires,
+    viewportBounds,
+    selectedId,
+  ]);
 
   const handleSelectWire = useCallback(
     (id: string, world?: { x: number; y: number }) => {
@@ -391,7 +510,7 @@ const CircuitCanvas: React.FC = () => {
       }
     }
     return (
-      (wireInProgress.color as WireColor | undefined) ||
+      (wireInProgress.color) ||
       inferWireColor(fromLabel, '')
     );
   }, [wireInProgress, circuit.components, hoveredConnectionPoint]);
@@ -637,6 +756,7 @@ const CircuitCanvas: React.FC = () => {
       if (e.button === 1 && middlePanRef.current) {
         middlePanRef.current = null;
         restoreCursor();
+        clearSchematicLayerCache();
       }
     };
     const onPointerMove = (e: PointerEvent) => {
@@ -657,12 +777,14 @@ const CircuitCanvas: React.FC = () => {
       if (e.button === 1 && middlePanRef.current) {
         middlePanRef.current = null;
         restoreCursor();
+        clearSchematicLayerCache();
       }
     };
     const onPointerCancel = () => {
       if (middlePanRef.current) {
         middlePanRef.current = null;
         restoreCursor();
+        clearSchematicLayerCache();
       }
     };
     window.addEventListener('mousemove', onMouseMove);
@@ -677,7 +799,7 @@ const CircuitCanvas: React.FC = () => {
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerCancel);
     };
-  }, []);
+  }, [clearSchematicLayerCache]);
 
   // Multi-selection live drag: capture initial positions at dragStart, then each
   // dragmove tick sets peers to initialPos + totalDelta (no accumulation drift).
@@ -804,7 +926,9 @@ const CircuitCanvas: React.FC = () => {
         );
         setPendingInsertType(null);
         setInsertCursor(null);
-        setPaletteResult(`Placed ${pendingInsertType}`);
+        const placed = `Placed ${pendingInsertType}`;
+        setPaletteResult(placed);
+        setCanvasStatusMessage(placed);
         return;
       }
       if (e.target === stageRef.current) {
@@ -812,6 +936,14 @@ const CircuitCanvas: React.FC = () => {
           const pos = getStagePointerPosition();
           if (!pos) return;
           const st = useCircuitStore.getState();
+          if (
+            st.isBusDropWireActive() &&
+            st.wirePoints.length === 2 &&
+            !hoveredConnectionPoint
+          ) {
+            const dropped = st.dropFeederAtBusTap(pos.x, pos.y);
+            if (dropped) return;
+          }
           const hover = hoveredConnectionPoint;
           const r = resolveWireDrawSnap({
             pointerWorld: pos,
@@ -845,6 +977,8 @@ const CircuitCanvas: React.FC = () => {
       addWirePoint,
       setSelected,
       hoveredConnectionPoint,
+      setPendingInsertType,
+      setCanvasStatusMessage,
     ]
   );
 
@@ -1281,7 +1415,7 @@ const CircuitCanvas: React.FC = () => {
               );
               const energizedWire = connected.find((w) => w.energized);
               return (energizedWire?.color ||
-                connected[0]?.color) as WireColor | undefined;
+                connected[0]?.color);
             })()}
           />
         );
@@ -1660,7 +1794,7 @@ const CircuitCanvas: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cancelWire, setSelected]);
+  }, [cancelWire, setSelected, setPendingInsertType]);
 
   // Keep time-dependent devices (e.g. timer ON-delay) progressing even when
   // the user is not interacting with the canvas.
@@ -1673,11 +1807,25 @@ const CircuitCanvas: React.FC = () => {
     return () => window.clearInterval(id);
   }, [circuit.components, runSimulation]);
 
+  const toolLabel =
+    tool === 'select'
+      ? 'Select'
+      : tool === 'wire'
+        ? 'Wire'
+        : tool === 'delete'
+          ? 'Delete'
+          : 'Pan';
+
   return (
     <div
       ref={containerRef}
-      className={`circuit-canvas-container flex-1 overflow-hidden`}
+      className="circuit-canvas-container relative flex-1 overflow-hidden"
       style={{ backgroundColor: tc.canvasHex }}
+      role="application"
+      aria-label="Circuit schematic canvas"
+      aria-describedby="canvas-instructions"
+      aria-keyshortcuts="S Select W Wire Delete Pan Escape Cancel"
+      tabIndex={0}
       onMouseEnter={() => setIsPointerInsideCanvas(true)}
       onMouseLeave={() => {
         setIsPointerInsideCanvas(false);
@@ -1717,6 +1865,7 @@ const CircuitCanvas: React.FC = () => {
           lastX: e.clientX,
           lastY: e.clientY,
         };
+        tryCacheSchematicLayer();
         if (containerRef.current) {
           containerRef.current.style.cursor = 'grabbing';
         }
@@ -1728,11 +1877,60 @@ const CircuitCanvas: React.FC = () => {
           lastX: e.clientX,
           lastY: e.clientY,
         };
+        tryCacheSchematicLayer();
         if (containerRef.current) {
           containerRef.current.style.cursor = 'grabbing';
         }
       }}
     >
+      <p id="canvas-instructions" className="sr-only">
+        Schematic drawing surface. Active tool: {toolLabel}. Use the toolbar for
+        zoom and tools, or keyboard shortcuts S, W, D, and P. Press Escape to
+        cancel placement or wire in progress.
+      </p>
+      <div
+        role="toolbar"
+        aria-label="Canvas view controls"
+        className={`absolute top-2 right-2 z-10 flex items-center gap-1 rounded border ${tc.border} ${tc.toolbar} p-1 shadow-md`}
+      >
+        <button
+          type="button"
+          aria-label="Zoom in"
+          title="Zoom in"
+          onClick={() => setZoom(circuit.zoom * 1.2)}
+          className={`rounded p-1.5 ${tc.btnText} ${tc.itemHover} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
+        >
+          <FiZoomIn aria-hidden />
+        </button>
+        <button
+          type="button"
+          aria-label="Zoom out"
+          title="Zoom out"
+          onClick={() => setZoom(circuit.zoom / 1.2)}
+          className={`rounded p-1.5 ${tc.btnText} ${tc.itemHover} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
+        >
+          <FiZoomOut aria-hidden />
+        </button>
+        <button
+          type="button"
+          aria-label="Reset zoom and pan"
+          title="Fit view"
+          onClick={() => {
+            setZoom(1);
+            setPan(0, 0);
+          }}
+          className={`rounded p-1.5 ${tc.btnText} ${tc.itemHover} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
+        >
+          <FiMaximize aria-hidden />
+        </button>
+        <span
+          className={`px-1 text-[10px] ${tc.textMuted}`}
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {toolLabel} · {(circuit.zoom * 100).toFixed(0)}%
+        </span>
+      </div>
       <Stage
         ref={stageRef}
         width={dimensions.width}
@@ -1747,7 +1945,9 @@ const CircuitCanvas: React.FC = () => {
         onMouseUp={handleStageMouseUp}
         onWheel={handleWheel}
         draggable={tool === 'pan'}
+        onDragStart={() => tryCacheSchematicLayer()}
         onDragEnd={() => {
+          clearSchematicLayerCache();
           if (stageRef.current) {
             setPan(stageRef.current.x(), stageRef.current.y());
           }
@@ -1764,13 +1964,12 @@ const CircuitCanvas: React.FC = () => {
         />
 
         {/*
-          Single schematic layer (one canvas): z-order is wires → segment grips →
-          components → multimeter → vertex grips → preview → marquee → wire tool.
-          Grid stays a separate static layer beneath (fewer canvases).
+          Schematic layer (cacheable during pan): wires + components.
+          Interaction layer above: grips, previews, overlays (not cached).
         */}
-        <Layer>
+        <Layer ref={schematicLayerRef} perfectDrawEnabled={false}>
           <WireLayer
-            wires={circuit.wires}
+            wires={visibleWires}
             selectedId={selectedId}
             panX={circuit.panX}
             panY={circuit.panY}
@@ -1790,14 +1989,16 @@ const CircuitCanvas: React.FC = () => {
             wireLabelsMasterVisible={circuit.wireLabelsVisible !== false}
           />
 
-          <WireGripLayer phases={['segments']} />
+          <Group listening>
+            {visibleComponents.map(renderComponent)}
+          </Group>
+          <Group listening>
+            {visibleComponents.map(renderMultimeterLeads)}
+          </Group>
+        </Layer>
 
-          <Group listening>
-            {circuit.components.map(renderComponent)}
-          </Group>
-          <Group listening>
-            {circuit.components.map(renderMultimeterLeads)}
-          </Group>
+        <Layer>
+          <WireGripLayer phases={['segments']} />
 
           <WireGripLayer phases={['vertices']} />
 
@@ -1823,6 +2024,30 @@ const CircuitCanvas: React.FC = () => {
                 dash={[6, 4]}
               />
             </Group>
+          )}
+
+          {connectionIntegrityOverlay && (
+            <ConnectionIntegrityOverlay
+              circuit={circuit}
+              panX={circuit.panX}
+              panY={circuit.panY}
+              zoom={circuit.zoom}
+            />
+          )}
+
+          {arcFlashBadges && (
+            <ArcFlashBadgeLayer
+              circuit={circuit}
+              simulationResult={simulationResult}
+              panX={circuit.panX}
+              panY={circuit.panY}
+              zoom={circuit.zoom}
+              visibleComponentIds={
+                cullingActive
+                  ? new Set(visibleComponents.map((c) => c.id))
+                  : undefined
+              }
+            />
           )}
 
           {tool === 'wire' && (

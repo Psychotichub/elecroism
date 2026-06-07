@@ -9,11 +9,16 @@
   "scripts": {
     "dev": "vite",
     "dev:electron": "concurrently -k \"npm:dev\" \"npm:electron:dev\"",
-    "electron:dev": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+    "electron:dev": "wait-on tcp:5173 && cross-env ELECTRON_DISABLE_SECURITY_WARNINGS=true VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
     "build": "tsc -b && vite build",
-    "build:desktop": "npm run build && node scripts/rm-win-unpacked.mjs && electron-builder",
-    "lint": "eslint .",
+    "build:desktop": "npm run build && node scripts/clean-release.mjs && electron-builder",
+    "build:desktop:win": "npm run build && node scripts/clean-release.mjs && electron-builder --win",
+    "build:desktop:mac": "npm run build && node scripts/clean-release.mjs && electron-builder --mac",
+    "build:desktop:linux": "npm run build && node scripts/clean-release.mjs && electron-builder --linux",
+    "build:desktop:publish": "npm run build && node scripts/clean-release.mjs && electron-builder --publish always",
+    "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "preview": "vite preview"
   },
@@ -21,20 +26,57 @@
     "appId": "com.electrosim.app",
     "productName": "ElectroSim",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
       "package.json"
     ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Psychotichub",
+        "repo": "elecroism"
+      }
+    ],
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis"
+      ],
       "signAndEditExecutable": false
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development",
+      "maintainer": "PSYCHOTIC"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true
     }
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.9",
+    "immer": "^11.1.8",
+    "jspdf": "^4.2.1",
     "konva": "^10.2.5",
     "mathjs": "^15.2.0",
     "react": "^19.2.5",
@@ -52,6 +94,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.5",
     "autoprefixer": "^10.5.0",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",

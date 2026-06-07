@@ -28,6 +28,8 @@ const BASE_COMMAND_HINTS: string[] = [
   'add',
   'clear',
   'copy',
+  'find',
+  'goto',
   'help',
   'line',
   'pan',
@@ -62,9 +64,20 @@ const BASE_COMMAND_HINTS: string[] = [
   'labels off',
   'normalize',
   'cleanup',
+  'selectall',
+  'select unwired',
+  'select faulted',
+  'reroute',
+  'bundle',
   'wiresch',
   'wireschedule',
   'exportwires',
+  'pdf',
+  'exportpdf',
+  'drawingpdf',
+  'cablesch',
+  'cableschedule',
+  'exportcables',
   'z',
   'ze',
   'zi',
@@ -257,10 +270,36 @@ export function runCadCommand(ctx: CadCommandContext): string {
       'autoroute|autowire · wirecolor <color|auto> · wiretype power|control|comm|auto',
       'break (click segment) · trim (two interior grips) · extend [from|to] (then click crossing wire)',
       'join · fillet 0 · labels [on|off] · wirelayer power_ac|…|instrumentation_analog',
+      'find|goto <label> · selectall <type> · select unwired|faulted · Ctrl+K palette',
       'z ze zi zo · add <type> [x y] · copy · clear',
     ].join(' — ');
   }
+  if (cmd === 'find' || cmd === 'goto') {
+    const label = parts.slice(1).join(' ');
+    if (!label) return 'Usage: find <label>  (jump to device)';
+    const ok = useCircuitStore.getState().jumpToLabel(label);
+    return ok ? `Jumped to "${label}"` : `No device matching "${label}"`;
+  }
+  if (cmd === 'selectall' || cmd === 'selall') {
+    const typeQ = parts.slice(1).join(' ');
+    if (!typeQ) return 'Usage: selectall mcb|motor|contactor|<type>';
+    const ok = useCircuitStore.getState().selectAllOfType(typeQ);
+    return ok ? `Selected all matching "${typeQ}"` : `No devices for "${typeQ}"`;
+  }
   if (cmd === 'select' || cmd === 's') {
+    const sub = parts[1];
+    if (sub === 'unwired') {
+      const ok = useCircuitStore.getState().selectUnwiredComponents();
+      return ok
+        ? 'Selected components with unwired terminals'
+        : 'No unwired terminals found';
+    }
+    if (sub === 'faulted' || sub === 'fault') {
+      const ok = useCircuitStore.getState().selectFaultedComponents();
+      return ok
+        ? 'Selected faulted / flagged devices'
+        : 'No faulted devices found';
+    }
     setTool('select');
     return 'Tool set to Select';
   }
@@ -400,9 +439,35 @@ export function runCadCommand(ctx: CadCommandContext): string {
     }
     return st.normalizeWireRoute(sid) || 'Normalized wire polyline';
   }
+  if (cmd === 'reroute') {
+    const st = useCircuitStore.getState();
+    const sid = st.selectedId;
+    if (!sid || !st.circuit.wires.some((w) => w.id === sid)) {
+      return 'Reroute: select a wire first';
+    }
+    return st.autoRerouteWire(sid) || 'Auto-rerouted wire around obstacles';
+  }
+  if (cmd === 'bundle' || cmd === 'spacebundle') {
+    const st = useCircuitStore.getState();
+    const sid = st.selectedId;
+    if (!sid || !st.circuit.wires.some((w) => w.id === sid)) {
+      return 'Bundle: select a wire first';
+    }
+    return st.bundleParallelWires(sid)
+      ? 'Spaced parallel wire bundle'
+      : 'No parallel bundle found';
+  }
   if (cmd === 'wiresch' || cmd === 'wireschedule' || cmd === 'exportwires') {
     useCircuitStore.getState().exportWireScheduleCsv();
     return 'Wire schedule CSV downloaded';
+  }
+  if (cmd === 'pdf' || cmd === 'exportpdf' || cmd === 'drawingpdf') {
+    void useCircuitStore.getState().exportDrawingPdf();
+    return 'Drawing PDF export started';
+  }
+  if (cmd === 'cablesch' || cmd === 'cableschedule' || cmd === 'exportcables') {
+    useCircuitStore.getState().exportCableScheduleCsv();
+    return 'Cable schedule CSV downloaded';
   }
   if (cmd === 'labels') {
     const v = parts[1];

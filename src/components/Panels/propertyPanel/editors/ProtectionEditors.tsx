@@ -1,5 +1,6 @@
 import { usePPCtx } from '../PropertyPanelContext';
 import { Label } from '../PropertyPanelLabel';
+import { AddIdenticalFeederButton } from './FeederEditors';
 
 export const renderMCBProps = (
     variant: '1p' | '3p' | '4p' | 'motorized_mccb' | 'motorized_mccb_4p' = '1p'
@@ -122,6 +123,7 @@ export const renderMCBProps = (
           {selectedComp!.state.toUpperCase()}
         </span>
       </Label>
+      <AddIdenticalFeederButton />
     </>
   )};
 
@@ -489,6 +491,69 @@ export const renderRCDProps = () => { const { selectedComp, tc, updateProp, upda
   )};
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
+export const renderOverloadRelayProps = () => { const { selectedComp, tc, updateProp, toggleComponent, resetTripped } = usePPCtx(); return (
+    <>
+      <Label text="Thermal pickup (A)">
+        <select
+          value={selectedComp!.properties.ratingAmps ?? 16}
+          onChange={(e) =>
+            updateProp({ ratingAmps: Number(e.target.value) })
+          }
+          className="input-field"
+        >
+          {[4, 6, 9, 10, 12, 16, 20, 25, 32].map((a) => (
+            <option key={a} value={a}>
+              {a}A
+            </option>
+          ))}
+        </select>
+      </Label>
+      <Label text="Trip class">
+        <div className="flex gap-1">
+          {(['10', '20', '30'] as const).map((cls) => (
+            <button
+              key={cls}
+              type="button"
+              onClick={() => updateProp({ overloadTripClass: cls })}
+              className={`px-2 py-1 rounded text-xs ${
+                (selectedComp!.properties.overloadTripClass ?? '10') === cls
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {cls}
+            </button>
+          ))}
+        </div>
+      </Label>
+      <Label text="State">
+        <button
+          onClick={() => toggleComponent(selectedComp!.id)}
+          className={`w-full px-3 py-2 rounded text-sm font-medium transition-colors ${
+            selectedComp!.state === 'on'
+              ? 'bg-green-600 text-white hover:bg-green-700'
+              : 'bg-gray-600 text-white hover:bg-gray-700'
+          }`}
+        >
+          {selectedComp!.state === 'on' ? 'ON' : 'OFF'}
+        </button>
+      </Label>
+      {selectedComp!.state === 'tripped' && (
+        <button
+          onClick={() => resetTripped(selectedComp!.id)}
+          className="w-full px-3 py-2 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700"
+        >
+          RESET overload relay
+        </button>
+      )}
+      <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+        Inverse-time thermal trip (IEC 60947-4-1). Used by the motor thermal
+        integrator in the oscilloscope and Properties thermal readout.
+      </p>
+    </>
+  );};
+
+// eslint-disable-next-line react-hooks/rules-of-hooks
 export const renderMpcbProps = () => { const { selectedComp, tc, updateProp, toggleComponent, resetTripped } = usePPCtx(); return (
     <>
       <Label text="Motor FLA setting">
@@ -548,6 +613,7 @@ export const renderMpcbProps = () => { const { selectedComp, tc, updateProp, tog
         Motor protector with adjustable thermal pickup near motor FLA and
         magnetic short-circuit trip. Place ahead of contactor + overload loop.
       </p>
+      <AddIdenticalFeederButton />
     </>
   )};
 

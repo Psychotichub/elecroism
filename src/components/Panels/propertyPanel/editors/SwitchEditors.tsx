@@ -188,6 +188,97 @@ export const renderSelectorSwitchProps = () => {
           the coil). MANUAL bridges <strong>COM ↔ MAN</strong> (panel push-
           buttons). OFF opens both, isolating the contactor.
         </p>
+        <Label text="ATS sequence controller">
+          <button
+            type="button"
+            onClick={() =>
+              updateProp({ atsController: !selectedComp.properties.atsController })
+            }
+            className={`w-full rounded px-3 py-2 text-xs font-medium ${
+              selectedComp.properties.atsController
+                ? 'bg-emerald-600 text-white'
+                : 'bg-gray-600 text-gray-300'
+            }`}
+          >
+            {selectedComp.properties.atsController ? 'Enabled' : 'Disabled'}
+          </button>
+        </Label>
+        {selectedComp.properties.atsController ? (
+          <>
+            <Label text="Transition">
+              <div className="flex gap-1">
+                {(['open', 'closed'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => updateProp({ atsTransition: mode })}
+                    className={`flex-1 rounded px-2 py-1 text-xs capitalize ${
+                      (selectedComp.properties.atsTransition ?? 'open') === mode
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-600 text-gray-300'
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            </Label>
+            <Label text="Utility fail (ms)">
+              <input
+                type="number"
+                min={0}
+                step={100}
+                value={selectedComp.properties.atsUtilityFailAtMs ?? 2000}
+                onChange={(e) =>
+                  updateProp({ atsUtilityFailAtMs: Math.max(0, Number(e.target.value)) })
+                }
+                className="input-field"
+              />
+            </Label>
+            <Label text="Gen start delay (ms)">
+              <input
+                type="number"
+                min={0}
+                step={100}
+                value={selectedComp.properties.atsGenStartDelayMs ?? 1500}
+                onChange={(e) =>
+                  updateProp({ atsGenStartDelayMs: Math.max(0, Number(e.target.value)) })
+                }
+                className="input-field"
+              />
+            </Label>
+            <Label text="Transfer delay (ms)">
+              <input
+                type="number"
+                min={0}
+                step={100}
+                value={selectedComp.properties.atsTransferDelayMs ?? 1000}
+                onChange={(e) =>
+                  updateProp({ atsTransferDelayMs: Math.max(0, Number(e.target.value)) })
+                }
+                className="input-field"
+              />
+            </Label>
+            <Label text="Utility restore (ms, 0=off)">
+              <input
+                type="number"
+                min={0}
+                step={500}
+                value={selectedComp.properties.atsUtilityRestoreAtMs ?? 0}
+                onChange={(e) => {
+                  const v = Math.max(0, Number(e.target.value));
+                  updateProp({ atsUtilityRestoreAtMs: v > 0 ? v : undefined });
+                }}
+                className="input-field"
+              />
+            </Label>
+            <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
+              Labels default to Mains / Generator / KM-M / KM-G. Record the
+              oscilloscope on <strong>ATS transfer</strong> to step through
+              utility fail → gen start → transfer → retransfer.
+            </p>
+          </>
+        ) : null}
       </>
     );
   };

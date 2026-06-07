@@ -36,7 +36,7 @@ const MultimeterSymbol: React.FC<Props> = ({
   const mode = component.properties.multimeterMode ?? 'voltage';
   const selectedSignal = component.properties.multimeterSignal ?? 'auto';
   const detectedSignal =
-    (nodeResult as NodeResult & { meterSignal?: 'ac' | 'dc' } | undefined)
+    (nodeResult)
       ?.meterSignal ?? 'ac';
   const signal =
     selectedSignal === 'auto'

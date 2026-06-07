@@ -206,6 +206,8 @@ function defaultConnectionPoints(
       return [cp(-16, 32, 'DC_PLUS'), cp(16, 32, 'DC_MINUS')];
     case 'mcb':
       return [cp(0, -25, '1'), cp(0, 25, '2')];
+    case 'overload_relay':
+      return [cp(0, -25, '1'), cp(0, 25, '2')];
     case 'switch':
       return [cp(0, -20, '1'), cp(0, 20, '2')];
     case 'lamp':
@@ -266,6 +268,25 @@ function defaultConnectionPoints(
     case 'junction':
       return [
         cp(0, 0, 'T1'),
+      ];
+    case 'smps':
+    case 'ac_dc_converter':
+      return [
+        cp(-22, -26, 'AC_L'),
+        cp(22, -26, 'AC_N'),
+        cp(-22, 26, 'DC_PLUS'),
+        cp(22, 26, 'DC_MINUS'),
+      ];
+    case 'dc_battery_backup':
+      return [cp(-14, -22, 'BAT_POS'), cp(14, -22, 'BAT_NEG')];
+    case 'ups_module':
+      return [
+        cp(-30, -12, 'AC_IN_L'),
+        cp(-30, -2, 'AC_IN_N'),
+        cp(30, -12, 'AC_OUT_L'),
+        cp(30, -2, 'AC_OUT_N'),
+        cp(-10, 24, 'BAT_POS'),
+        cp(10, 24, 'BAT_NEG'),
       ];
     default:
       return [cp(0, -20, 'T1'), cp(0, 20, 'T2')];

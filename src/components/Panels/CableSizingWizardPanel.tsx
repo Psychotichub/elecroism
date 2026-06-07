@@ -3,6 +3,8 @@ import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
 import {
   runCableSizingWizard,
+  buildWireCableSizingRecord,
+  evaluateAppliedCrossSection,
   INSTALLATION_METHOD_LABELS,
   type CableSizingInput,
   type CableSizingResult,
@@ -10,7 +12,9 @@ import {
   type ConductorMaterial,
   type PhaseConfig,
 } from '../../utils/cableSizingWizard';
+import { downloadCableScheduleCsv } from '../../utils/cableScheduleExport';
 import { FiCheck, FiX, FiZap, FiArrowRight } from 'react-icons/fi';
+import { wireLengthMeters } from '../../simulation/cableImpedance';
 
 // ---------------------------------------------------------------------------
 // Storage key for sticky wizard defaults
@@ -27,6 +31,7 @@ interface WizardDefaults {
   conductorMaterial: ConductorMaterial;
   maxVoltageDropPct: number;
   ambientTempC: number;
+  circuitsInGroup: number;
 }
 
 function loadDefaults(): WizardDefaults {
@@ -40,10 +45,16 @@ function loadDefaults(): WizardDefaults {
     conductorMaterial: 'copper',
     maxVoltageDropPct: 3,
     ambientTempC: 30,
+    circuitsInGroup: 1,
   };
   try {
     const raw = localStorage.getItem(WIZARD_STORAGE_KEY);
-    if (raw) return { ...base, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return { ...base, ...(parsed as Partial<WizardDefaults>) };
+      }
+    }
   } catch {
     /* ignore */
   }
@@ -97,17 +108,25 @@ const CableSizingWizardPanel: React.FC = () => {
     [circuit.wires]
   );
 
-  const [manualTargetWireId, setManualTargetWireId] = useState<string | ''>('');
+  const [manualTargetWireId, setManualTargetWireId] = useState('');
 
   // Derive the effective target: canvas-selected wire wins, else manual pick.
   const targetWireId = selectedWire ? selectedWire.id : manualTargetWireId;
   const setTargetWireId = setManualTargetWireId;
 
+  const selectedWireLengthM = useMemo(() => {
+    if (!selectedWire) return null;
+    return wireLengthMeters(selectedWire.points, circuit.gridSize);
+  }, [selectedWire, circuit.gridSize]);
+
   // Run the calculation
   const input: CableSizingInput = useMemo(
     () => ({
       loadKw: defs.loadKw,
-      distanceM: defs.distanceM,
+      distanceM:
+        selectedWireLengthM != null && selectedWireLengthM > 0
+          ? Math.round(selectedWireLengthM * 10) / 10
+          : defs.distanceM,
       voltageV: defs.voltageV,
       powerFactor: defs.powerFactor,
       phaseConfig: defs.phaseConfig,
@@ -115,8 +134,9 @@ const CableSizingWizardPanel: React.FC = () => {
       conductorMaterial: defs.conductorMaterial,
       maxVoltageDropPct: defs.maxVoltageDropPct,
       ambientTempC: defs.ambientTempC,
+      circuitsInGroup: defs.circuitsInGroup,
     }),
-    [defs]
+    [defs, selectedWireLengthM]
   );
 
   const result: CableSizingResult = useMemo(
@@ -124,21 +144,47 @@ const CableSizingWizardPanel: React.FC = () => {
     [input]
   );
 
-  // Apply recommended size to the target wire
+  const targetWire = useMemo(
+    () => circuit.wires.find((w) => w.id === targetWireId),
+    [circuit.wires, targetWireId]
+  );
+
+  const appliedEvaluation = useMemo(() => {
+    if (!targetWire) return null;
+    return evaluateAppliedCrossSection(targetWire.crossSection, input);
+  }, [targetWire, input]);
+
+  const persistSizingToWire = useCallback(
+    (wireId: string, crossMm2?: number) => {
+      updateWire(wireId, {
+        ...(crossMm2 != null ? { crossSection: crossMm2 } : {}),
+        cableSizing: buildWireCableSizingRecord(input, result),
+      });
+    },
+    [input, result, updateWire]
+  );
+
   const applyRecommended = useCallback(() => {
     if (!result.recommended || !targetWireId) return;
-    updateWire(targetWireId, {
-      crossSection: result.recommended.crossSectionMm2,
-    });
-  }, [result.recommended, targetWireId, updateWire]);
+    persistSizingToWire(targetWireId, result.recommended.crossSectionMm2);
+  }, [result.recommended, targetWireId, persistSizingToWire]);
 
-  // Apply a specific candidate
   const applyCandidate = useCallback(
     (crossMm2: number) => {
       if (!targetWireId) return;
-      updateWire(targetWireId, { crossSection: crossMm2 });
+      persistSizingToWire(targetWireId, crossMm2);
     },
-    [targetWireId, updateWire]
+    [targetWireId, persistSizingToWire]
+  );
+
+  const saveSizingRecordOnly = useCallback(() => {
+    if (!targetWireId) return;
+    persistSizingToWire(targetWireId);
+  }, [targetWireId, persistSizingToWire]);
+
+  const wiresWithSizing = useMemo(
+    () => circuit.wires.filter((w) => w.cableSizing).length,
+    [circuit.wires]
   );
 
   // ---- input field helper ----
@@ -161,7 +207,7 @@ const CableSizingWizardPanel: React.FC = () => {
         min={opts?.min ?? 0}
         max={opts?.max}
         step={opts?.step ?? 1}
-        value={defs[field] as number}
+        value={defs[field]}
         onChange={(e) =>
           updateField(field, Math.max(opts?.min ?? 0, Number(e.target.value) || 0) as never)
         }
@@ -189,6 +235,13 @@ const CableSizingWizardPanel: React.FC = () => {
           Enter load parameters. The wizard recommends the smallest standard
           cable cross-section that satisfies both ampacity (IEC 60364-5-52
           simplified) and your voltage drop limit.
+          {selectedWireLengthM != null && selectedWireLengthM > 0 ? (
+            <>
+              {' '}
+              Run length from selected wire:{' '}
+              <strong>{selectedWireLengthM.toFixed(1)} m</strong>.
+            </>
+          ) : null}
         </p>
       </div>
 
@@ -237,6 +290,11 @@ const CableSizingWizardPanel: React.FC = () => {
             max: 65,
             step: 1,
             unit: '°C',
+          })}
+          {numInput('csw-group', 'Circuits grouped', 'circuitsInGroup', {
+            min: 1,
+            max: 20,
+            step: 1,
           })}
 
           {/* Phase config */}
@@ -376,6 +434,48 @@ const CableSizingWizardPanel: React.FC = () => {
             {result.summary}
           </p>
 
+          {/* Derating breakdown */}
+          <div
+            className={`mt-2 grid grid-cols-4 gap-1 text-center text-[10px] ${
+              theme === 'dark' ? 'text-emerald-100/80' : 'text-emerald-900/80'
+            }`}
+          >
+            <div className={`rounded px-1 py-1 ${theme === 'dark' ? 'bg-black/20' : 'bg-white/60'}`}>
+              <div className="font-semibold">×{result.derating.methodK.toFixed(2)}</div>
+              <div className="opacity-70">Method</div>
+            </div>
+            <div className={`rounded px-1 py-1 ${theme === 'dark' ? 'bg-black/20' : 'bg-white/60'}`}>
+              <div className="font-semibold">×{result.derating.tempK.toFixed(2)}</div>
+              <div className="opacity-70">Temp</div>
+            </div>
+            <div className={`rounded px-1 py-1 ${theme === 'dark' ? 'bg-black/20' : 'bg-white/60'}`}>
+              <div className="font-semibold">×{result.derating.groupingK.toFixed(2)}</div>
+              <div className="opacity-70">Group</div>
+            </div>
+            <div className={`rounded px-1 py-1 ${theme === 'dark' ? 'bg-black/20' : 'bg-white/60'}`}>
+              <div className="font-semibold">×{result.derating.combinedK.toFixed(2)}</div>
+              <div className="opacity-70">Total</div>
+            </div>
+          </div>
+
+          {appliedEvaluation && !appliedEvaluation.ok && (
+            <p
+              className={`mt-2 rounded px-2 py-1.5 text-[10px] leading-snug ${
+                theme === 'dark'
+                  ? 'bg-red-950/40 text-red-200 border border-red-900/50'
+                  : 'bg-red-50 text-red-800 border border-red-200'
+              }`}
+            >
+              Selected wire ({targetWire?.crossSection} mm²) is insufficient after
+              derating: Iz ≈ {appliedEvaluation.deratedAmpacity.toFixed(0)} A vs load{' '}
+              {appliedEvaluation.loadCurrentA.toFixed(1)} A
+              {appliedEvaluation.voltageDropPct > input.maxVoltageDropPct
+                ? `; ΔV ${appliedEvaluation.voltageDropPct.toFixed(1)} %`
+                : ''}
+              .
+            </p>
+          )}
+
           {/* Quick stats */}
           {result.recommended && (
             <div
@@ -446,12 +546,51 @@ const CableSizingWizardPanel: React.FC = () => {
               <FiArrowRight aria-hidden />
               Apply {result.recommended.crossSectionMm2} mm² to wire
             </button>
+            <button
+              type="button"
+              disabled={!targetWireId}
+              onClick={saveSizingRecordOnly}
+              className={`w-full px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                targetWireId
+                  ? `${tc.btnBg} ${tc.btnHover} ${tc.text}`
+                  : `${tc.btnBg} ${tc.textMuted} cursor-not-allowed`
+              }`}
+            >
+              Save wizard result (keep current mm²)
+            </button>
             <p className={`text-[10px] ${tc.textMuted} leading-snug`}>
-              This updates the wire&apos;s cross-section in the schematic.
-              Select a wire on the canvas or pick one from the dropdown.
+              Apply updates cross-section and saves sizing data for the cable
+              schedule. {wiresWithSizing} wire
+              {wiresWithSizing === 1 ? '' : 's'} have saved wizard results.
             </p>
           </div>
         )}
+
+        {/* ─── Cable schedule export ─── */}
+        <div
+          className={`rounded-md border p-2.5 space-y-2 ${tc.border} ${
+            theme === 'dark' ? 'bg-black/20' : 'bg-gray-50'
+          }`}
+        >
+          <h3
+            className={`text-[11px] font-bold uppercase tracking-wide ${tc.textMuted}`}
+          >
+            Cable schedule
+          </h3>
+          <p className={`text-[10px] leading-snug ${tc.textMuted}`}>
+            Export a CSV with wire endpoints, applied mm², and persisted wizard
+            fields (load, length, Iz, ΔV) per wire.
+          </p>
+          <button
+            type="button"
+            onClick={() =>
+              downloadCableScheduleCsv(circuit, circuit.name || 'circuit')
+            }
+            className="w-full rounded bg-indigo-700 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-600"
+          >
+            Download cable schedule CSV
+          </button>
+        </div>
 
         {/* ─── Full candidate table ─── */}
         <div>

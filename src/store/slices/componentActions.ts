@@ -15,6 +15,11 @@ import { v4 as uuid } from 'uuid';
 import { clampComponentScale } from '../../utils/geometry';
 import { attachConnectionPointToWireIfHit } from '../../utils/wireTapPlacement';
 import {
+  loadComponentMacros,
+  type ComponentMacro,
+} from '../../utils/componentMacros';
+import { getCircuitTemplate } from '../../utils/circuitTemplates';
+import {
   syncWireEndpoints,
   createConnectionPoints,
   mcbLayoutPoles,
@@ -37,6 +42,71 @@ import {
 
 import type { CircuitStoreSet, CircuitStoreGet } from './sliceTypes';
 import { globalMouseContext } from '../circuitStore';
+import {
+  alignPositions,
+  distributePositions,
+  type AlignMode,
+  type DistributeMode,
+} from '../../utils/componentAlignment';
+
+function selectedComponents(
+  get: CircuitStoreGet
+): CircuitComponent[] {
+  const { circuit, selectedId } = get();
+  return circuit.components.filter(
+    (c: CircuitComponent) => c.selected || c.id === selectedId
+  );
+}
+
+function applyPositionMap(
+  set: CircuitStoreSet,
+  get: CircuitStoreGet,
+  positions: Map<string, { x: number; y: number }>,
+  historyLabel: string
+): void {
+  if (positions.size === 0) return;
+  const circuit = get().circuit;
+  const movingIds = new Set(positions.keys());
+
+  const wires = circuit.wires.map((w: Wire) => {
+    const touches =
+      movingIds.has(w.fromComponentId) || movingIds.has(w.toComponentId);
+    if (!touches || w.points.length <= 4) return w;
+    const from = circuit.components.find(
+      (c: CircuitComponent) => c.id === w.fromComponentId
+    );
+    const to = circuit.components.find(
+      (c: CircuitComponent) => c.id === w.toComponentId
+    );
+    const fromPos = positions.get(w.fromComponentId);
+    const toPos = positions.get(w.toComponentId);
+    const dxFrom = from && fromPos ? fromPos.x - from.x : 0;
+    const dyFrom = from && fromPos ? fromPos.y - from.y : 0;
+    const dxTo = to && toPos ? toPos.x - to.x : 0;
+    const dyTo = to && toPos ? toPos.y - to.y : 0;
+    const pts = [...w.points];
+    for (let i = 2; i < pts.length - 2; i += 2) {
+      const t = i / (pts.length - 2);
+      pts[i] += dxFrom + (dxTo - dxFrom) * t;
+      pts[i + 1] += dyFrom + (dyTo - dyFrom) * t;
+    }
+    return { ...w, points: pts };
+  });
+
+  set({
+    circuit: syncWireEndpoints({
+      ...circuit,
+      components: circuit.components.map((c: CircuitComponent) => {
+        const pos = positions.get(c.id);
+        return pos ? { ...c, x: pos.x, y: pos.y } : c;
+      }),
+      wires,
+      updatedAt: new Date().toISOString(),
+    }),
+  });
+  get().pushHistory(historyLabel);
+  get().runSimulation();
+}
 
 export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGet) {
   return {
@@ -479,6 +549,58 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
       get().pushHistory('Pasted components');
     },
 
+    saveSelectionAsMacro: (name: string) => {
+      const circuit = get().circuit;
+      const selectedComponents = circuit.components.filter(
+        (c: CircuitComponent) => c.selected || c.id === get().selectedId
+      );
+      if (selectedComponents.length === 0) return false;
+      const selectedIds = new Set(selectedComponents.map((c: CircuitComponent) => c.id));
+      const selectedWires = circuit.wires.filter(
+        (w: Wire) =>
+          selectedIds.has(w.fromComponentId) && selectedIds.has(w.toComponentId)
+      );
+      get().addMacroToProjectLibrary(
+        name,
+        selectedComponents,
+        selectedWires
+      );
+      return true;
+    },
+
+    insertMacro: (macroId: string) => {
+      const macro =
+        get().getProjectLibrary().find((m: ComponentMacro) => m.id === macroId) ??
+        loadComponentMacros().find((m: ComponentMacro) => m.id === macroId);
+      if (!macro || macro.components.length === 0) return;
+      set({
+        clipboard: {
+          components: structuredClone(macro.components),
+          wires: structuredClone(macro.wires),
+        },
+      });
+      get().pasteSelection();
+    },
+
+    insertCircuitTemplate: (templateId: string) => {
+      const template = getCircuitTemplate(templateId);
+      if (!template) return;
+      const { components, wires } = template.build();
+      if (components.length === 0) return;
+      set({
+        clipboard: {
+          components: structuredClone(components),
+          wires: structuredClone(wires),
+        },
+      });
+      get().pasteSelection();
+    },
+
+    listMacros: () => {
+      const lib = get().getProjectLibrary();
+      return lib.length > 0 ? lib : loadComponentMacros();
+    },
+
     rotateComponent: (id: string) => {
       const comp = get().circuit.components.find((c: CircuitComponent) => c.id === id);
       if (!comp) return;
@@ -508,6 +630,38 @@ export function createComponentActions(set: CircuitStoreSet, get: CircuitStoreGe
             ? { mcbInitialPoles: mcbLayoutPoles(comp), ...baseScale }
             : baseScale
       );
+    },
+
+    nudgeSelection: (dx: number, dy: number) => {
+      if (dx === 0 && dy === 0) return;
+      const items = selectedComponents(get);
+      if (items.length === 0) return;
+      const positions = new Map(
+        items.map((c) => [c.id, { x: c.x + dx, y: c.y + dy }])
+      );
+      applyPositionMap(set, get, positions, 'Nudge selection');
+    },
+
+    alignSelection: (mode: AlignMode) => {
+      const items = selectedComponents(get);
+      if (items.length < 2) return;
+      const positions = alignPositions(
+        items.map((c) => ({ id: c.id, x: c.x, y: c.y })),
+        mode,
+        get().circuit.gridSize
+      );
+      applyPositionMap(set, get, positions, `Align ${mode}`);
+    },
+
+    distributeSelection: (mode: DistributeMode) => {
+      const items = selectedComponents(get);
+      if (items.length < 3) return;
+      const positions = distributePositions(
+        items.map((c) => ({ id: c.id, x: c.x, y: c.y })),
+        mode,
+        get().circuit.gridSize
+      );
+      applyPositionMap(set, get, positions, `Distribute ${mode}`);
     },
   };
 }

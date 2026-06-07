@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType } from '../../types';
-import { useThemeStore, themeColors } from '../../store/themeStore';
+import { isDarkSurface, useThemeStore, themeColors } from '../../store/themeStore';
+import { useUiStore } from '../../store/uiStore';
 import {
   clearDragComponentType,
   setDragComponentType,
@@ -636,7 +637,7 @@ function loadCollapsed(): Set<string> {
   try {
     const raw = window.localStorage.getItem(COLLAPSE_STORAGE_KEY);
     if (!raw) return new Set();
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       return new Set(parsed.filter((s) => typeof s === 'string'));
     }
@@ -714,6 +715,10 @@ type SidebarSection = {
 const Sidebar: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
+  const darkSurface = isDarkSurface(theme);
+  const setPendingInsertType = useUiStore((s) => s.setPendingInsertType);
+  const paletteListRef = useRef<HTMLDivElement>(null);
+  const [focusedPaletteIndex, setFocusedPaletteIndex] = useState(-1);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed());
   const [searchPanelOpen, setSearchPanelOpen] = useState(() =>
     loadSearchPanelOpen()
@@ -782,6 +787,68 @@ const Sidebar: React.FC = () => {
     return out;
   }, [searchQuery, categoryFilter, favorites]);
 
+  const visiblePaletteItems = useMemo(() => {
+    const out: { item: ComponentItem; sectionKey: string; optionId: string }[] =
+      [];
+    for (const section of filteredSections) {
+      if (collapsed.has(section.collapseKey)) continue;
+      section.items.forEach((item, idx) => {
+        out.push({
+          item,
+          sectionKey: section.collapseKey,
+          optionId: `palette-opt-${section.collapseKey}-${item.type}-${idx}`,
+        });
+      });
+    }
+    return out;
+  }, [filteredSections, collapsed]);
+
+  const safeFocusedPaletteIndex =
+    focusedPaletteIndex >= visiblePaletteItems.length
+      ? visiblePaletteItems.length > 0
+        ? visiblePaletteItems.length - 1
+        : -1
+      : focusedPaletteIndex;
+
+  const handlePaletteKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const count = visiblePaletteItems.length;
+    if (count === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedPaletteIndex((i) => (i < 0 ? 0 : Math.min(count - 1, i + 1)));
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedPaletteIndex((i) => (i < 0 ? count - 1 : Math.max(0, i - 1)));
+      return;
+    }
+    if (e.key === 'Home') {
+      e.preventDefault();
+      setFocusedPaletteIndex(0);
+      return;
+    }
+    if (e.key === 'End') {
+      e.preventDefault();
+      setFocusedPaletteIndex(count - 1);
+      return;
+    }
+    if (e.key === 'Enter' && safeFocusedPaletteIndex >= 0) {
+      e.preventDefault();
+      const entry = visiblePaletteItems[safeFocusedPaletteIndex];
+      if (entry) {
+        setPendingInsertType(entry.item.type);
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setFocusedPaletteIndex(-1);
+      setPendingInsertType(null);
+    }
+  };
+
   const toggleGroup = (name: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -820,18 +887,34 @@ const Sidebar: React.FC = () => {
     clearDragComponentType();
   };
 
-  const renderPaletteRow = (item: ComponentItem, idx: number, sectionKey: string) => {
+  const renderPaletteRow = (
+    item: ComponentItem,
+    idx: number,
+    sectionKey: string,
+    optionId: string,
+    isFocused: boolean
+  ) => {
     const isFav = favorites.includes(item.type);
     return (
       <div
         key={`${sectionKey}-${item.type}-${idx}`}
+        id={optionId}
+        role="option"
+        aria-selected={isFocused}
+        tabIndex={-1}
         draggable
         onDragStart={(e) => handleDragStart(e, item)}
         onDragEnd={handleDragEnd}
+        onFocus={() => {
+          const flatIdx = visiblePaletteItems.findIndex((v) => v.optionId === optionId);
+          if (flatIdx >= 0) setFocusedPaletteIndex(flatIdx);
+        }}
         title={formatComponentPanelHelpText(
           COMPONENT_PANEL_DESCRIPTIONS[item.type]
         )}
-        className={`flex items-center gap-2 px-3 py-1.5 mx-1 rounded cursor-grab ${tc.itemHover} transition-colors active:cursor-grabbing`}
+        className={`flex items-center gap-2 px-3 py-1.5 mx-1 rounded cursor-grab ${tc.itemHover} transition-colors active:cursor-grabbing focus:outline-none ${
+          isFocused ? 'ring-2 ring-blue-500 ring-inset' : ''
+        }`}
       >
         <span className={`text-sm shrink-0 ${tc.groupLabel}`}>{item.icon}</span>
         <div className="flex min-w-0 flex-1 flex-col">
@@ -868,8 +951,11 @@ const Sidebar: React.FC = () => {
     );
   };
 
+  let paletteRowCounter = 0;
+
   return (
     <div
+      id="sidebar-palette-root"
       className={`w-56 ${tc.sidebar} ${tc.text} flex min-h-0 flex-col select-none border-r ${tc.border}`}
     >
       <div className={`shrink-0 border-b ${tc.border} ${tc.sidebar}`}>
@@ -1022,10 +1108,24 @@ const Sidebar: React.FC = () => {
       </div>
       {componentListOpen && (
       <div
+        ref={paletteListRef}
         id="sidebar-palette-body"
-        role="region"
+        role="listbox"
+        aria-label="Component palette"
         aria-labelledby="sidebar-component-list-heading"
-        className="min-h-0 flex-1 overflow-y-auto py-1"
+        aria-activedescendant={
+          focusedPaletteIndex >= 0
+            ? visiblePaletteItems[focusedPaletteIndex]?.optionId
+            : undefined
+        }
+        tabIndex={0}
+        onKeyDown={handlePaletteKeyDown}
+        onFocus={() => {
+          if (focusedPaletteIndex < 0 && visiblePaletteItems.length > 0) {
+            setFocusedPaletteIndex(0);
+          }
+        }}
+        className="min-h-0 flex-1 overflow-y-auto py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-inset"
       >
         {filteredSections.length === 0 ? (
           <p className={`px-3 py-4 text-center text-[10px] ${tc.textMuted}`}>
@@ -1040,7 +1140,7 @@ const Sidebar: React.FC = () => {
                 className={`mb-1 mx-1 rounded-lg border ${
                   isCollapsed
                     ? 'border-transparent'
-                    : `${tc.border} ${theme === 'dark' ? 'bg-black/20' : 'bg-black/[0.03]'}`
+                    : `${tc.border} ${darkSurface ? 'bg-black/20' : 'bg-black/[0.03]'}`
                 } overflow-hidden`}
               >
                 <button
@@ -1078,9 +1178,20 @@ const Sidebar: React.FC = () => {
                     id={`sidebar-group-${section.collapseKey}`}
                     className={`border-t ${tc.border} pb-1`}
                   >
-                    {section.items.map((item, idx) =>
-                      renderPaletteRow(item, idx, section.collapseKey)
-                    )}
+                    {section.items.map((item, idx) => {
+                      const entry = visiblePaletteItems[paletteRowCounter];
+                      const optionId = entry?.optionId ?? `palette-opt-${section.collapseKey}-${item.type}-${idx}`;
+                      const isFocused =
+                        paletteRowCounter === safeFocusedPaletteIndex;
+                      paletteRowCounter += 1;
+                      return renderPaletteRow(
+                        item,
+                        idx,
+                        section.collapseKey,
+                        optionId,
+                        isFocused
+                      );
+                    })}
                   </div>
                 )}
               </div>

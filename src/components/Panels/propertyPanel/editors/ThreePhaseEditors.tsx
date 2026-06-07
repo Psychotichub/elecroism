@@ -2,6 +2,8 @@ import { usePPCtx } from '../PropertyPanelContext';
 import { Label } from '../PropertyPanelLabel';
 import type { ComponentProperties } from '../../../../types';
 import { defaultPhaseSystemForType } from '../constants';
+import ThdHarmonicFields from './ThdHarmonicFields';
+import { MotorThermalReadout } from './MotorThermalReadout';
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
 export const renderPhaseCurrentUnbalanceFields = () => { const { selectedComp, tc, updateProp } = usePPCtx();
@@ -383,6 +385,8 @@ export const renderThreePhaseMotorProps = () => {
           </div>
         </Label>
         {renderPhaseCurrentUnbalanceFields()}
+        <ThdHarmonicFields showMotorDrive />
+        <MotorThermalReadout />
         <Label text="Nameplate line current (A)">
           <input
             type="number"

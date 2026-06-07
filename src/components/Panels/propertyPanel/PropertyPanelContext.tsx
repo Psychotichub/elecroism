@@ -21,7 +21,7 @@ export type ThemeColorSet = (typeof themeColors)[keyof typeof themeColors];
 
 export interface PropertyPanelContextValue {
   /* ---- theme ---- */
-  theme: 'dark' | 'light';
+  theme: 'dark' | 'light' | 'high-contrast';
   tc: ThemeColorSet;
 
   /* ---- selection ---- */

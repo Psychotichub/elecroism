@@ -139,13 +139,13 @@ export const renderAuxContactBlockProps = () => {
     const coilTargets = circuit.components.filter((c) =>
       followCoilTypes.includes(c.type)
     );
-    const followId = selectedComp!.properties.auxContactFollowContactorId ?? '';
+    const followId = selectedComp.properties.auxContactFollowContactorId ?? '';
     return (
       <>
         <Label text="Contact rating (A)">
           <input
             type="number"
-            value={selectedComp!.properties.ratingAmps ?? 10}
+            value={selectedComp.properties.ratingAmps ?? 10}
             onChange={(e) =>
               updateProp({
                 ratingAmps: Math.max(0, Number(e.target.value) || 0),

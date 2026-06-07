@@ -13,6 +13,7 @@ import {
   keyPotentialTag,
   splitTerminalKey,
 } from './engineTypes';
+import { collectDcSourceSeeds, extendDcPowerSeeds } from './dcPowerPaths';
 
 /* ------------------------------------------------------------------ */
 /*  Voltage defaults                                                  */
@@ -29,6 +30,14 @@ export function defaultSinglePhaseLoadVoltage(circuit: Circuit): number {
 export function defaultDcLoadVoltage(circuit: Circuit): number {
   const dc = circuit.components.find((c) => c.type === 'dc_power_source');
   if (dc) return dc.properties.voltage ?? 24;
+  const bat = circuit.components.find(
+    (c) => c.type === 'dc_battery_backup' && c.state === 'on'
+  );
+  if (bat) return bat.properties.voltage ?? 24;
+  const charger = circuit.components.find(
+    (c) => c.type === 'ac_dc_converter' || c.type === 'smps'
+  );
+  if (charger) return charger.properties.voltage ?? 24;
   return 24;
 }
 
@@ -63,8 +72,10 @@ export function getLiveStartKeys(circuit: Circuit): string[] {
 
 export function getDcConductorStartKeys(circuit: Circuit): string[] {
   const keys: string[] = [];
+  const dcSeeds = collectDcSourceSeeds(circuit);
+  keys.push(...dcSeeds.plus, ...dcSeeds.minus);
   for (const source of circuit.components) {
-    if (source.type !== 'dc_power_source' && source.type !== 'ac_dc_converter' && source.type !== 'smps') continue;
+    if (source.type !== 'ac_dc_converter' && source.type !== 'smps') continue;
     if (source.state === 'off' || source.state === 'tripped') continue;
     for (const cp of source.connectionPoints) {
       const key = terminalKey(source.id, cp.id);
@@ -113,17 +124,16 @@ export function propagatePotentials(
   const l2Starts: string[] = [];
   const l3Starts: string[] = [];
 
+  const dcSeeds = collectDcSourceSeeds(circuit);
+  liveStarts.push(...dcSeeds.plus);
+  neutralStarts.push(...dcSeeds.minus);
+
   for (const source of circuit.components) {
-    if (source.type !== 'power_source' && source.type !== 'dc_power_source') continue;
+    if (source.type !== 'power_source') continue;
     if (source.state === 'off' || source.state === 'tripped') continue;
     for (const cp of source.connectionPoints) {
       const key = terminalKey(source.id, cp.id);
       const tokens = tokenizeLabel(cp.label);
-      if (source.type === 'dc_power_source') {
-        if (tokens.includes('PLUS')) liveStarts.push(key);
-        else if (tokens.includes('MINUS')) neutralStarts.push(key);
-        continue;
-      }
       if (tokens.includes('L') || tokens.includes('LINE') || tokens.includes('PHASE')) {
         liveStarts.push(key);
       } else if (tokens.includes('N') || tokens.includes('NEUTRAL')) {
@@ -155,24 +165,14 @@ export function propagatePotentials(
   const liveL3 = bfsFrom(graph, l3Starts);
 
   for (let iter = 0; iter < 8; iter++) {
-    let added = false;
-    for (const c of circuit.components) {
-      if (c.type !== 'ac_dc_converter' && c.type !== 'smps') continue;
-      if (c.state === 'off' || c.state === 'tripped') continue;
-      const acLcp = c.connectionPoints.find((cp) => cp.label.toUpperCase() === 'AC_L');
-      const acNcp = c.connectionPoints.find((cp) => cp.label.toUpperCase() === 'AC_N');
-      const plusCp = c.connectionPoints.find((cp) => cp.label.toUpperCase() === 'DC_PLUS');
-      const minusCp = c.connectionPoints.find((cp) => cp.label.toUpperCase() === 'DC_MINUS');
-      if (!acLcp || !acNcp || !plusCp || !minusCp) continue;
-      const acLk = terminalKey(c.id, acLcp.id);
-      const acNk = terminalKey(c.id, acNcp.id);
-      const acHot = live.has(acLk) || liveL1.has(acLk) || liveL2.has(acLk) || liveL3.has(acLk);
-      if (!acHot || !neutral.has(acNk)) continue;
-      const plusK = terminalKey(c.id, plusCp.id);
-      const minusK = terminalKey(c.id, minusCp.id);
-      if (!live.has(plusK)) { liveStarts.push(plusK); added = true; }
-      if (!neutral.has(minusK)) { neutralStarts.push(minusK); added = true; }
-    }
+    const added = extendDcPowerSeeds(circuit, liveStarts, neutralStarts, {
+      live,
+      neutral,
+      pe: new Set(),
+      liveL1,
+      liveL2,
+      liveL3,
+    });
     if (!added) break;
     live = bfsFrom(graph, liveStarts);
     neutral = bfsFrom(graph, neutralStarts);
@@ -402,7 +402,12 @@ function estimateDcVoltageBetweenProbeKeys(circuit: Circuit, probeAKey: string, 
     if (!cp) return null;
     const lbl = cp.label.toUpperCase();
     if (!lbl.includes('PLUS') && !lbl.includes('MINUS')) return null;
-    if (comp.type === 'dc_power_source' || comp.type === 'ac_dc_converter' || comp.type === 'smps') {
+    if (
+      comp.type === 'dc_power_source' ||
+      comp.type === 'dc_battery_backup' ||
+      comp.type === 'ac_dc_converter' ||
+      comp.type === 'smps'
+    ) {
       return comp.properties.voltage ?? 24;
     }
     return null;

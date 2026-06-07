@@ -56,7 +56,7 @@ describe('Basic single-phase energization', () => {
     const lampNode = result.nodes[lamp.id];
     expect(lampNode).toBeDefined();
     expect(lampNode.energized).toBe(true);
-    expect(lampNode.voltageV).toBe(230);
+    expect(lampNode.voltageV).toBeCloseTo(230, 0);
     // I = P / V = 60 / 230 ≈ 0.26 A
     expect(lampNode.currentA).toBeCloseTo(60 / 230, 1);
     expect(lampNode.powerW).toBeCloseTo(60, 0);
@@ -318,7 +318,7 @@ describe('Three-phase motor', () => {
     // I_line = P / (√3 × V_LL × PF) = 3000 / (√3 × 400 × 0.85) ≈ 5.09A
     const expectedI = 3000 / (Math.sqrt(3) * 400 * 0.85);
     expect(motorNode.currentA).toBeCloseTo(expectedI, 1);
-    expect(motorNode.lineVoltageRmsV).toBe(400);
+    expect(motorNode.lineVoltageRmsV).toBeCloseTo(400, 0);
   });
 });
 

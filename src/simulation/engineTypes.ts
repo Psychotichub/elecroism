@@ -78,6 +78,16 @@ export function keyPotentialTag(
 /*  Graph helpers                                                     */
 /* ------------------------------------------------------------------ */
 
+export type TerminalGraph = Map<string, Set<string>>;
+
+export function cloneTerminalGraph(graph: TerminalGraph): TerminalGraph {
+  const out = new Map<string, Set<string>>();
+  for (const [key, neighbors] of graph) {
+    out.set(key, new Set(neighbors));
+  }
+  return out;
+}
+
 export function addEdge(graph: Map<string, Set<string>>, a: string, b: string): void {
   if (!graph.has(a)) graph.set(a, new Set());
   if (!graph.has(b)) graph.set(b, new Set());

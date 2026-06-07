@@ -36,7 +36,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         serialDataBits: 8,
         modbusDefaultSlaveId: 1,
         phaseSystem: 'single_phase',
-      } as ComponentProperties;
+      };
     case 'modbus_rtu_module':
       return {
         ioChannels: 1,
@@ -58,7 +58,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         mstpMacAddress: 1,
         mstpMaxMaster: 127,
         phaseSystem: 'single_phase',
-      } as ComponentProperties;
+      };
     case 'di_module':
       return { ioChannels: 8, phaseSystem: 'single_phase' };
     case 'do_module':
@@ -92,7 +92,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         serialStopBits: 1,
         serialDataBits: 8,
         phaseSystem: 'single_phase',
-      } as ComponentProperties;
+      };
     case 'iot_gateway':
       return {
         gatewayIp: '10.10.10.10',
@@ -125,9 +125,14 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
     case 'optocoupler_module':
       return { ioChannels: 1, phaseSystem: 'single_phase' };
     case 'ups_module':
-      return { ratingAmps: 10, phaseSystem: 'single_phase' };
+      return {
+        ratingAmps: 10,
+        upsInverterEnabled: true,
+        upsStaticBypass: false,
+        phaseSystem: 'single_phase',
+      };
     case 'dc_battery_backup':
-      return { voltage: 24, phaseSystem: 'single_phase' };
+      return { voltage: 24, batteryCapacityAh: 7, phaseSystem: 'single_phase' };
     case 'motor_operator_kit':
       return { voltage: 230, phaseSystem: 'single_phase' };
     case 'shunt_trip_coil':
@@ -181,6 +186,8 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         lineVoltage: 400,
         phaseSystem: 'three_phase',
         ratedLineAmps: 5.5,
+        motorDrive: 'dol',
+        thdPercent: 0,
       };
     case 'three_phase_mcb':
     case 'mccb':
@@ -352,7 +359,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         phaseSystem: 'single_phase',
       };
     case 'overload_relay':
-      return { ratingAmps: 16, phaseSystem: 'single_phase' };
+      return { ratingAmps: 16, overloadTripClass: '10', phaseSystem: 'single_phase' };
     case 'socket':
       return {
         socketType: 'schuko',
@@ -373,6 +380,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         loadType: 'inductive',
         powerFactor: 0.8,
         phaseSystem: 'single_phase',
+        ratedLineAmps: 5,
       };
     case 'heater':
       return {
@@ -457,6 +465,8 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
     case 'smps':
       return {
         voltage: 24,
+        powerWatts: 120,
+        thdPercent: 80,
         phaseSystem: 'single_phase',
         meterProtocol: 'none',
       };
@@ -490,7 +500,7 @@ function getDefaultProperties(type: ComponentType): ComponentProperties {
         multimeterHighVoltage: true,
         multimeterMaxVoltage: 1000,
         phaseSystem: 'single_phase',
-      } as ComponentProperties;
+      };
     case 'junction':
     case 'connection_point':
       return { phaseSystem: 'single_phase' };

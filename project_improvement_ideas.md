@@ -1,6 +1,6 @@
 # ElectroSim Project Improvement Ideas
 
-Date: 2026-05-03
+Date: 2026-05-03 (updated 2026-06-07)
 
 ## Current Impression
 
@@ -53,18 +53,18 @@ Suggested refactor:
 - Split simulation into focused modules (fault detection, load calculation, etc.).
 - Split store actions by feature using Zustand slices.
 
-### ❌ 5. Optimize History Store for Performance
+### ✅ 5. Optimize History Store for Performance
 
 The current `circuitStore.ts` tracks history in an array. As circuits get larger, deep copying the state can become a memory bottleneck.
 
 Recommended improvements:
-- ❌ Implement patches (e.g., using `immer`) instead of full state clones for history.
+- ✅ Implement patches (immer) instead of full state clones for history (`src/store/circuitHistory.ts`).
 - ✅ Limit the history size to prevent memory leaks during long sessions.
 
-### ❌ 6. Add Type-Aware ESLint Rules & CI Checks
+### ✅ 6. Add Type-Aware ESLint Rules & CI Checks
 
-- ❌ Enable `typescript-eslint` recommended type-checked rules.
-- ❌ Add a GitHub Actions workflow (`npm run lint`, `npm run build`, `npm test`) to prevent broken builds.
+- ✅ Enable `typescript-eslint` recommended type-checked rules (promise/async safety; unsafe rules deferred).
+- ✅ Add a GitHub Actions workflow (`npm run lint`, `npm run build`, `npm test`) to prevent broken builds (`.github/workflows/ci.yml`).
 
 ## Advanced Analytical & Engineering Ideas (NEW)
 
@@ -81,12 +81,12 @@ Instead of just warning about undersized cables, provide an automated wizard.
 - App calculates the required cross-sectional area (mm²) based on ampacity and acceptable voltage drop (e.g., 3%).
 - Automatically updates the wire properties in the schematic.
 
-### ❌ 9. Short-Circuit & Arc Flash Calculation
+### ⚠️ 9. Short-Circuit & Arc Flash Calculation
 
 Take the simulation beyond steady-state load flow.
-- Calculate the prospective short-circuit current (Isc) at various nodes based on source impedance and cable lengths.
-- Warn if a component's breaking capacity (kA rating) is lower than the prospective fault current.
-- (Bonus) Calculate incident energy for Arc Flash boundaries.
+- ✅ Calculate the prospective short-circuit current (Isc) at various nodes based on source impedance and cable lengths (`PROSPECTIVE_SHORT_CIRCUIT_A` + validation in `shortCircuitValidation.ts`).
+- ✅ Warn if a component's breaking capacity (kA rating) is lower than the prospective fault current.
+- ❌ (Bonus) Calculate incident energy for Arc Flash boundaries.
 
 ### ❌ 10. Transient / Oscilloscope View
 
@@ -104,10 +104,11 @@ The component list is large. Add:
 - Category filters
 - Favorites & Recently used components
 
-### ❌ 12. Add Component Grouping (Macros)
+### ✅ 12. Add Component Grouping (Macros)
 
 Allow users to select multiple components (e.g., MCB + Contactor + Overload Relay) and group them into a single reusable "Macro" component. 
 - Greatly speeds up building repetitive structures like DOL starters or VFD panels.
+- **Implemented:** Toolbar → **Macros** — save selection, insert from library (`componentMacros.ts`).
 
 ### ❌ 13. Generate 2D Panel Layouts
 
@@ -115,19 +116,23 @@ Automatically generate a 2D physical layout diagram of the electrical panel base
 - Assign physical dimensions (W x H x D) to components.
 - Allow users to drag and drop them onto a virtual DIN rail or mounting plate.
 
-### ❌ 14. Add Learning Mode
+### ✅ 14. Add Learning Mode
 
 Learning mode could explain faults and wiring mistakes in simple terms.
 - "This load is not energized because neutral is missing."
 - "This breaker tripped because current exceeded the C-curve threshold."
+- **Implemented:** Validation panel → **Learning mode** toggle with hints (`learningHints.ts`, `uiStore.ts`).
 
 ## Recommended Priority Order
 
 1. **✅ Replace `README.md`** (Crucial for presentation).
 2. **✅ Add Vitest** and simulation tests (Crucial for stability before refactoring).
-3. **❌ Optimize History Store** (Crucial for performance).
+3. **✅ Optimize History Store** (Crucial for performance).
 4. **✅ Split Large Files** (`engine.ts`, `circuitStore.ts`, `PropertyPanel.tsx`).
 5. **✅ Component Sidebar Search** (UX win).
-6. **✅ / ❌ Example Circuits & Component Grouping** (Product win).
+6. **✅ Example Circuits & Component Grouping** (Product win).
 7. **✅ Time-Current Curve Plotter** (Massive engineering value).
 8. **✅ Cable Sizing Wizard**.
+9. **⚠️ Short-circuit validation** — breaking capacity checks done; arc flash energy still open.
+10. **❌ Transient / oscilloscope view** — next major simulation upgrade.
+11. **❌ 2D panel physical layout** — future product feature.

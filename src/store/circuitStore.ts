@@ -3,19 +3,11 @@ import type {
   Circuit,
   CircuitComponent,
   Wire,
-  SimulationResult,
-  ToolMode,
-  HistoryEntry,
-  ComponentType,
-  FaultEvent,
-  PhaseSystem,
-  BmsSimLogEntry,
-  WireObjectSnapModes,
   WireColor,
   WireStyleLayer,
 } from '../types';
 import { DEFAULT_WIRE_OBJECT_SNAP_MODES } from '../types';
-import { engine } from '../simulation/engine';
+import { simulateCircuitAsync } from '../simulation/simulationClient';
 import { v4 as uuid } from 'uuid';
 import {
   clampComponentScale,
@@ -32,7 +24,6 @@ import {
   finalizeWirePolylineForCommit,
   insertVertexOnWireSegment,
   removeInteriorWireVertex,
-  translateWireSegment,
 } from '../utils/wireGripUtils';
 import {
   resolveSplitPointOnSegment,
@@ -74,16 +65,43 @@ import {
 } from '../utils/wireEndpointNumbering';
 import { normalizeWirePoints } from '../utils/wireNormalize';
 import { downloadWireScheduleCsv } from '../utils/wireScheduleExport';
+import { downloadBomCsv } from '../utils/bomExport';
+import { downloadTerminalScheduleCsv } from '../utils/terminalScheduleExport';
+import { downloadCableScheduleCsv } from '../utils/cableScheduleExport';
+import {
+  appendHistoryEntry,
+  initialHistorySnapshot,
+  redoHistoryStep,
+  undoHistoryStep,
+} from './circuitHistory';
 import {
   applyWireStyleLayerDefaults,
   suggestedCrossSectionForLayer,
 } from '../utils/wireStyleLayers';
 import { createComponentActions } from './slices/componentActions';
+import { createFeederActions } from './slices/feederActions';
+import { createDesignatorActions } from './slices/designatorActions';
+import { createSelectionActions } from './slices/selectionActions';
+import { createWireRoutingActions } from './slices/wireRoutingActions';
+import { createDrawingExportActions } from './slices/drawingExportActions';
+import { createProjectActions } from './slices/projectActions';
+import { createLibraryActions } from './slices/libraryActions';
+import {
+  activeSheetCircuit,
+  createEmptyProject,
+} from '../utils/projectPersistence';
+import {
+  collectBundleDragSnapshot,
+  translateBundleSegment,
+} from '../utils/wireBundle';
 import { createBmsActions } from './slices/bmsActions';
+import type { CircuitStore } from './circuitStoreTypes';
+
+export type { CircuitStore, DrawingMetadataPatch } from './circuitStoreTypes';
 
 /**
- * Maximum number of undo/redo snapshots retained. Each entry stores a
- * structuredClone of the full circuit + BMS log, so this bounds peak memory.
+ * Maximum undo/redo steps. Patch entries store immer deltas instead of full
+ * circuit clones (baseline index 0 keeps one snapshot).
  */
 const MAX_HISTORY_SIZE = 50;
 
@@ -132,208 +150,8 @@ function resolvedWireStrokeForNewConnection(
   return out;
 }
 
-interface CircuitStore {
-  circuit: Circuit;
-  simulationResult: SimulationResult | null;
-  selectedId: string | null;
-  /** Selected vertex on the selected wire (for Delete = remove bend). */
-  wireGripVertexIndex: number | null;
-  tool: ToolMode;
-  wireInProgress: Partial<Wire> | null;
-  wirePoints: number[];
-  /** Axis the next leg of the in-progress wire will follow ('h' = horizontal,
-   *  'v' = vertical). Seeded from the start terminal's outward direction so
-   *  the first segment leaves the terminal perpendicular to the component;
-   *  toggles after every committed leg so subsequent clicks alternate. */
-  wireOrientation: 'h' | 'v';
-  history: HistoryEntry[];
-  historyIndex: number;
-  faultDialogEvent: FaultEvent | null;
-  /** Last BMS command attempts (simulator / audit). */
-  bmsSimLog: BmsSimLogEntry[];
-  clearBmsSimLog: () => void;
-  clearBmsSimLogForDevice: (deviceId: string) => void;
-
-  addComponent: (
-    type: ComponentType,
-    x: number,
-    y: number,
-    options?: {
-      pushButtonVariant?: 'NO' | 'NC';
-      mcbInitialPoles?: 1 | 2;
-      initialScale?: number;
-    }
-  ) => void;
-  setMcbPoleLayout: (id: string, poles: 1 | 2) => void;
-  setPushButtonPressed: (id: string, pressed: boolean) => void;
-  updateComponent: (
-    id: string,
-    updates: Partial<CircuitComponent>
-  ) => void;
-  setComponentPhaseSystem: (id: string, phase: PhaseSystem) => void;
-  removeComponent: (id: string) => void;
-  toggleComponent: (id: string) => void;
-  resetTripped: (id: string) => void;
-  /** BMS closing coil (CC) pulse — closes main contacts if interlocks OK */
-  acbBmsClosePulse: (id: string) => void;
-  /** BMS shunt trip — opens main contacts (remote OFF) */
-  acbBmsShuntOpen: (id: string) => void;
-  mccbBmsMotorClosePulse: (id: string) => void;
-  mccbBmsShuntOpen: (id: string) => void;
-  moveComponent: (id: string, x: number, y: number) => void;
-  dragMoveSelection: (draggedId: string, initialPositions: Record<string, { x: number; y: number }>, totalDx: number, totalDy: number) => void;
-  rotateComponent: (id: string) => void;
-  duplicateComponent: (id: string) => void;
-  clipboard: { components: CircuitComponent[]; wires: Wire[] } | null;
-  copySelection: () => void;
-  cutSelection: () => void;
-  pasteSelection: () => void;
-
-  addWire: (wire: Omit<Wire, 'id'>) => void;
-  updateWire: (id: string, updates: Partial<Wire>) => void;
-  removeWire: (id: string) => void;
-  /** Live polyline while dragging grips — no history/simulation. */
-  setWirePointsLive: (wireId: string, points: number[]) => void;
-  /** Finalize grip edit: endpoint reconnect/revert, grid snap, sync, history, sim. */
-  commitWireGripEdit: (
-    wireId: string,
-    draggedVertexIndex: number | null
-  ) => void;
-  setWireGripVertexIndex: (index: number | null) => void;
-  insertWireVertex: (
-    wireId: string,
-    segmentIndex: number,
-    worldX: number,
-    worldY: number
-  ) => void;
-  removeWireVertex: (wireId: string, vertexIndex: number) => void;
-  moveWireSegment: (
-    wireId: string,
-    segmentIndex: number,
-    deltaX: number,
-    deltaY: number
-  ) => void;
-  /** Move one vertex to world (x,y) and commit (history + sync + sim). */
-  moveWireVertex: (
-    wireId: string,
-    vertexIndex: number,
-    x: number,
-    y: number
-  ) => void;
-  startWire: (componentId: string, pointId: string) => void;
-  addWirePoint: (x: number, y: number) => void;
-  finishWire: (componentId: string, pointId: string) => void;
-  /**
-   * Complete the in-progress wire by tapping an existing wire segment (T junction):
-   * split the span, insert a junction dot, and attach the branch.
-   */
-  finishWireOnWireSpan: (
-    targetWireId: string,
-    segmentIndex: number,
-    worldX: number,
-    worldY: number
-  ) => void;
-  cancelWire: () => void;
-  /**
-   * Remove last committed wire vertex while drawing (Backspace).
-   * Keeps wire active if only the start point remains; flips `wireOrientation` back.
-   */
-  undoLastWirePoint: () => void;
-
-  /** Object snap for wire tool (terminals, wire geometry). F3 / osnap. */
-  wireObjectSnapEnabled: boolean;
-  /** Grid snap while wiring (F9 / grid). */
-  wireGridSnapEnabled: boolean;
-  /** Orthogonal segments from last vertex (F8 / ortho). Off = free-angle segments. */
-  wireOrthoEnabled: boolean;
-  /** When on, terminal-to-terminal finish with no polyline uses auto Manhattan routing. */
-  wireAutoRouteEnabled: boolean;
-  toggleWireAutoRoute: () => void;
-  setWireObjectSnapEnabled: (v: boolean) => void;
-  setWireGridSnapEnabled: (v: boolean) => void;
-  setWireOrthoEnabled: (v: boolean) => void;
-  toggleWireObjectSnap: () => void;
-  toggleWireGridSnap: () => void;
-  toggleWireOrtho: () => void;
-  /** Flip next wire leg axis without adding a vertex (Tab). */
-  toggleWireOrientation: () => void;
-  /** Per-mode object snap (connection / endpoint / midpoint / intersection). */
-  wireSnapModes: WireObjectSnapModes;
-  setWireSnapModes: (partial: Partial<WireObjectSnapModes>) => void;
-  toggleWireSnapMode: (key: keyof WireObjectSnapModes) => void;
-  resetWireSnapModes: () => void;
-
-  /** Sticky stroke / category for the next wire (and live patch while drafting). */
-  wireDraftDefaults: {
-    color: WireColor | null;
-    wireCategory: 'power' | 'control' | 'comm' | null;
-    styleLayer: WireStyleLayer | null;
-  };
-  patchWireDraftStyle: (partial: {
-    color?: WireColor | null;
-    wireCategory?: 'power' | 'control' | 'comm' | null;
-    styleLayer?: WireStyleLayer | null;
-  }) => void;
-
-  /** CAD-style wire edit: break = split at click; trim = two vertex grips; extend = click cutter segment. */
-  wireCadEditMode: null | 'break' | 'trim' | 'extend';
-  /** Which end to lengthen for `extend` (first or last bend toward a crossing). */
-  wireCadExtendEnd: 'from' | 'to';
-  wireTrimFirstVertexIndex: number | null;
-  setWireCadEditMode: (mode: null | 'break' | 'trim' | 'extend') => void;
-  setWireCadExtendEnd: (end: 'from' | 'to') => void;
-  clearWireCadEditMode: () => void;
-  setWireTrimFirstVertexIndex: (index: number | null) => void;
-
-  breakWireAtSpan: (
-    wireId: string,
-    segmentIndex: number,
-    worldX: number,
-    worldY: number
-  ) => string;
-  simplifyWireCollinear: (wireId: string) => string;
-  normalizeWireRoute: (wireId: string) => string;
-  mergeWiresAtJunction: (junctionComponentId: string) => string;
-  trimWireBetweenGrips: (
-    wireId: string,
-    vertexIndexA: number,
-    vertexIndexB: number
-  ) => string;
-  extendWireToCutterHit: (cutterWireId: string, worldX: number, worldY: number) => string;
-
-  setSelected: (
-    id: string | null,
-    options?: { clearWireGrip?: boolean }
-  ) => void;
-  setTool: (tool: ToolMode) => void;
-  setZoom: (zoom: number) => void;
-  /** Zoom to `zoom` while keeping the world point under (stageX, stageY) fixed; coords match Konva `getPointerPosition()`. */
-  setZoomAroundStagePoint: (
-    zoom: number,
-    stageX: number,
-    stageY: number
-  ) => void;
-  setPan: (x: number, y: number) => void;
-
-  runSimulation: () => void;
-  clearCircuit: () => void;
-  loadCircuit: (circuit: Circuit) => void;
-  saveCircuit: () => void;
-  /** Download a CSV wire schedule (numbers, endpoints, tags, style). */
-  exportWireScheduleCsv: () => void;
-
-  undo: () => void;
-  redo: () => void;
-  pushHistory: (description: string) => void;
-
-  dismissFault: () => void;
-
-  setPhaseImbalanceWarningPercent: (percent: number) => void;
-
-  setContinuityPowerThresholdW: (watts: number) => void;
-
-  setCircuitWireLabelsVisible: (visible: boolean) => void;
-}
+/** Cancels stale async simulation results when edits outpace the worker. */
+let simulationRequestSeq = 0;
 
 export const globalMouseContext = {
   worldX: 0,
@@ -341,9 +159,15 @@ export const globalMouseContext = {
   isOverCanvas: false,
 };
 
+const bootstrapProject = createEmptyProject();
+const bootstrapCircuit =
+  activeSheetCircuit(bootstrapProject) ?? createEmptyCircuit();
+
 export const useCircuitStore = create<CircuitStore>((set, get) => ({
-  circuit: createEmptyCircuit(),
+  project: bootstrapProject,
+  circuit: bootstrapCircuit,
   simulationResult: null,
+  simulationPending: false,
   selectedId: null,
   wireGripVertexIndex: null,
   tool: 'select',
@@ -367,6 +191,13 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
 
   // --- Component actions (extracted to slices/componentActions.ts) ---
   ...createComponentActions(set, get),
+  ...createFeederActions(set, get),
+  ...createDesignatorActions(set, get),
+  ...createSelectionActions(set, get),
+  ...createWireRoutingActions(set, get),
+  ...createDrawingExportActions(set, get),
+  ...createProjectActions(set, get),
+  ...createLibraryActions(set, get),
 
   // --- BMS actions (extracted to slices/bmsActions.ts) ---
   ...createBmsActions(set, get),
@@ -376,7 +207,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     set((state) => {
       const id = uuid();
       const auto = wire.wireNumberAuto === true;
-      const draft: Wire = { ...(wire as Wire), id };
+      const draft: Wire = { ...wire, id };
       let wireNumber = wire.wireNumber;
       if (auto) {
         wireNumber = deriveEndpointWireNumber(state.circuit, draft);
@@ -386,7 +217,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
         }
       }
       const newWire: Wire = {
-        ...(wire as Wire),
+        ...wire,
         id,
         wireNumber,
         wireNumberAuto: auto ? true : false,
@@ -545,30 +376,26 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     const state = get();
     const wire = state.circuit.wires.find((w) => w.id === wireId);
     if (!wire) return;
-    const next = translateWireSegment(
-      wire.points,
+    const snapshot = collectBundleDragSnapshot(
+      state.circuit,
+      wireId,
+      segmentIndex
+    );
+    const moved = translateBundleSegment(
+      snapshot,
+      wireId,
       segmentIndex,
       deltaX,
       deltaY
     );
-    if (!next) return;
-    const draft = { ...wire, points: next };
-    const finalized = finalizeWirePolylineForCommit(state.circuit, draft, {
-      draggedVertexIndex: null,
-      gridSnapEnabled: state.wireGridSnapEnabled,
-      gridSize: state.circuit.gridSize,
-      zoom: state.circuit.zoom,
-    });
-    const nextCircuit = syncWireEndpoints({
-      ...state.circuit,
-      wires: state.circuit.wires.map((w) =>
-        w.id === wireId ? finalized : w
-      ),
-      updatedAt: new Date().toISOString(),
-    });
-    set({ circuit: nextCircuit });
-    get().pushHistory('Moved wire segment');
-    get().runSimulation();
+    if (moved.size === 0) return;
+    get().setWirePointsLiveBatch(
+      [...moved.entries()].map(([id, points]) => ({
+        wireId: id,
+        points,
+      }))
+    );
+    get().commitWireSegmentBundle([...moved.keys()]);
   },
 
   moveWireVertex: (wireId, vertexIndex, x, y) => {
@@ -1501,40 +1328,39 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     })),
 
   runSimulation: () => {
+    const reqId = ++simulationRequestSeq;
     const base = get().circuit;
     const normalized = {
       ...base,
       components: base.components.map(ensureBreakerControlTerminals),
     };
     const clonedCircuit = structuredClone(syncWireEndpoints(normalized));
-    const result = engine.simulate(clonedCircuit, 0, Date.now());
-    set({
-      circuit: clonedCircuit,
-      simulationResult: result,
-      faultDialogEvent:
-        result.faults.length > 0 ? result.faults[0] : null,
-    });
+    set({ circuit: clonedCircuit, simulationPending: true });
+    void simulateCircuitAsync(clonedCircuit, Date.now())
+      .then((result) => {
+        if (reqId !== simulationRequestSeq) return;
+        set({
+          simulationResult: result,
+          simulationPending: false,
+          faultDialogEvent:
+            result.faults.length > 0 ? result.faults[0] : null,
+        });
+      })
+      .catch(() => {
+        if (reqId !== simulationRequestSeq) return;
+        set({ simulationPending: false });
+      });
   },
 
   clearCircuit: () => {
-    set({
-      circuit: createEmptyCircuit(),
-      simulationResult: null,
-      selectedId: null,
-      wireGripVertexIndex: null,
-      history: [],
-      historyIndex: -1,
-      bmsSimLog: [],
-      wireDraftDefaults: { color: null, wireCategory: null, styleLayer: null },
-      wireInProgress: null,
-      wirePoints: [],
-      wireOrientation: 'h',
-      wireCadEditMode: null,
-      wireTrimFirstVertexIndex: null,
-    });
+    get().newProject();
   },
 
   loadCircuit: (circuit) => {
+    get().loadCircuitAsProject(circuit);
+  },
+
+  hydrateCircuit: (circuit) => {
     let wires = circuit.wires;
     const withPush = circuit.components.map((c) =>
       c.type === 'push_button' && !('pressed' in c)
@@ -1631,11 +1457,15 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       components: withAcbCps,
       wires,
     };
+    const synced = refreshAutoWireNumbers(syncWireEndpoints(normalized));
+    const hist = initialHistorySnapshot(synced, [], 'Loaded circuit');
     set({
-      circuit: refreshAutoWireNumbers(syncWireEndpoints(normalized)),
+      circuit: synced,
       selectedId: null,
       wireGripVertexIndex: null,
       bmsSimLog: [],
+      history: hist.history,
+      historyIndex: hist.historyIndex,
       wireDraftDefaults: { color: null, wireCategory: null, styleLayer: null },
       wireInProgress: null,
       wirePoints: [],
@@ -1647,27 +1477,7 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
   },
 
   saveCircuit: () => {
-    const c = get().circuit;
-    const data = {
-      version: '1.0',
-      name: c.name,
-      created: c.createdAt,
-      circuit: {
-        components: c.components,
-        wires: c.wires,
-        phaseImbalanceWarningPercent: c.phaseImbalanceWarningPercent ?? 15,
-        wireLabelsVisible: c.wireLabelsVisible !== false,
-        continuityPowerThresholdW: c.continuityPowerThresholdW ?? 0.5,
-      },
-    };
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${get().circuit.name}.esim`;
-    a.click();
-    URL.revokeObjectURL(url);
+    get().saveProject();
   },
 
   exportWireScheduleCsv: () => {
@@ -1675,29 +1485,44 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
     downloadWireScheduleCsv(c, c.name || 'circuit');
   },
 
+  exportBomCsv: () => {
+    const c = get().circuit;
+    downloadBomCsv(c, c.name || 'circuit');
+  },
+
+  exportTerminalScheduleCsv: () => {
+    const c = get().circuit;
+    downloadTerminalScheduleCsv(c, c.name || 'circuit');
+  },
+
+  exportCableScheduleCsv: () => {
+    const c = get().circuit;
+    downloadCableScheduleCsv(c, c.name || 'circuit');
+  },
+
   undo: () => {
-    const { history, historyIndex } = get();
-    if (historyIndex <= 0) return;
-    const newIndex = historyIndex - 1;
-    const entry = history[newIndex];
+    const { history, historyIndex, circuit } = get();
+    const step = undoHistoryStep(history, historyIndex, circuit);
+    if (!step) return;
+    const entry = history[historyIndex];
     set({
-      circuit: structuredClone(entry.circuit),
+      circuit: step.circuit,
       bmsSimLog: structuredClone(entry.bmsSimLog ?? []),
-      historyIndex: newIndex,
+      historyIndex: step.historyIndex,
       wireGripVertexIndex: null,
     });
     get().runSimulation();
   },
 
   redo: () => {
-    const { history, historyIndex } = get();
-    if (historyIndex >= history.length - 1) return;
-    const newIndex = historyIndex + 1;
-    const entry = history[newIndex];
+    const { history, historyIndex, circuit } = get();
+    const step = redoHistoryStep(history, historyIndex, circuit);
+    if (!step) return;
+    const entry = history[step.historyIndex];
     set({
-      circuit: structuredClone(entry.circuit),
+      circuit: step.circuit,
       bmsSimLog: structuredClone(entry.bmsSimLog ?? []),
-      historyIndex: newIndex,
+      historyIndex: step.historyIndex,
       wireGripVertexIndex: null,
     });
     get().runSimulation();
@@ -1719,23 +1544,16 @@ export const useCircuitStore = create<CircuitStore>((set, get) => ({
       lastDesc = description;
       lastTs = now;
 
-      const circuit = structuredClone(get().circuit);
-      const bmsSimLog = structuredClone(get().bmsSimLog);
-
-      set((state) => {
-        const trimmed = state.history.slice(
-          0,
-          state.historyIndex + 1
-        );
-        const newHistory = [
-          ...trimmed,
-          { circuit, description, bmsSimLog },
-        ].slice(-MAX_HISTORY_SIZE);
-        return {
-          history: newHistory,
-          historyIndex: newHistory.length - 1,
-        };
-      });
+      const st = get();
+      const { history, historyIndex } = appendHistoryEntry(
+        st.history,
+        st.historyIndex,
+        st.circuit,
+        st.bmsSimLog,
+        description,
+        MAX_HISTORY_SIZE
+      );
+      set({ history, historyIndex });
     };
   })(),
 

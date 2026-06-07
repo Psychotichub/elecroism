@@ -2,6 +2,7 @@ import { usePPCtx } from '../PropertyPanelContext';
 import { Label } from '../PropertyPanelLabel';
 import type { ComponentProperties } from '../../../../types';
 import { renderMCBProps } from './ProtectionEditors';
+import { AddIdenticalFeederButton } from './FeederEditors';
 
 export const renderMultipoleMcbProps = () => {
 // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -30,6 +31,7 @@ export const renderMultipoleMcbProps = () => {
           ))}
         </div>
       </Label>
+      <AddIdenticalFeederButton />
     </>
     );
 };
@@ -79,7 +81,7 @@ export const renderMotorizedMccbProps = () => {
           <label className="flex items-center gap-2 text-xs cursor-pointer">
             <input
               type="checkbox"
-              checked={selectedComp!.properties.mccbBmsEnabled ?? false}
+              checked={selectedComp.properties.mccbBmsEnabled ?? false}
               onChange={(e) =>
                 updateProp({ mccbBmsEnabled: e.target.checked })
               }
@@ -87,11 +89,11 @@ export const renderMotorizedMccbProps = () => {
             <span className={tc.textMuted}>Remote motor + shunt (BMS/PLC)</span>
           </label>
         </Label>
-        {(selectedComp!.properties.mccbBmsEnabled ?? false) && (
+        {(selectedComp.properties.mccbBmsEnabled ?? false) && (
           <>
             <Label text="Field bus (supervision)">
               <select
-                value={selectedComp!.properties.mccbBmsProtocol ?? 'none'}
+                value={selectedComp.properties.mccbBmsProtocol ?? 'none'}
                 onChange={(e) =>
                   updateProp({
                     mccbBmsProtocol: e.target
@@ -111,10 +113,10 @@ export const renderMotorizedMccbProps = () => {
                 <input
                   type="checkbox"
                   checked={
-                    selectedComp!.properties.mccbBmsCtrlVoltageOk !== false
+                    selectedComp.properties.mccbBmsCtrlVoltageOk !== false
                   }
                   onChange={(e) => {
-                    const c = selectedComp!;
+                    const c = selectedComp;
                     const on = e.target.checked;
                     if (
                       !on &&
@@ -143,7 +145,7 @@ export const renderMotorizedMccbProps = () => {
                 <input
                   type="checkbox"
                   checked={
-                    selectedComp!.properties.mccbBmsMotorReady !== false
+                    selectedComp.properties.mccbBmsMotorReady !== false
                   }
                   onChange={(e) =>
                     updateProp({ mccbBmsMotorReady: e.target.checked })
@@ -157,14 +159,14 @@ export const renderMotorizedMccbProps = () => {
             <div className="flex flex-col gap-1">
               <button
                 type="button"
-                onClick={() => mccbBmsMotorClosePulse(selectedComp!.id)}
+                onClick={() => mccbBmsMotorClosePulse(selectedComp.id)}
                 className="w-full px-2 py-1.5 rounded text-xs font-medium bg-emerald-700 text-white hover:bg-emerald-600"
               >
                 BMS DO — motor close (remote ON)
               </button>
               <button
                 type="button"
-                onClick={() => mccbBmsShuntOpen(selectedComp!.id)}
+                onClick={() => mccbBmsShuntOpen(selectedComp.id)}
                 className="w-full px-2 py-1.5 rounded text-xs font-medium bg-amber-700 text-white hover:bg-amber-600"
               >
                 BMS DO — shunt trip (remote OFF)
@@ -176,7 +178,7 @@ export const renderMotorizedMccbProps = () => {
               </p>
               <Label text="Control supply">
                 <select
-                  value={selectedComp!.properties.mccbCtrlSupply ?? '24dc'}
+                  value={selectedComp.properties.mccbCtrlSupply ?? '24dc'}
                   onChange={(e) =>
                     updateProp({
                       mccbCtrlSupply: e.target
@@ -197,7 +199,7 @@ export const renderMotorizedMccbProps = () => {
                     className="input-field"
                     placeholder="F1"
                     value={
-                      selectedComp!.properties.mccbCtrlFuseDesignation ?? 'F1'
+                      selectedComp.properties.mccbCtrlFuseDesignation ?? 'F1'
                     }
                     onChange={(e) =>
                       updateProp({
@@ -210,7 +212,7 @@ export const renderMotorizedMccbProps = () => {
                 <Label text="Fuse (A)">
                   <select
                     value={String(
-                      selectedComp!.properties.mccbCtrlFuseAmps ?? 2
+                      selectedComp.properties.mccbCtrlFuseAmps ?? 2
                     )}
                     onChange={(e) =>
                       updateProp({
@@ -233,7 +235,7 @@ export const renderMotorizedMccbProps = () => {
                     type="text"
                     className="input-field"
                     placeholder="K1"
-                    value={selectedComp!.properties.mccbRelayMotorId ?? 'K1'}
+                    value={selectedComp.properties.mccbRelayMotorId ?? 'K1'}
                     onChange={(e) =>
                       updateProp({
                         mccbRelayMotorId: e.target.value.trim() || 'K1',
@@ -246,7 +248,7 @@ export const renderMotorizedMccbProps = () => {
                     type="text"
                     className="input-field"
                     placeholder="K2"
-                    value={selectedComp!.properties.mccbRelayStId ?? 'K2'}
+                    value={selectedComp.properties.mccbRelayStId ?? 'K2'}
                     onChange={(e) =>
                       updateProp({
                         mccbRelayStId: e.target.value.trim() || 'K2',
@@ -266,7 +268,7 @@ export const renderMotorizedMccbProps = () => {
                       className="input-field flex-1"
                       placeholder="DO-MOTOR"
                       value={
-                        selectedComp!.properties.mccbBmsDoMotorTag ??
+                        selectedComp.properties.mccbBmsDoMotorTag ??
                         'DO-MOTOR'
                       }
                       onChange={(e) =>
@@ -280,7 +282,7 @@ export const renderMotorizedMccbProps = () => {
                       className="input-field flex-1"
                       placeholder="DO-ST"
                       value={
-                        selectedComp!.properties.mccbBmsDoShuntTag ?? 'DO-ST'
+                        selectedComp.properties.mccbBmsDoShuntTag ?? 'DO-ST'
                       }
                       onChange={(e) =>
                         updateProp({
@@ -297,7 +299,7 @@ export const renderMotorizedMccbProps = () => {
                       className="input-field"
                       placeholder="DI-AUX-NO"
                       value={
-                        selectedComp!.properties.mccbBmsDiAuxNoTag ??
+                        selectedComp.properties.mccbBmsDiAuxNoTag ??
                         'DI-AUX-NO'
                       }
                       onChange={(e) =>
@@ -311,7 +313,7 @@ export const renderMotorizedMccbProps = () => {
                       className="input-field"
                       placeholder="DI-AUX-NC"
                       value={
-                        selectedComp!.properties.mccbBmsDiAuxNcTag ??
+                        selectedComp.properties.mccbBmsDiAuxNcTag ??
                         'DI-AUX-NC'
                       }
                       onChange={(e) =>
@@ -325,7 +327,7 @@ export const renderMotorizedMccbProps = () => {
                       className="input-field"
                       placeholder="DI-TRIP"
                       value={
-                        selectedComp!.properties.mccbBmsDiTripTag ??
+                        selectedComp.properties.mccbBmsDiTripTag ??
                         'DI-TRIP'
                       }
                       onChange={(e) =>
@@ -339,7 +341,7 @@ export const renderMotorizedMccbProps = () => {
                 </Label>
               </div>
               {(() => {
-                const pr = selectedComp!.properties;
+                const pr = selectedComp.properties;
                 const pos =
                   pr.mccbCtrlSupply === '110dc'
                     ? '+110 V DC'

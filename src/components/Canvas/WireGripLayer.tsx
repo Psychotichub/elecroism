@@ -2,7 +2,10 @@ import React, { useMemo, useRef, useCallback } from 'react';
 import { Group, Rect, Line } from 'react-konva';
 import Konva from 'konva';
 import { useCircuitStore } from '../../store/circuitStore';
-import { translateWireSegment } from '../../utils/wireGripUtils';
+import {
+  collectBundleDragSnapshot,
+  translateBundleSegment,
+} from '../../utils/wireBundle';
 
 const GRIP = 3;
 
@@ -41,6 +44,12 @@ const WireGripLayer: React.FC<{ phases?: WireGripPhase[] }> = ({
     (s) => s.setWireTrimFirstVertexIndex
   );
   const setWirePointsLive = useCircuitStore((s) => s.setWirePointsLive);
+  const setWirePointsLiveBatch = useCircuitStore(
+    (s) => s.setWirePointsLiveBatch
+  );
+  const commitWireSegmentBundle = useCircuitStore(
+    (s) => s.commitWireSegmentBundle
+  );
   const commitWireGripEdit = useCircuitStore((s) => s.commitWireGripEdit);
   const insertWireVertex = useCircuitStore((s) => s.insertWireVertex);
   const setSelected = useCircuitStore((s) => s.setSelected);
@@ -58,7 +67,8 @@ const WireGripLayer: React.FC<{ phases?: WireGripPhase[] }> = ({
   } | null>(null);
 
   const segmentDragRef = useRef<{
-    startPoints: number[];
+    snapshot: Map<string, number[]>;
+    bundleIds: string[];
     segIndex: number;
     midX: number;
     midY: number;
@@ -134,8 +144,14 @@ const WireGripLayer: React.FC<{ phases?: WireGripPhase[] }> = ({
               }
               onDragStart={(e) => {
                 e.cancelBubble = true;
+                const snapshot = collectBundleDragSnapshot(
+                  circuit,
+                  wireId,
+                  segIdx
+                );
                 segmentDragRef.current = {
-                  startPoints: [...wire.points],
+                  snapshot,
+                  bundleIds: [...snapshot.keys()],
                   segIndex: segIdx,
                   midX: mx,
                   midY: my,
@@ -152,18 +168,27 @@ const WireGripLayer: React.FC<{ phases?: WireGripPhase[] }> = ({
                 let tdy = rawDy;
                 if (horizontal && !vertical) tdx = 0;
                 else if (vertical && !horizontal) tdy = 0;
-                const next = translateWireSegment(
-                  d.startPoints,
+                const moved = translateBundleSegment(
+                  d.snapshot,
+                  wireId,
                   d.segIndex,
                   tdx,
                   tdy
                 );
-                if (next) setWirePointsLive(wireId, next);
+                if (moved.size > 0) {
+                  setWirePointsLiveBatch(
+                    [...moved.entries()].map(([id, points]) => ({
+                      wireId: id,
+                      points,
+                    }))
+                  );
+                }
               }}
               onDragEnd={(e) => {
                 e.cancelBubble = true;
+                const ids = segmentDragRef.current?.bundleIds ?? [wireId];
                 segmentDragRef.current = null;
-                commitWireGripEdit(wireId, null);
+                commitWireSegmentBundle(ids);
               }}
             />
           </React.Fragment>

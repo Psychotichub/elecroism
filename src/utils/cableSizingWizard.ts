@@ -1,3 +1,5 @@
+import type { WireCableSizing } from '../types';
+
 /**
  * Cable Sizing & Voltage Drop Wizard — core engineering calculations.
  *
@@ -20,7 +22,8 @@ export type InstallationMethod =
   | 'enclosed_conduit'   // Method B — in conduit / trunking
   | 'cable_tray'         // Method E — perforated tray, single layer
   | 'free_air'           // Method F / G — freely suspended
-  | 'buried_direct';     // Method D — direct buried
+  | 'buried_direct'      // Method D — direct buried
+  | 'buried_duct';       // Buried in duct / conduit in soil
 
 /** Cable material. */
 export type ConductorMaterial = 'copper' | 'aluminium';
@@ -48,6 +51,20 @@ export interface CableSizingInput {
   maxVoltageDropPct: number;
   /** Ambient temperature (°C); default 30 if omitted. */
   ambientTempC: number;
+  /**
+   * Number of loaded circuits grouped together (this circuit included).
+   * IEC 60364-5-52 Table B.52.17 style reduction when > 1.
+   */
+  circuitsInGroup: number;
+}
+
+/** Per-factor derating breakdown applied to base ampacity. */
+export interface DeratingBreakdown {
+  methodK: number;
+  tempK: number;
+  groupingK: number;
+  materialK: number;
+  combinedK: number;
 }
 
 /** Result of the sizing calculation for one cable size. */
@@ -70,6 +87,8 @@ export interface CableSizingCandidate {
 export interface CableSizingResult {
   /** Calculated line current at the supply end (A). */
   loadCurrentA: number;
+  /** Derating factors applied to every candidate. */
+  derating: DeratingBreakdown;
   /** All candidates evaluated (ascending by size). */
   candidates: CableSizingCandidate[];
   /** The smallest cable size that passes both checks (or null if none does). */
@@ -126,13 +145,28 @@ const METHOD_DERATING: Record<InstallationMethod, number> = {
   cable_tray: 1.05,
   free_air: 1.15,
   buried_direct: 0.90,
+  buried_duct: 0.75,
 };
+
+/**
+ * IEC 60364-5-52 Table B.52.17 style grouping factors (PVC, multi-circuit).
+ * `circuitsInGroup` includes the circuit being sized.
+ */
+const GROUPING_DERATING: { maxCircuits: number; k: number }[] = [
+  { maxCircuits: 1, k: 1.0 },
+  { maxCircuits: 2, k: 0.8 },
+  { maxCircuits: 3, k: 0.7 },
+  { maxCircuits: 6, k: 0.65 },
+  { maxCircuits: 9, k: 0.6 },
+  { maxCircuits: 16, k: 0.55 },
+  { maxCircuits: 20, k: 0.5 },
+];
 
 /**
  * Ambient temperature correction factor (PVC insulated cable, 70 °C max).
  * k = √((Tc − Ta) / (Tc − Tref)), Tc = 70, Tref = 30.
  */
-function ambientDerating(ambientC: number): number {
+export function ambientDerating(ambientC: number): number {
   const tc = 70; // conductor max
   const tRef = 30; // reference ambient
   const num = tc - ambientC;
@@ -145,6 +179,71 @@ function ambientDerating(ambientC: number): number {
  * for the same cross-section (√(0.61) ≈ 0.78).
  */
 const AL_FACTOR = 0.79;
+
+export function groupingDerating(circuitsInGroup: number): number {
+  const n = Math.max(1, Math.min(20, Math.round(circuitsInGroup)));
+  for (const row of GROUPING_DERATING) {
+    if (n <= row.maxCircuits) return row.k;
+  }
+  return 0.5;
+}
+
+export function computeDeratingBreakdown(
+  input: Pick<
+    CableSizingInput,
+    'installationMethod' | 'ambientTempC' | 'circuitsInGroup' | 'conductorMaterial'
+  >
+): DeratingBreakdown {
+  const methodK = METHOD_DERATING[input.installationMethod];
+  const tempK = ambientDerating(input.ambientTempC);
+  const groupingK = groupingDerating(input.circuitsInGroup);
+  const materialK = input.conductorMaterial === 'aluminium' ? AL_FACTOR : 1;
+  const combinedK = methodK * tempK * groupingK * materialK;
+  return {
+    methodK,
+    tempK: Math.round(tempK * 1000) / 1000,
+    groupingK,
+    materialK,
+    combinedK: Math.round(combinedK * 1000) / 1000,
+  };
+}
+
+/** Derated ampacity (A) for a nominal cross-section under the given inputs. */
+export function deratedAmpacityForSize(
+  crossSectionMm2: number,
+  input: CableSizingInput
+): number {
+  const baseIz = BASE_AMPACITY_CU[crossSectionMm2] ?? 10;
+  const { combinedK } = computeDeratingBreakdown(input);
+  return Math.round(baseIz * combinedK * 10) / 10;
+}
+
+/** Evaluate whether an applied wire size passes ampacity and voltage-drop limits. */
+export function evaluateAppliedCrossSection(
+  crossSectionMm2: number,
+  input: CableSizingInput
+): CableSizingCandidate {
+  const powerW = input.loadKw * 1000;
+  const iLoad = loadCurrent(powerW, input.voltageV, input.powerFactor, input.phaseConfig);
+  const iz = deratedAmpacityForSize(crossSectionMm2, input);
+  const vd = voltageDrop(
+    iLoad,
+    input.distanceM,
+    crossSectionMm2,
+    input.powerFactor,
+    input.phaseConfig,
+    input.conductorMaterial
+  );
+  const vdPct = input.voltageV > 0 ? (vd / input.voltageV) * 100 : 0;
+  return {
+    crossSectionMm2,
+    deratedAmpacity: iz,
+    loadCurrentA: Math.round(iLoad * 100) / 100,
+    voltageDropV: Math.round(vd * 100) / 100,
+    voltageDropPct: Math.round(vdPct * 100) / 100,
+    ok: iz >= iLoad && vdPct <= input.maxVoltageDropPct,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Electrical formulas
@@ -224,22 +323,18 @@ export function runCableSizingWizard(input: CableSizingInput): CableSizingResult
     voltageV,
     powerFactor,
     phaseConfig,
-    installationMethod,
     conductorMaterial,
     maxVoltageDropPct,
-    ambientTempC,
   } = input;
 
   const powerW = loadKw * 1000;
   const iLoad = loadCurrent(powerW, voltageV, powerFactor, phaseConfig);
-  const methodK = METHOD_DERATING[installationMethod];
-  const tempK = ambientDerating(ambientTempC);
-  const matK = conductorMaterial === 'aluminium' ? AL_FACTOR : 1;
+  const derating = computeDeratingBreakdown(input);
 
   const candidates: CableSizingCandidate[] = STANDARD_CROSS_SECTIONS.map(
     (cs) => {
       const baseIz = BASE_AMPACITY_CU[cs] ?? 10;
-      const iz = baseIz * methodK * tempK * matK;
+      const iz = baseIz * derating.combinedK;
       const vd = voltageDrop(iLoad, distanceM, cs, powerFactor, phaseConfig, conductorMaterial);
       const vdPct = voltageV > 0 ? (vd / voltageV) * 100 : 0;
       const ampOk = iz >= iLoad;
@@ -257,14 +352,20 @@ export function runCableSizingWizard(input: CableSizingInput): CableSizingResult
 
   const recommended = candidates.find((c) => c.ok) ?? null;
 
+  const groupNote =
+    input.circuitsInGroup > 1
+      ? `, ${input.circuitsInGroup} grouped circuits (×${derating.groupingK})`
+      : '';
+
   let summary: string;
   if (recommended) {
     summary =
       `Recommended cable: ${recommended.crossSectionMm2} mm² ` +
       `${conductorMaterial === 'aluminium' ? 'Al' : 'Cu'} ` +
-      `(${installationMethod.replace(/_/g, ' ')}). ` +
+      `(${input.installationMethod.replace(/_/g, ' ')}${groupNote}). ` +
       `Load current ≈ ${recommended.loadCurrentA.toFixed(1)} A, ` +
-      `derated ampacity ≈ ${recommended.deratedAmpacity.toFixed(0)} A, ` +
+      `derated ampacity ≈ ${recommended.deratedAmpacity.toFixed(0)} A ` +
+      `(×${derating.combinedK.toFixed(2)} total derating), ` +
       `voltage drop ≈ ${recommended.voltageDropV.toFixed(1)} V ` +
       `(${recommended.voltageDropPct.toFixed(1)} %).`;
   } else {
@@ -276,9 +377,42 @@ export function runCableSizingWizard(input: CableSizingInput): CableSizingResult
 
   return {
     loadCurrentA: Math.round(iLoad * 100) / 100,
+    derating,
     candidates,
     recommended,
     summary,
+  };
+}
+
+/** Build a persisted wizard snapshot to store on a wire. */
+export function buildWireCableSizingRecord(
+  input: CableSizingInput,
+  result: CableSizingResult
+): WireCableSizing {
+  const rec = result.recommended;
+  return {
+    loadKw: input.loadKw,
+    distanceM: input.distanceM,
+    voltageV: input.voltageV,
+    powerFactor: input.powerFactor,
+    phaseConfig: input.phaseConfig,
+    installationMethod: input.installationMethod,
+    conductorMaterial: input.conductorMaterial,
+    maxVoltageDropPct: input.maxVoltageDropPct,
+    ambientTempC: input.ambientTempC,
+    circuitsInGroup: input.circuitsInGroup,
+    deratingMethodK: result.derating.methodK,
+    deratingTempK: result.derating.tempK,
+    deratingGroupingK: result.derating.groupingK,
+    deratingMaterialK: result.derating.materialK,
+    deratingCombinedK: result.derating.combinedK,
+    recommendedMm2: rec?.crossSectionMm2 ?? null,
+    loadCurrentA: result.loadCurrentA,
+    deratedAmpacityA: rec?.deratedAmpacity ?? null,
+    voltageDropV: rec?.voltageDropV ?? null,
+    voltageDropPct: rec?.voltageDropPct ?? null,
+    summary: result.summary,
+    calculatedAt: new Date().toISOString(),
   };
 }
 
@@ -289,4 +423,63 @@ export const INSTALLATION_METHOD_LABELS: Record<InstallationMethod, string> = {
   cable_tray: 'Perforated cable tray (Method E)',
   free_air: 'Free air / suspended (Method F)',
   buried_direct: 'Direct buried (Method D)',
+  buried_duct: 'Buried in duct / soil (Method D2)',
 };
+
+export interface CableDeratingValidationIssue {
+  id: string;
+  severity: 'info' | 'warning' | 'error';
+  message: string;
+  wireId: string;
+}
+
+/** Flag wires whose applied mm² fails wizard derating or is below recommendation. */
+export function validateCableDerating(circuit: {
+  wires: { id: string; crossSection: number; wireNumber?: string; wireLabel?: string; cableSizing?: WireCableSizing }[];
+}): CableDeratingValidationIssue[] {
+  const issues: CableDeratingValidationIssue[] = [];
+  for (const w of circuit.wires) {
+    const cs = w.cableSizing;
+    if (!cs) continue;
+    const label = w.wireLabel || w.wireNumber || w.id.slice(0, 8);
+    const input: CableSizingInput = {
+      loadKw: cs.loadKw,
+      distanceM: cs.distanceM,
+      voltageV: cs.voltageV,
+      powerFactor: cs.powerFactor,
+      phaseConfig: cs.phaseConfig,
+      installationMethod: cs.installationMethod as InstallationMethod,
+      conductorMaterial: cs.conductorMaterial as ConductorMaterial,
+      maxVoltageDropPct: cs.maxVoltageDropPct,
+      ambientTempC: cs.ambientTempC,
+      circuitsInGroup: cs.circuitsInGroup ?? 1,
+    };
+    const applied = evaluateAppliedCrossSection(w.crossSection, input);
+    if (!applied.ok) {
+      const ampFail = applied.deratedAmpacity < applied.loadCurrentA;
+      const vdFail = applied.voltageDropPct > input.maxVoltageDropPct;
+      const reason = ampFail && vdFail
+        ? 'derated ampacity and voltage drop'
+        : ampFail
+          ? `derated ampacity (${applied.deratedAmpacity.toFixed(0)} A < ${applied.loadCurrentA.toFixed(1)} A load)`
+          : `voltage drop (${applied.voltageDropPct.toFixed(1)} % > ${input.maxVoltageDropPct}% limit)`;
+      issues.push({
+        id: `cable-derate-${w.id}`,
+        severity: 'warning',
+        message: `Wire "${label}" (${w.crossSection} mm²): insufficient after derating — ${reason}. Wizard recommends ${cs.recommendedMm2 ?? 'larger'} mm².`,
+        wireId: w.id,
+      });
+    } else if (
+      cs.recommendedMm2 != null &&
+      w.crossSection < cs.recommendedMm2 - 1e-6
+    ) {
+      issues.push({
+        id: `cable-undersize-${w.id}`,
+        severity: 'info',
+        message: `Wire "${label}": applied ${w.crossSection} mm² is below wizard recommendation ${cs.recommendedMm2} mm² (with derating applied).`,
+        wireId: w.id,
+      });
+    }
+  }
+  return issues;
+}

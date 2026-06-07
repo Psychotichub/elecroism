@@ -1,5 +1,6 @@
 import type { Circuit, CircuitComponent, Wire } from '../types';
 import { effectiveWireDisplayText } from './wireLabelLayout';
+import { buildDcWireExportFields } from './dcWireLabeling';
 
 function csvEscape(value: string): string {
   if (/[",\r\n]/.test(value)) {
@@ -41,22 +42,28 @@ export type WireScheduleRow = {
   sourceTag: string;
   destinationTag: string;
   vertexCount: string;
+  dcPolarity: string;
+  exportColorLabel: string;
+  dcColorOk: string;
 };
 
 export function buildWireScheduleRows(circuit: Circuit): WireScheduleRow[] {
   return circuit.wires.map((w: Wire) => {
     const fromC = circuit.components.find((c) => c.id === w.fromComponentId);
     const toC = circuit.components.find((c) => c.id === w.toComponentId);
+    const fromL = terminalLabel(circuit, w.fromComponentId, w.fromPointId);
+    const toL = terminalLabel(circuit, w.toComponentId, w.toPointId);
+    const dcFields = buildDcWireExportFields(w, fromL, toL);
     return {
       wireNumber: String(w.wireNumber ?? ''),
       wireLabel: String(w.wireLabel ?? ''),
       displayLabel: effectiveWireDisplayText(w),
       fromType: fromC?.type ?? '',
       fromComponent: componentRef(fromC),
-      fromTerminal: terminalLabel(circuit, w.fromComponentId, w.fromPointId),
+      fromTerminal: fromL,
       toType: toC?.type ?? '',
       toComponent: componentRef(toC),
-      toTerminal: terminalLabel(circuit, w.toComponentId, w.toPointId),
+      toTerminal: toL,
       color: w.color,
       wireCategory: w.wireCategory ?? '',
       styleLayer: w.styleLayer ?? '',
@@ -64,6 +71,9 @@ export function buildWireScheduleRows(circuit: Circuit): WireScheduleRow[] {
       sourceTag: String(w.sourceTag ?? ''),
       destinationTag: String(w.destinationTag ?? ''),
       vertexCount: String(Math.max(0, w.points.length / 2)),
+      dcPolarity: dcFields.dcPolarity,
+      exportColorLabel: dcFields.exportColorLabel,
+      dcColorOk: dcFields.dcColorOk,
     };
   });
 }
@@ -85,6 +95,9 @@ const WIRE_SCHEDULE_HEADER: (keyof WireScheduleRow)[] = [
   'sourceTag',
   'destinationTag',
   'vertexCount',
+  'dcPolarity',
+  'exportColorLabel',
+  'dcColorOk',
 ];
 
 export function wireScheduleToCsv(circuit: Circuit): string {

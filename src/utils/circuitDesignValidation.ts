@@ -5,6 +5,31 @@ import type {
   Wire,
 } from '../types';
 import { engine } from '../simulation/engine';
+import { validateBreakingCapacity } from './shortCircuitValidation';
+import { validateEarthFaultLoop } from './earthFaultLoopValidation';
+import { validateArcFlash } from './arcFlashAnalysis';
+import { validatePowerQuality } from './powerQualityValidation';
+import { findDuplicateDesignators } from './designatorRules';
+import { validateAtsInstallation } from '../simulation/atsTransferSequence';
+import { validateCableDerating } from './cableSizingWizard';
+import { validateDcFaultLevels } from './dcFaultCurrent';
+import {
+  classifyDcWirePolarity,
+  wireUsesDcColorConvention,
+} from './dcWireLabeling';
+
+export type { EarthFaultLoopRow } from './earthFaultLoopValidation';
+export { buildEarthFaultLoopReport } from './earthFaultLoopValidation';
+export type { ArcFlashRow } from './arcFlashAnalysis';
+export {
+  buildArcFlashReport,
+  downloadArcFlashLabel,
+  formatArcFlashLabel,
+} from './arcFlashAnalysis';
+export type { FaultLevelRow } from './faultLevelAnalysis';
+export { buildFaultLevelReport } from './faultLevelAnalysis';
+export type { PowerQualityRow } from '../simulation/powerQuality';
+export { buildPowerQualityReport } from '../simulation/powerQuality';
 
 export type CircuitValidationSeverity = 'info' | 'warning' | 'error';
 
@@ -106,7 +131,7 @@ function bfsFrom(
   }
   let i = 0;
   while (i < queue.length) {
-    const k = queue[i++]!;
+    const k = queue[i++];
     for (const n of graph.get(k) ?? []) {
       if (!seen.has(n)) {
         seen.add(n);
@@ -211,7 +236,7 @@ function maxContinuousAmpsCu(crossSectionMm2: number): number {
     240: 400,
   };
   const key = Math.round(crossSectionMm2 * 1000) / 1000;
-  if (table[key] !== undefined) return table[key]!;
+  if (table[key] !== undefined) return table[key];
   if (crossSectionMm2 < 0.5) return 3;
   if (crossSectionMm2 > 240) return Math.round(400 + (crossSectionMm2 - 240) * 0.9);
   // Linear interpolate between bracketing standard sizes
@@ -223,7 +248,7 @@ function maxContinuousAmpsCu(crossSectionMm2: number): number {
     const b = sizes[i + 1];
     if (crossSectionMm2 > a && crossSectionMm2 < b) {
       const t = (crossSectionMm2 - a) / (b - a);
-      return Math.round(table[a]! + t * (table[b]! - table[a]!));
+      return Math.round(table[a] + t * (table[b] - table[a]));
     }
   }
   return Math.round(Math.min(450, crossSectionMm2 * 1.65));
@@ -245,9 +270,9 @@ export function collectSupplySeeds(circuit: Circuit): {
       } else if (c.type === 'three_phase_source') {
         if (L === 'L1_OUT' || L === 'L2_OUT' || L === 'L3_OUT') live.add(k);
         if (L === 'N_OUT') neutral.add(k);
-      } else if (c.type === 'dc_power_source') {
-        if (L.includes('PLUS')) live.add(k);
-        if (L.includes('MINUS')) neutral.add(k);
+      } else if (c.type === 'dc_power_source' || c.type === 'dc_battery_backup') {
+        if (L.includes('PLUS') || L.includes('POS')) live.add(k);
+        if (L.includes('MINUS') || L.includes('NEG')) neutral.add(k);
       } else if (c.type === 'smps' || c.type === 'ac_dc_converter') {
         if (L.includes('PLUS')) live.add(k);
         if (L.includes('MINUS')) neutral.add(k);
@@ -287,7 +312,7 @@ function bfsShortestDistances(
   }
   let i = 0;
   while (i < q.length) {
-    const k = q[i++]!;
+    const k = q[i++];
     const d = dist.get(k)!;
     for (const n of graph.get(k) ?? []) {
       if (!dist.has(n)) {
@@ -393,8 +418,8 @@ export function buildProtectionCoordinationReportInner(
   });
 
   for (let i = 0; i < rows.length - 1; i++) {
-    const up = rows[i]!;
-    const down = rows[i + 1]!;
+    const up = rows[i];
+    const down = rows[i + 1];
     const a = up.ratedAmps;
     const b = down.ratedAmps;
     if (
@@ -420,7 +445,7 @@ export function buildProtectionCoordinationReportInner(
 export function buildProtectionCoordinationReport(
   circuit: Circuit
 ): ProtectionCoordinationReport {
-  const clone = structuredClone(circuit) as Circuit;
+  const clone = structuredClone(circuit);
   const graph = engine.getTerminalGraphForValidation(clone);
   const { live } = collectSupplySeeds(circuit);
   return buildProtectionCoordinationReportInner(circuit, graph, live);
@@ -437,7 +462,7 @@ export function runCircuitDesignValidation(
   const issues: CircuitValidationIssue[] = [];
   const push = (issue: CircuitValidationIssue) => issues.push(issue);
 
-  const clone = structuredClone(circuit) as Circuit;
+  const clone = structuredClone(circuit);
   const graph = engine.getTerminalGraphForValidation(clone);
   const { live: liveSeeds, neutral: neutralSeeds } = collectSupplySeeds(circuit);
   const skipPolarityPathChecks =
@@ -722,6 +747,24 @@ export function runCircuitDesignValidation(
           componentIds: [],
         });
       }
+      const dropV = w.voltageDropV ?? 0;
+      if (dropV > 4 && i > 0.5) {
+        push({
+          id: `wire-vdrop-${w.id}`,
+          severity: 'warning',
+          message: `Wire ${w.wireNumber ?? w.id.slice(0, 6)} (${w.crossSection} mm²): ~${dropV.toFixed(2)} V conductor drop in load-flow — consider larger cable or shorter run.`,
+          componentIds: [],
+        });
+      }
+    }
+    const maxDrop = simulationResult.loadFlowMaxVoltageDropPct;
+    if (maxDrop != null && maxDrop > 5) {
+      push({
+        id: 'loadflow-max-vdrop',
+        severity: 'warning',
+        message: `Impedance load flow: worst load sees ~${maxDrop.toFixed(1)}% voltage drop vs nominal — check cable sizes and run lengths.`,
+        componentIds: [],
+      });
     }
   }
 
@@ -740,6 +783,70 @@ export function runCircuitDesignValidation(
         componentIds: [c.id],
       });
     }
+  }
+
+  for (const iss of validateBreakingCapacity(circuit, simulationResult)) {
+    push(iss);
+  }
+
+  for (const iss of validateEarthFaultLoop(circuit, simulationResult)) {
+    push(iss);
+  }
+
+  for (const iss of validateArcFlash(circuit, simulationResult)) {
+    push(iss);
+  }
+
+  for (const iss of validatePowerQuality(circuit, simulationResult)) {
+    push(iss);
+  }
+
+  for (const iss of validateAtsInstallation(circuit)) {
+    push(iss);
+  }
+
+  for (const iss of validateCableDerating(circuit)) {
+    push({
+      id: iss.id,
+      severity: iss.severity,
+      message: iss.message,
+      componentIds: [],
+    });
+  }
+
+  for (const iss of validateDcFaultLevels(circuit, graph)) {
+    push({
+      id: iss.id,
+      severity: iss.severity,
+      message: iss.message,
+      componentIds: iss.componentIds,
+    });
+  }
+
+  for (const w of circuit.wires) {
+    const fromC = circuit.components.find((c) => c.id === w.fromComponentId);
+    const toC = circuit.components.find((c) => c.id === w.toComponentId);
+    const fromL =
+      fromC?.connectionPoints.find((p) => p.id === w.fromPointId)?.label ?? '';
+    const toL =
+      toC?.connectionPoints.find((p) => p.id === w.toPointId)?.label ?? '';
+    if (classifyDcWirePolarity(fromL, toL) === 'not_dc') continue;
+    if (wireUsesDcColorConvention(w, fromL, toL)) continue;
+    push({
+      id: `dc-wire-color-${w.id}`,
+      severity: 'info',
+      message: `DC wire ${w.wireLabel || w.wireNumber || w.id.slice(0, 8)}: colour "${w.color}" does not match typical DC convention (red +, black/blue −) for ${fromL}↔${toL}.`,
+      componentIds: [],
+    });
+  }
+
+  for (const dup of findDuplicateDesignators(circuit)) {
+    push({
+      id: `designator-dup-${dup.normalized}`,
+      severity: 'error',
+      message: `Duplicate device tag "${dup.display}" on ${dup.componentIds.length} symbols — renumber or rename so each device is unique.`,
+      componentIds: dup.componentIds,
+    });
   }
 
   issues.sort((a, b) => {

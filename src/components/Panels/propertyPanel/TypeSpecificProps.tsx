@@ -24,6 +24,7 @@ export const TypeSpecificProps: React.FC = () => {
     case 'three_phase_mcb':
     case 'mccb':
     case 'four_phase_mcb': return <MotorizedBreakerEditors.renderMultipoleMcbProps />;
+    case 'overload_relay': return <ProtectionEditors.renderOverloadRelayProps />;
     case 'motor_protection_circuit_breaker': return <ProtectionEditors.renderMpcbProps />;
     case 'air_circuit_breaker': return <MotorizedBreakerEditors.renderAirCircuitBreakerProps />;
     case 'motorized_mccb':

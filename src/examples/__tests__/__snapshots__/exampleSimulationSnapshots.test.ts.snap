@@ -1,0 +1,261 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`example circuit simulation snapshots > matches energization snapshot for "3-Phase Motor Starter" 1`] = `
+{
+  "faultTypes": [],
+  "loads": [
+    {
+      "currentA": 9.32,
+      "energized": true,
+      "label": "M1",
+      "powerW": 5500,
+      "type": "three_phase_motor",
+      "voltageV": 400.7,
+    },
+  ],
+  "shortCircuitCount": 0,
+  "success": true,
+  "supplies": [
+    {
+      "energized": true,
+      "label": "3φ Supply",
+      "type": "three_phase_source",
+    },
+  ],
+  "totalCurrentA": 9.32,
+  "totalPowerW": 5500,
+}
+`;
+
+exports[`example circuit simulation snapshots > matches energization snapshot for "ACB Incomer with BMS" 1`] = `
+{
+  "faultTypes": [],
+  "loads": [
+    {
+      "currentA": 12.72,
+      "energized": true,
+      "label": "M1 - Pump",
+      "powerW": 7500,
+      "type": "three_phase_motor",
+      "voltageV": 400.4,
+    },
+    {
+      "currentA": 5.09,
+      "energized": true,
+      "label": "M2 - Fan",
+      "powerW": 3000,
+      "type": "three_phase_motor",
+      "voltageV": 400.1,
+    },
+  ],
+  "shortCircuitCount": 0,
+  "success": true,
+  "supplies": [
+    {
+      "energized": true,
+      "label": "3φ Main Supply",
+      "type": "three_phase_source",
+    },
+  ],
+  "totalCurrentA": 17.81,
+  "totalPowerW": 10500,
+}
+`;
+
+exports[`example circuit simulation snapshots > matches energization snapshot for "ATS Transfer Panel" 1`] = `
+{
+  "faultTypes": [],
+  "loads": [
+    {
+      "currentA": 25.45,
+      "energized": true,
+      "label": "M1 - Load",
+      "powerW": 15000,
+      "type": "three_phase_motor",
+      "voltageV": 400.3,
+    },
+  ],
+  "shortCircuitCount": 0,
+  "success": true,
+  "supplies": [
+    {
+      "energized": true,
+      "label": "Generator",
+      "type": "three_phase_source",
+    },
+    {
+      "energized": true,
+      "label": "Mains",
+      "type": "three_phase_source",
+    },
+  ],
+  "totalCurrentA": 25.46,
+  "totalPowerW": 15002,
+}
+`;
+
+exports[`example circuit simulation snapshots > matches energization snapshot for "BMS I/O Panel" 1`] = `
+{
+  "faultTypes": [],
+  "loads": [],
+  "shortCircuitCount": 0,
+  "success": true,
+  "supplies": [
+    {
+      "energized": true,
+      "label": "Control Supply",
+      "type": "power_source",
+    },
+    {
+      "energized": true,
+      "label": "SMPS 24V",
+      "type": "smps",
+    },
+  ],
+  "totalCurrentA": 0,
+  "totalPowerW": 0,
+}
+`;
+
+exports[`example circuit simulation snapshots > matches energization snapshot for "DC UPS Backup" 1`] = `
+{
+  "faultTypes": [],
+  "loads": [
+    {
+      "currentA": 0.26,
+      "energized": true,
+      "label": "Critical Load",
+      "powerW": 60,
+      "type": "lamp",
+      "voltageV": 0,
+    },
+  ],
+  "shortCircuitCount": 0,
+  "success": true,
+  "supplies": [
+    {
+      "energized": false,
+      "label": "AC Mains",
+      "type": "power_source",
+    },
+  ],
+  "totalCurrentA": 0.26,
+  "totalPowerW": 60,
+}
+`;
+
+exports[`example circuit simulation snapshots > matches energization snapshot for "DOL Motor Starter" 1`] = `
+{
+  "faultTypes": [],
+  "loads": [
+    {
+      "currentA": 4.07,
+      "energized": true,
+      "label": "M1",
+      "powerW": 750,
+      "type": "motor",
+      "voltageV": 230.2,
+    },
+  ],
+  "shortCircuitCount": 0,
+  "success": true,
+  "supplies": [
+    {
+      "energized": true,
+      "label": "AC Supply",
+      "type": "power_source",
+    },
+  ],
+  "totalCurrentA": 4.07,
+  "totalPowerW": 750,
+}
+`;
+
+exports[`example circuit simulation snapshots > matches energization snapshot for "Simple Lighting Circuit" 1`] = `
+{
+  "faultTypes": [],
+  "loads": [
+    {
+      "currentA": 0.26,
+      "energized": true,
+      "label": "L1",
+      "powerW": 60,
+      "type": "lamp",
+      "voltageV": 230,
+    },
+    {
+      "currentA": 0.26,
+      "energized": true,
+      "label": "L2",
+      "powerW": 60,
+      "type": "lamp",
+      "voltageV": 230,
+    },
+  ],
+  "shortCircuitCount": 0,
+  "success": true,
+  "supplies": [
+    {
+      "energized": true,
+      "label": "AC Supply",
+      "type": "power_source",
+    },
+  ],
+  "totalCurrentA": 0.52,
+  "totalPowerW": 120,
+}
+`;
+
+exports[`example circuit simulation snapshots > matches energization snapshot for "Star-Delta Motor Starter" 1`] = `
+{
+  "faultTypes": [],
+  "loads": [
+    {
+      "currentA": 12.7,
+      "energized": true,
+      "label": "M1",
+      "powerW": 7500,
+      "type": "three_phase_motor",
+      "voltageV": 401.3,
+    },
+  ],
+  "shortCircuitCount": 0,
+  "success": true,
+  "supplies": [
+    {
+      "energized": true,
+      "label": "3φ Supply",
+      "type": "three_phase_source",
+    },
+  ],
+  "totalCurrentA": 12.7,
+  "totalPowerW": 7500,
+}
+`;
+
+exports[`example circuit simulation snapshots > matches energization snapshot for "VFD Feeder" 1`] = `
+{
+  "faultTypes": [],
+  "loads": [
+    {
+      "currentA": 18.4,
+      "energized": true,
+      "label": "M1",
+      "powerW": 11000,
+      "type": "three_phase_motor",
+      "voltageV": 401.3,
+    },
+  ],
+  "shortCircuitCount": 0,
+  "success": true,
+  "supplies": [
+    {
+      "energized": true,
+      "label": "3φ Supply",
+      "type": "three_phase_source",
+    },
+  ],
+  "totalCurrentA": 18.4,
+  "totalPowerW": 11000,
+}
+`;

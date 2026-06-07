@@ -10,6 +10,7 @@
  */
 
 import type { Circuit, CircuitComponent } from '../types';
+import type { TerminalGraphCache } from './terminalGraphCache';
 import {
   addEdge,
   connectAll,
@@ -118,16 +119,8 @@ function pickupSetsEqual(a: Set<string>, b: Set<string>): boolean {
 /*  Terminal graph builder                                            */
 /* ------------------------------------------------------------------ */
 
-/**
- * @param omitInternalConnectionForComponentId When set, that component's
- * IN↔OUT bridge is omitted (used to compute branch current through an MCB).
- * @param contactorPickupSet Main poles closed for these coil-actuated device ids.
- */
-export function buildTerminalGraph(
-  circuit: Circuit,
-  omitInternalConnectionForComponentId?: string | null,
-  contactorPickupSet?: Set<string> | null
-): Map<string, Set<string>> {
+/** Wire connectivity only — cached across edits that do not change topology. */
+export function buildWireSkeletonGraph(circuit: Circuit): Map<string, Set<string>> {
   const graph = new Map<string, Set<string>>();
 
   for (const component of circuit.components) {
@@ -145,7 +138,22 @@ export function buildTerminalGraph(
     }
   }
 
+  return graph;
+}
+
+/**
+ * Apply device-internal bridges (switch poles, contactor contacts, etc.).
+ * @param onlyComponentIds When set, refresh bridges for these components only.
+ */
+export function applyInternalBridges(
+  graph: Map<string, Set<string>>,
+  circuit: Circuit,
+  omitInternalConnectionForComponentId?: string | null,
+  contactorPickupSet?: Set<string> | null,
+  onlyComponentIds?: ReadonlySet<string> | null
+): void {
   for (const component of circuit.components) {
+    if (onlyComponentIds && !onlyComponentIds.has(component.id)) continue;
     const keys = component.connectionPoints.map((cp) =>
       terminalKey(component.id, cp.id)
     );
@@ -478,7 +486,25 @@ export function buildTerminalGraph(
         break;
     }
   }
+}
 
+/**
+ * @param omitInternalConnectionForComponentId When set, that component's
+ * IN↔OUT bridge is omitted (used to compute branch current through an MCB).
+ * @param contactorPickupSet Main poles closed for these coil-actuated device ids.
+ */
+export function buildTerminalGraph(
+  circuit: Circuit,
+  omitInternalConnectionForComponentId?: string | null,
+  contactorPickupSet?: Set<string> | null
+): Map<string, Set<string>> {
+  const graph = buildWireSkeletonGraph(circuit);
+  applyInternalBridges(
+    graph,
+    circuit,
+    omitInternalConnectionForComponentId,
+    contactorPickupSet
+  );
   return graph;
 }
 
@@ -500,7 +526,8 @@ export function computeContactorPickupFixpoint(
     circuit: Circuit,
     graph: Map<string, Set<string>>
   ) => PotentialSets,
-  timerCoilEnergizedSinceMs: Map<string, number>
+  timerCoilEnergizedSinceMs: Map<string, number>,
+  graphCache?: TerminalGraphCache
 ): Set<string> {
   const timerIdsInCircuit = new Set(
     circuit.components.filter((c) => c.type === 'timer').map((c) => c.id)
@@ -518,7 +545,9 @@ export function computeContactorPickupFixpoint(
     if (c.state === 'on') pickup.add(c.id);
   }
   for (let iter = 0; iter < 16; iter++) {
-    const graph = buildTerminalGraph(circuit, null, pickup);
+    const graph = graphCache
+      ? graphCache.buildForPickupIteration(circuit, pickup)
+      : buildTerminalGraph(circuit, null, pickup);
     const potentials = propagatePotentials(circuit, graph);
     const next = new Set<string>();
     for (const c of circuit.components) {

@@ -1,5 +1,6 @@
 import { usePPCtx } from '../PropertyPanelContext';
 import { Label } from '../PropertyPanelLabel';
+import ThdHarmonicFields from './ThdHarmonicFields';
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
 export const renderPowerSourceProps = () => { const { selectedComp, updateProp } = usePPCtx(); return (
@@ -274,6 +275,18 @@ export const renderSmpsProps = () => { const { selectedComp, tc, updateProp } = 
           step={0.1}
         />
       </Label>
+      <Label text="DC output power (W)">
+        <input
+          type="number"
+          value={selectedComp!.properties.powerWatts ?? 120}
+          onChange={(e) =>
+            updateProp({ powerWatts: Math.max(1, Number(e.target.value) || 1) })
+          }
+          className="input-field"
+          min={1}
+        />
+      </Label>
+      <ThdHarmonicFields showSmpsHint />
       <Label text="Presets">
         <div className="flex gap-1 flex-wrap">
           {[5, 12, 24, 48, 110].map((p) => (

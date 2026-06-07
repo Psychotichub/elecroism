@@ -149,6 +149,20 @@ export function resolveLogicalWireEndpoint(
     }
   }
 
+  // Intermediate hop in a junction / connection-point chain (not this wire's end).
+  if (!onFrom && !onTo) {
+    const up = findUpstreamAtTap(circuit, wire.id, componentId, pointId);
+    if (up) {
+      return resolveLogicalWireEndpoint(
+        circuit,
+        wire,
+        up.componentId,
+        up.pointId,
+        depth + 1
+      );
+    }
+  }
+
   return { componentId, pointId };
 }
 

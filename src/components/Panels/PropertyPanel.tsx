@@ -3,6 +3,7 @@ import * as WireEditor from './propertyPanel/editors/WireEditor';
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
+import { useUiStore } from '../../store/uiStore';
 import type { ComponentProperties, PhaseSystem } from '../../types';
 import { clampComponentScale } from '../../utils/geometry';
 import {
@@ -10,6 +11,11 @@ import {
   formatComponentPanelHelpText,
 } from '../../utils/componentPanelInfo';
 import { defaultPhaseSystemForType } from './propertyPanel/constants';
+import { explainWhyDeenergized } from '../../utils/whyIsOff';
+import {
+  defaultFunctionLetter,
+  isRenumberableComponent,
+} from '../../utils/designatorRules';
 import { Label } from './propertyPanel/PropertyPanelLabel';
 import {
   PropertyPanelProvider,
@@ -19,6 +25,9 @@ import {
 const PropertyPanel: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const tc = themeColors[theme];
+  const activeChallengeId = useUiStore((s) => s.activeChallengeId);
+  const challengeSubmitted = useUiStore((s) => s.challengeSubmitted);
+  const hideWhyOffHint = Boolean(activeChallengeId && !challengeSubmitted);
 
   const {
     circuit,
@@ -114,6 +123,11 @@ const PropertyPanel: React.FC = () => {
     selectedComp && simulationResult?.nodes[selectedComp.id] != null
       ? simulationResult.nodes[selectedComp.id]
       : null;
+
+  const whyOffMessage = useMemo(() => {
+    if (!selectedComp) return null;
+    return explainWhyDeenergized(circuit, selectedComp.id, simulationResult);
+  }, [circuit, selectedComp, simulationResult]);
 
   const updateProp = useCallback(
     (
@@ -214,6 +228,22 @@ const PropertyPanel: React.FC = () => {
                 className="input-field"
               />
             </Label>
+            {isRenumberableComponent(selectedComp) ? (
+              <Label text="Function letter (IEC)">
+                <input
+                  type="text"
+                  maxLength={4}
+                  placeholder={defaultFunctionLetter(selectedComp.type)}
+                  value={selectedComp.properties.designatorFunction ?? ''}
+                  onChange={(e) =>
+                    updateProp({
+                      designatorFunction: e.target.value.toUpperCase(),
+                    })
+                  }
+                  className="input-field"
+                />
+              </Label>
+            ) : null}
             <Label text="Label text size">
               <input
                 type="number"
@@ -323,7 +353,7 @@ const PropertyPanel: React.FC = () => {
               <select
                 value={
                   (selectedComp.properties.phaseSystem ??
-                    defaultPhaseSystemForType(selectedComp.type)) as PhaseSystem
+                    defaultPhaseSystemForType(selectedComp.type))
                 }
                 onChange={(e) =>
                   setComponentPhaseSystem(
@@ -470,6 +500,12 @@ const PropertyPanel: React.FC = () => {
             >
               {nodeResult.energized ? 'ENERGIZED' : 'DE-ENERGIZED'}
             </span>
+            {!nodeResult.energized && whyOffMessage && !hideWhyOffHint ? (
+              <div className="col-span-2 mt-1 rounded border border-amber-600/40 bg-amber-950/40 px-2 py-1.5 text-[11px] leading-snug text-amber-200">
+                <span className="font-semibold text-amber-400">Why off? </span>
+                {whyOffMessage}
+              </div>
+            ) : null}
             {selectedComp?.type === 'air_circuit_breaker' && (
               <>
                 <span className={tc.textMuted}>ACB overload ∫:</span>

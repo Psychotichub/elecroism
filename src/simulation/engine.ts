@@ -24,7 +24,6 @@ import { isSeriesProtectionTripType } from '../utils/seriesProtectionTripTypes';
 import { isLoadComponent, isSeriesPathComponent } from './componentClassification';
 import { terminalKey, bfsFrom, findTerminalByLabel } from './engineTypes';
 import {
-  buildTerminalGraph,
   computeContactorPickupFixpoint,
   mainBreakerBmsInterlockOpen,
 } from './terminalGraph';
@@ -58,23 +57,61 @@ import {
   mergeBalancedThreePhaseNodeResults,
 } from './threePhaseCalc';
 import { checkFaults } from './faultDetection';
+import { applyImpedanceLoadFlow } from './loadFlow';
+import {
+  dcFaultLevelsByComponentId,
+  maxDcFaultCurrentA,
+} from '../utils/dcFaultCurrent';
+import {
+  faultLevelsByDeviceId,
+  maxProspectiveFaultCurrentA,
+} from '../utils/faultLevelAnalysis';
+import { PROSPECTIVE_SHORT_CIRCUIT_A } from '../utils/shortCircuitValidation';
+import { applyPowerQualityHarmonics } from './powerQuality';
+import { TerminalGraphCache } from './terminalGraphCache';
+import type { SimulateOverrides } from './simulateOverrides';
+
+export type { SimulateOverrides } from './simulateOverrides';
 
 export class CircuitEngine {
   /** Runtime ON-delay latch start time for timer relays. */
   private timerCoilEnergizedSinceMs = new Map<string, number>();
+  private readonly terminalGraphCache = new TerminalGraphCache();
 
-  simulate(circuit: Circuit, depth = 0, wallMs = Date.now()): SimulationResult {
+  simulate(
+    circuit: Circuit,
+    depth = 0,
+    wallMs = Date.now(),
+    overrides?: SimulateOverrides
+  ): SimulationResult {
     if (depth > 6) {
       return this.buildDegradedResult(circuit);
     }
 
-    const contactorPickup = computeContactorPickupFixpoint(
+    let contactorPickup = computeContactorPickupFixpoint(
       circuit,
       wallMs,
       propagatePotentials,
-      this.timerCoilEnergizedSinceMs
+      this.timerCoilEnergizedSinceMs,
+      this.terminalGraphCache
     );
-    const terminalGraph = buildTerminalGraph(circuit, null, contactorPickup);
+
+    if (overrides?.forcedContactorPickup?.size) {
+      contactorPickup = new Set(contactorPickup);
+      for (const [id, on] of overrides.forcedContactorPickup) {
+        const comp = circuit.components.find((c) => c.id === id);
+        if (!comp) continue;
+        comp.state = on ? 'on' : 'off';
+        if (on) contactorPickup.add(id);
+        else contactorPickup.delete(id);
+      }
+    }
+
+    const terminalGraph = this.terminalGraphCache.build(
+      circuit,
+      null,
+      contactorPickup
+    );
     const potentials = propagatePotentials(circuit, terminalGraph);
     const nodes: Record<string, NodeResult> = {};
     const faults: FaultEvent[] = [];
@@ -153,7 +190,8 @@ export class CircuitEngine {
             phaseVoltageRmsV = vLL / Math.sqrt(3);
           } else if (
             component.type === 'three_phase_contactor' || component.type === 'four_phase_contactor' ||
-            component.type === 'energy_meter' || component.type === 'digital_multifunction_meter'
+            component.type === 'energy_meter' || component.type === 'digital_multifunction_meter' ||
+            component.type === 'power_quality_analyzer'
           ) {
             const vLL = component.properties.lineVoltage || getDefaultThreePhaseLineVoltage(circuit);
             voltageV = energized ? vLL : 0;
@@ -163,6 +201,26 @@ export class CircuitEngine {
             voltageV = energized ? (component.properties.voltage ?? 230) : 0;
           } else if (component.type === 'dc_power_source') {
             voltageV = energized ? (component.properties.voltage ?? 24) : 0;
+          } else if (component.type === 'dc_battery_backup') {
+            voltageV =
+              component.state === 'on'
+                ? (component.properties.voltage ?? 24)
+                : 0;
+            energized = component.state === 'on';
+          } else if (component.type === 'ups_module') {
+            const acOutL = component.connectionPoints.find(
+              (cp) => cp.label.toUpperCase() === 'AC_OUT_L'
+            );
+            const acOutN = component.connectionPoints.find(
+              (cp) => cp.label.toUpperCase() === 'AC_OUT_N'
+            );
+            const outEnergized =
+              !!acOutL &&
+              !!acOutN &&
+              potentials.live.has(terminalKey(component.id, acOutL.id)) &&
+              potentials.neutral.has(terminalKey(component.id, acOutN.id));
+            energized = outEnergized;
+            voltageV = outEnergized ? (component.properties.voltage ?? 230) : 0;
           } else if (component.type === 'ac_dc_converter' || component.type === 'smps') {
             const acLcp = component.connectionPoints.find((cp) => cp.label.toUpperCase() === 'AC_L');
             const acNcp = component.connectionPoints.find((cp) => cp.label.toUpperCase() === 'AC_N');
@@ -231,7 +289,10 @@ export class CircuitEngine {
         timestamp: wallMs,
       });
     }
-    const prospectiveShortCurrentA = 5000;
+    const prospectiveShortCurrentA = Math.max(
+      maxProspectiveFaultCurrentA(circuit, { nodes } as SimulationResult),
+      PROSPECTIVE_SHORT_CIRCUIT_A * 0.1
+    );
 
     // Series path current computation
     const seriesPathCurrents = new Map<string, number>();
@@ -304,6 +365,9 @@ export class CircuitEngine {
     }
 
     updateWireStates(circuit, nodes, potentials);
+    const loadFlow = applyImpedanceLoadFlow(circuit, nodes, potentials, terminalGraph);
+    updateWireStates(circuit, nodes, potentials);
+    const powerQuality = applyPowerQualityHarmonics(circuit, nodes);
     faults.push(...validateEthernetWires(circuit, wallMs));
     updateMultimeterCurrentReadings(circuit, nodes);
 
@@ -318,7 +382,27 @@ export class CircuitEngine {
       }
     }
 
-    return { success: true, nodes, faults, timestamp: wallMs, totalPowerW, totalCurrentA };
+    const simForFault: SimulationResult = {
+      success: true,
+      nodes,
+      faults,
+      timestamp: wallMs,
+      totalPowerW,
+      totalCurrentA,
+      loadFlowMaxVoltageDropPct: loadFlow.maxVoltageDropPct,
+      powerQualityMaxThdPct: powerQuality.maxThdPct,
+      powerQualityNeutralHarmonicA: powerQuality.neutralHarmonicA,
+    };
+
+    const dcFaultLevels = dcFaultLevelsByComponentId(circuit, terminalGraph);
+
+    return {
+      ...simForFault,
+      maxProspectiveFaultA: maxProspectiveFaultCurrentA(circuit, simForFault),
+      prospectiveFaultLevels: faultLevelsByDeviceId(circuit, simForFault),
+      maxDcFaultCurrentA: maxDcFaultCurrentA(circuit, terminalGraph),
+      dcFaultLevels,
+    };
   }
 
   /**
@@ -326,8 +410,14 @@ export class CircuitEngine {
    * for static design checks.
    */
   public getTerminalGraphForValidation(circuit: Circuit): Map<string, Set<string>> {
-    const pickup = computeContactorPickupFixpoint(circuit, Date.now(), propagatePotentials, this.timerCoilEnergizedSinceMs);
-    return buildTerminalGraph(circuit, null, pickup);
+    const pickup = computeContactorPickupFixpoint(
+      circuit,
+      Date.now(),
+      propagatePotentials,
+      this.timerCoilEnergizedSinceMs,
+      this.terminalGraphCache
+    );
+    return this.terminalGraphCache.build(circuit, null, pickup);
   }
 
   /* ------------------------------------------------------------------ */
@@ -357,7 +447,11 @@ export class CircuitEngine {
     seriesDevice: CircuitComponent, circuit: Circuit,
     nodes: Record<string, NodeResult>, contactorPickup: Set<string>
   ): number {
-    const graph = buildTerminalGraph(circuit, seriesDevice.id, contactorPickup);
+    const graph = this.terminalGraphCache.build(
+      circuit,
+      seriesDevice.id,
+      contactorPickup
+    );
     const lineStarts = getAllLineConductorStartKeys(circuit);
     const lineReach = bfsFrom(graph, lineStarts);
 
@@ -386,7 +480,11 @@ export class CircuitEngine {
     faultLiveAnchors: Set<string>, contactorPickup: Set<string>
   ): boolean {
     if (faultLiveAnchors.size === 0) return false;
-    const graphWithout = buildTerminalGraph(circuit, seriesDevice.id, contactorPickup);
+    const graphWithout = this.terminalGraphCache.build(
+      circuit,
+      seriesDevice.id,
+      contactorPickup
+    );
     const liveStarts = getAllLineConductorStartKeys(circuit);
     const liveReach = bfsFrom(graphWithout, liveStarts);
     for (const key of faultLiveAnchors) {

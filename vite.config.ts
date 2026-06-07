@@ -1,5 +1,34 @@
+/// <reference types="vitest/config" />
+import type { Plugin } from 'vite'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+
+const PRODUCTION_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "worker-src 'self' blob:",
+  "media-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join('; ')
+
+/** Inject a strict CSP meta tag into the packaged Electron renderer HTML. */
+function electronProductionCsp(): Plugin {
+  return {
+    name: 'electron-production-csp',
+    apply: 'build',
+    transformIndexHtml(html) {
+      const tag = `<meta http-equiv="Content-Security-Policy" content="${PRODUCTION_CSP}" />`
+      return html.replace('<head>', `<head>\n    ${tag}`)
+    },
+  }
+}
 
 function manualChunkFromNodeModules(id: string): string | undefined {
   if (!id.includes('node_modules')) return undefined
@@ -19,7 +48,7 @@ function manualChunkFromNodeModules(id: string): string | undefined {
 export default defineConfig({
   /** Required for Electron `loadFile(dist/index.html)` — absolute `/assets/…` breaks under `file://`. */
   base: './',
-  plugins: [react()],
+  plugins: [react(), electronProductionCsp()],
   build: {
     rollupOptions: {
       output: {
@@ -41,6 +70,44 @@ export default defineConfig({
     },
     hmr: {
       overlay: true,
+    },
+  },
+  test: {
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: [
+        'src/simulation/**/*.ts',
+        'src/utils/**/*.ts',
+        'src/examples/**/*.ts',
+        'src/store/circuitHistory.ts',
+      ],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/**/__tests__/**',
+        'src/simulation/simulationWorker.ts',
+        'src/simulation/simulationClient.ts',
+      ],
+      thresholds: {
+        'src/simulation/**': {
+          lines: 68,
+          functions: 65,
+          branches: 55,
+          statements: 65,
+        },
+        'src/utils/**': {
+          lines: 38,
+          functions: 38,
+          branches: 28,
+          statements: 36,
+        },
+        'src/examples/**': {
+          lines: 95,
+          functions: 100,
+          branches: 80,
+          statements: 95,
+        },
+      },
     },
   },
 })

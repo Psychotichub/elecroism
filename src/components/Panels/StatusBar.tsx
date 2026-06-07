@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCircuitStore } from '../../store/circuitStore';
 import { useThemeStore, themeColors } from '../../store/themeStore';
+import { useUiStore } from '../../store/uiStore';
 import { runCadCommand } from '../../utils/cadCommands';
+import { analyzeConnectionIntegrity } from '../../utils/connectionIntegrity';
 
 const StatusBar: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
@@ -9,6 +11,7 @@ const StatusBar: React.FC = () => {
   const {
     circuit,
     simulationResult,
+    simulationPending,
     tool,
     selectedId,
     wireInProgress,
@@ -24,10 +27,23 @@ const StatusBar: React.FC = () => {
     setZoom,
     setPan,
     duplicateComponent,
+    isBusDropWireActive,
   } = useCircuitStore();
+  const busDropActive =
+    tool === 'wire' && !!wireInProgress && isBusDropWireActive();
   const inputRef = useRef<HTMLInputElement>(null);
   const [command, setCommand] = useState('');
   const [commandResult, setCommandResult] = useState('');
+
+  const connectionIntegrityOverlay = useUiStore(
+    (s) => s.connectionIntegrityOverlay
+  );
+  const canvasStatusMessage = useUiStore((s) => s.canvasStatusMessage);
+
+  const integrity = useMemo(
+    () => analyzeConnectionIntegrity(circuit),
+    [circuit]
+  );
 
   const totalPower = simulationResult?.totalPowerW || 0;
   const totalCurrent = simulationResult?.totalCurrentA || 0;
@@ -139,9 +155,15 @@ const StatusBar: React.FC = () => {
         {tool === 'wire' && wireInProgress ? (
           <>
             <span className={`shrink-0 ${tc.textMuted} opacity-50`}>|</span>
-            <span className={tc.textMuted}>
-              {wireVertexCount} pt{wireVertexCount !== 1 ? 's' : ''}
-            </span>
+            {busDropActive ? (
+              <span className="font-semibold text-emerald-400">
+                Bus drop — click canvas to place feeder
+              </span>
+            ) : (
+              <span className={tc.textMuted}>
+                {wireVertexCount} pt{wireVertexCount !== 1 ? 's' : ''}
+              </span>
+            )}
           </>
         ) : null}
       </div>
@@ -151,10 +173,41 @@ const StatusBar: React.FC = () => {
       <span>
         Wires: <span className={tc.text}>{wireCount}</span>
       </span>
+      {connectionIntegrityOverlay ? (
+        <span
+          className={
+            integrity.unwiredTerminalCount + integrity.floatingWireEndCount > 0
+              ? 'text-red-400'
+              : tc.textMuted
+          }
+          title="Connection integrity (toggle in toolbar)"
+        >
+          Open:{' '}
+          <span className={tc.text}>
+            {integrity.unwiredTerminalCount} term
+            {integrity.floatingWireEndCount > 0
+              ? ` · ${integrity.floatingWireEndCount} float`
+              : ''}
+            {integrity.junctionCount > 0
+              ? ` · ${integrity.junctionCount} jct`
+              : ''}
+          </span>
+        </span>
+      ) : null}
       <span>
         Zoom: <span className={tc.text}>{(circuit.zoom * 100).toFixed(0)}%</span>
       </span>
       <div className="flex-1" />
+      <span
+        className="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {canvasStatusMessage}
+      </span>
+      {simulationPending ? (
+        <span className="text-sky-400 animate-pulse">Simulating…</span>
+      ) : null}
       <span>
         Total Power:{' '}
         <span className="text-yellow-400">{totalPower.toFixed(1)}W</span>

@@ -214,10 +214,21 @@ export function routeWireBetweenTerminals(
   }));
 
   const free = scored.filter((s) => !s.hits);
-  const pool = free.length ? free : scored;
+  if (free.length > 0) {
+    free.sort((a, b) => a.len - b.len);
+    return free[0].p;
+  }
+
+  const astar = astarOrthogonalRoute(sx, sy, ex, ey, obstacles, gridSize);
+  if (astar && astar.length >= 4 && !pathHitsObstacles(astar, obstacles)) {
+    return astar;
+  }
+
+  const pool = scored;
   pool.sort((a, b) => a.len - b.len);
   const best = pool[0];
   if (best && best.p.length >= 4) return best.p;
+  if (astar && astar.length >= 4) return astar;
   const fb = dedupeWirePoints([
     sx,
     sy,
@@ -230,4 +241,157 @@ export function routeWireBetweenTerminals(
     ...orthogonalLeg(sx, sy, ex, ey, startOutward === 'h' ? 'v' : 'h'),
   ]);
   return fb2.length >= 4 ? fb2 : fb;
+}
+
+type GridNode = { gx: number; gy: number };
+
+function cellBlocked(
+  wx: number,
+  wy: number,
+  rects: WireObstacleRect[]
+): boolean {
+  for (const r of rects) {
+    if (wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function nodeKey(gx: number, gy: number): string {
+  return `${gx},${gy}`;
+}
+
+function simplifyOrthogonalPath(flat: number[]): number[] {
+  if (flat.length <= 4) return flat;
+  const out: number[] = [flat[0], flat[1]];
+  for (let i = 2; i < flat.length; i += 2) {
+    const x = flat[i];
+    const y = flat[i + 1];
+    const n = out.length;
+    if (n >= 4) {
+      const px = out[n - 4];
+      const py = out[n - 3];
+      const cx = out[n - 2];
+      const cy = out[n - 1];
+      const collinearH = py === cy && cy === y;
+      const collinearV = px === cx && cx === x;
+      if (collinearH || collinearV) {
+        out[n - 2] = x;
+        out[n - 1] = y;
+        continue;
+      }
+    }
+    out.push(x, y);
+  }
+  return dedupeWirePoints(out);
+}
+
+/** Grid A* for obstacle-free Manhattan routes when L/Z candidates fail. */
+export function astarOrthogonalRoute(
+  sx: number,
+  sy: number,
+  ex: number,
+  ey: number,
+  obstacles: WireObstacleRect[],
+  gridSize: number
+): number[] | null {
+  const step = Math.max(4, gridSize);
+  const minX = Math.min(sx, ex) - step * 8;
+  const maxX = Math.max(sx, ex) + step * 8;
+  const minY = Math.min(sy, ey) - step * 8;
+  const maxY = Math.max(sy, ey) + step * 8;
+
+  const toGrid = (v: number, origin: number) =>
+    Math.round((v - origin) / step);
+  const toWorld = (g: number, origin: number) => origin + g * step;
+
+  const start: GridNode = {
+    gx: toGrid(sx, minX),
+    gy: toGrid(sy, minY),
+  };
+  const goal: GridNode = {
+    gx: toGrid(ex, minX),
+    gy: toGrid(ey, minY),
+  };
+
+  const startWx = toWorld(start.gx, minX);
+  const startWy = toWorld(start.gy, minY);
+  if (cellBlocked(startWx, startWy, obstacles)) return null;
+
+  const open = new Map<string, { node: GridNode; f: number }>();
+  const gScore = new Map<string, number>();
+  const cameFrom = new Map<string, GridNode>();
+  const sk = nodeKey(start.gx, start.gy);
+  gScore.set(sk, 0);
+  open.set(sk, {
+    node: start,
+    f: Math.abs(start.gx - goal.gx) + Math.abs(start.gy - goal.gy),
+  });
+
+  const neighbors: GridNode[] = [
+    { gx: 0, gy: 0 },
+    { gx: 1, gy: 0 },
+    { gx: -1, gy: 0 },
+    { gx: 0, gy: 1 },
+    { gx: 0, gy: -1 },
+  ];
+
+  let iterations = 0;
+  const maxIter = 12000;
+
+  while (open.size > 0 && iterations < maxIter) {
+    iterations++;
+    let currentKey = '';
+    let bestF = Infinity;
+    for (const [k, v] of open) {
+      if (v.f < bestF) {
+        bestF = v.f;
+        currentKey = k;
+      }
+    }
+    const current = open.get(currentKey)!.node;
+    open.delete(currentKey);
+
+    if (current.gx === goal.gx && current.gy === goal.gy) {
+      const nodes: GridNode[] = [current];
+      let ck = currentKey;
+      while (cameFrom.has(ck)) {
+        const prev = cameFrom.get(ck)!;
+        nodes.unshift(prev);
+        ck = nodeKey(prev.gx, prev.gy);
+      }
+      const flat: number[] = [sx, sy];
+      for (let i = 1; i < nodes.length; i++) {
+        flat.push(toWorld(nodes[i].gx, minX), toWorld(nodes[i].gy, minY));
+      }
+      flat.push(ex, ey);
+      return simplifyOrthogonalPath(flat);
+    }
+
+    for (const delta of neighbors) {
+      if (delta.gx === 0 && delta.gy === 0) continue;
+      const next: GridNode = {
+        gx: current.gx + delta.gx,
+        gy: current.gy + delta.gy,
+      };
+      const wx = toWorld(next.gx, minX);
+      const wy = toWorld(next.gy, minY);
+      if (wx < minX || wx > maxX || wy < minY || wy > maxY) continue;
+      if (cellBlocked(wx, wy, obstacles)) continue;
+      const nk = nodeKey(next.gx, next.gy);
+      const tentative =
+        (gScore.get(currentKey) ?? Infinity) +
+        Math.abs(delta.gx) +
+        Math.abs(delta.gy);
+      if (tentative >= (gScore.get(nk) ?? Infinity)) continue;
+      cameFrom.set(nk, current);
+      gScore.set(nk, tentative);
+      const h =
+        Math.abs(next.gx - goal.gx) + Math.abs(next.gy - goal.gy);
+      open.set(nk, { node: next, f: tentative + h });
+    }
+  }
+
+  return null;
 }

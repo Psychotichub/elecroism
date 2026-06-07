@@ -1,3 +1,5 @@
+import type { Patch } from 'immer';
+
 export type ComponentType =
   | 'switch'
   /** Single-pole two-way (SPDT): COM, T1, T2 — maintained throw for stair/changeover wiring. */
@@ -206,6 +208,24 @@ export interface ComponentProperties {
   controlCircuitVoltage?: 24 | 110 | 230;
   elrTripDelayMs?: number;
   mpcbTripClass?: '10A' | '10' | '20' | '30';
+  /** Thermal overload relay trip class (IEC 60947-4-1). */
+  overloadTripClass?: '10' | '20' | '30';
+
+  /** ATS sequence controller on a selector switch. */
+  atsController?: boolean;
+  atsTransition?: 'open' | 'closed';
+  atsUtilitySourceLabel?: string;
+  atsGenSourceLabel?: string;
+  atsUtilityContactorLabel?: string;
+  atsGenContactorLabel?: string;
+  atsGenStartDelayMs?: number;
+  atsTransferDelayMs?: number;
+  atsRetransferDelayMs?: number;
+  atsOpenTransitionGapMs?: number;
+  atsClosedOverlapMs?: number;
+  atsInterlockRequired?: boolean;
+  atsUtilityFailAtMs?: number;
+  atsUtilityRestoreAtMs?: number;
   rcdSensitivity?: 10 | 30 | 100 | 300;
   rcdType?: 'AC' | 'A' | 'B';
   rcdTripTimeMs?: number;
@@ -279,12 +299,18 @@ export interface ComponentProperties {
   powerWatts?: number;
   loadType?: 'resistive' | 'inductive' | 'capacitive';
   powerFactor?: number;
+  /** Input current THD (%) for nonlinear loads — SMPS, VFD-fed motors, etc. */
+  thdPercent?: number;
+  /** Three-phase motor drive type; VFD implies default THD when thdPercent unset. */
+  motorDrive?: 'dol' | 'vfd';
 
   /** Optional conductor size hint on some devices (mm²). */
   crossSection?: number;
   wireColor?: WireColor;
   busbarLeftCount?: number;
   busbarRightCount?: number;
+  /** IEC 81346 function letter override (Q, M, K, …) for smart renumbering. */
+  designatorFunction?: string;
 
   phaseSystem?: PhaseSystem;
   phaseVoltage?: number;
@@ -339,6 +365,15 @@ export interface ComponentProperties {
    * simulation instead of the block’s manual on/off (seal-in / interlocks).
    */
   auxContactFollowContactorId?: string;
+
+  /** Battery string capacity (Ah) — DC fault estimate. */
+  batteryCapacityAh?: number;
+  /** Battery / DC source internal resistance override (mΩ). */
+  batteryInternalResistance_mOhm?: number;
+  /** UPS: static bypass (maintenance) feeds AC in→out when mains present. */
+  upsStaticBypass?: boolean;
+  /** UPS: inverter feeds AC out from battery when mains fails. Default true. */
+  upsInverterEnabled?: boolean;
 
   /** Interposing-relay coil voltage label (V) — 24 V DC typical for BMS DOs. */
   relayCoilVoltage?: number;
@@ -444,6 +479,8 @@ export interface Wire {
   /** Optional protocol tag for communication links. */
   wireProtocol?: 'none' | 'ethernet' | 'modbus_tcp' | 'bacnet_ip' | 'other';
   crossSection: number;
+  /** Per-conductor voltage drop (V) from last impedance load-flow solve. */
+  voltageDropV?: number;
   energized: boolean;
   currentAmps: number;
   /** Auto-generated designator (e.g. W1, W2, or `Q0.L1-Q1.L1` when `wireNumberAuto`). */
@@ -462,6 +499,54 @@ export interface Wire {
   destinationTag?: string;
   /** Layer-like stroke preset (color, width, dash). When set, overrides plain conductor look. */
   styleLayer?: WireStyleLayer;
+  /** Persisted cable-sizing wizard result for schedule export. */
+  cableSizing?: WireCableSizing;
+}
+
+/** Snapshot of cable-sizing wizard inputs and recommendation saved on a wire. */
+export interface WireCableSizing {
+  loadKw: number;
+  distanceM: number;
+  voltageV: number;
+  powerFactor: number;
+  phaseConfig: 'single_phase' | 'three_phase';
+  installationMethod: string;
+  conductorMaterial: string;
+  maxVoltageDropPct: number;
+  ambientTempC: number;
+  /** Loaded circuits grouped with this run (includes this circuit). */
+  circuitsInGroup?: number;
+  deratingMethodK?: number;
+  deratingTempK?: number;
+  deratingGroupingK?: number;
+  deratingMaterialK?: number;
+  deratingCombinedK?: number;
+  recommendedMm2: number | null;
+  loadCurrentA: number;
+  deratedAmpacityA: number | null;
+  voltageDropV: number | null;
+  voltageDropPct: number | null;
+  summary: string;
+  calculatedAt: string;
+}
+
+/** Device tag format: simple (`Q1`) or IEC 81346 (`=LOCATION+FUNCTION+NUMBER`). */
+export type DesignatorScheme = 'simple' | 'iec81346';
+
+/** One page in a multi-sheet drawing export (title block + optional crop). */
+export interface DrawingSheet {
+  id: string;
+  sheetNumber: number;
+  title: string;
+  /** Cross-reference tag shown on the sheet and in the index (e.g. `=MCC1`). */
+  reference: string;
+  /** World-space crop; omit to use `componentIds` or full drawing bounds. */
+  minX?: number;
+  minY?: number;
+  maxX?: number;
+  maxY?: number;
+  /** When crop box omitted, bbox of these components defines the sheet. */
+  componentIds?: string[];
 }
 
 export interface Circuit {
@@ -475,6 +560,10 @@ export interface Circuit {
   panY: number;
   createdAt: string;
   updatedAt: string;
+  /** Device tag scheme for bulk renumber / IEC-style labels. Default `simple`. */
+  designatorScheme?: DesignatorScheme;
+  /** Location prefix for IEC 81346 tags (e.g. `MCC1` → `=MCC1+Q1`). */
+  designatorLocation?: string;
   /**
    * Warn in validation when 3φ motor per-phase load imbalance (power or
    * current factors) exceeds this percent of the mean. Default 15.
@@ -487,6 +576,18 @@ export interface Circuit {
    * UI treats the path as closed (buzzer + BEEP). Default 0.5.
    */
   continuityPowerThresholdW?: number;
+  /** Title block: project / client name for PDF export. */
+  drawingProject?: string;
+  /** Title block: drawing number (e.g. `EL-001`). */
+  drawingNumber?: string;
+  /** Title block: revision (e.g. `A`, `01`). */
+  drawingRevision?: string;
+  /** Title block: author initials / name. */
+  drawnBy?: string;
+  /** Title block: checker initials / name. */
+  checkedBy?: string;
+  /** Multi-sheet export definitions; empty = single full-drawing sheet. */
+  drawingSheets?: DrawingSheet[];
 }
 
 export interface NodeResult {
@@ -514,6 +615,12 @@ export interface NodeResult {
   currentL3A?: number;
   /** Neutral conductor RMS (A); ~0 when phases are balanced in the model */
   currentNeutralA?: number;
+  /** Total harmonic distortion of current (%) when modeled */
+  thdPercent?: number;
+  /** Harmonic RMS current (A) */
+  harmonicCurrentA?: number;
+  /** Fundamental (60 Hz) current before harmonic content (A) */
+  fundamentalCurrentA?: number;
   /** RMS phase-to-neutral (V), wye */
   voltageL1NV?: number;
   voltageL2NV?: number;
@@ -531,6 +638,20 @@ export interface SimulationResult {
   timestamp: number;
   totalPowerW: number;
   totalCurrentA: number;
+  /** Max % voltage drop at any energized load after impedance load flow. */
+  loadFlowMaxVoltageDropPct?: number;
+  /** Highest prospective bolted fault (A) from impedance at any protection device. */
+  maxProspectiveFaultA?: number;
+  /** Per-device prospective bolted fault current (A) from feeder impedance. */
+  prospectiveFaultLevels?: Record<string, number>;
+  /** Highest estimated DC bolted fault (A) from battery / DC sources. */
+  maxDcFaultCurrentA?: number;
+  /** Per-component DC prospective fault current (A). */
+  dcFaultLevels?: Record<string, number>;
+  /** Highest THD (%) among energized nonlinear loads. */
+  powerQualityMaxThdPct?: number;
+  /** Sum of triplen harmonic neutral contributions (A). */
+  powerQualityNeutralHarmonicA?: number;
 }
 
 export interface FaultEvent {
@@ -557,8 +678,12 @@ export interface BmsSimLogEntry {
 }
 
 export interface HistoryEntry {
-  circuit: Circuit;
   description: string;
   /** BMS simulator log at this revision (restored with undo/redo). */
   bmsSimLog: BmsSimLogEntry[];
+  /** Baseline snapshot (index 0 only). Later steps use patches. */
+  circuit?: Circuit;
+  /** Immer patches from the previous step to this step. */
+  patches?: Patch[];
+  inversePatches?: Patch[];
 }

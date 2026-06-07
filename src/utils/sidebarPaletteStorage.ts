@@ -7,7 +7,7 @@ const FAVORITES_KEY = 'electroism.sidebarFavorites.v1';
 function parseJsonArray(raw: string | null): unknown[] {
   if (!raw) return [];
   try {
-    const v = JSON.parse(raw);
+    const v: unknown = JSON.parse(raw);
     return Array.isArray(v) ? v : [];
   } catch {
     return [];
