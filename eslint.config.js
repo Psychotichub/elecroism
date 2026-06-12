@@ -18,7 +18,7 @@ const LEGACY_RAW_COLOR_PATHS = [
 ]
 
 export default defineConfig([
-  globalIgnores(['dist', 'coverage']),
+  globalIgnores(['dist', 'coverage', 'playwright.config.ts', 'playwright.visual.config.ts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

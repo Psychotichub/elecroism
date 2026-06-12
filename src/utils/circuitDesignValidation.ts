@@ -5,6 +5,7 @@ import type {
   Wire,
 } from '../types';
 import { engine } from '../simulation/engine';
+import { findTerminalByLabel } from '../simulation/engineTypes';
 import { validateBreakingCapacity } from './shortCircuitValidation';
 import { validateEarthFaultLoop } from './earthFaultLoopValidation';
 import { validateArcFlash } from './arcFlashAnalysis';
@@ -456,6 +457,452 @@ export function buildProtectionCoordinationReport(
   return buildProtectionCoordinationReportInner(circuit, graph, live);
 }
 
+/** Valid parent breaker types for C8 accessories. */
+const BREAKER_PARENT_TYPES = new Set([
+  'mccb',
+  'motorized_mccb',
+  'four_pole_motorized_mccb',
+  'air_circuit_breaker',
+  'three_phase_mcb',
+  'motor_protection_circuit_breaker',
+]);
+
+const BREAKER_ACCESSORY_TYPES = new Set([
+  'shunt_trip_coil',
+  'closing_coil',
+  'uvr_release',
+  'motor_operator_kit',
+]);
+
+/**
+ * Design-time checks for breaker accessories (C8):
+ *  - Missing parent link
+ *  - Invalid/non-breaker parent
+ *  - UVR with no coil supply while parent is closed
+ *  - Closing coil fighting a de-energized UVR on same parent
+ */
+export function validateBreakerAccessories(
+  circuit: Circuit
+): CircuitValidationIssue[] {
+  const issues: CircuitValidationIssue[] = [];
+
+  const accessories = circuit.components.filter((c) =>
+    BREAKER_ACCESSORY_TYPES.has(c.type)
+  );
+  if (accessories.length === 0) return issues;
+
+  const componentById = new Map(circuit.components.map((c) => [c.id, c]));
+
+  /** Wires connected to this component */
+  function wireCountForComp(compId: string): number {
+    return circuit.wires.filter(
+      (w) => w.fromComponentId === compId || w.toComponentId === compId
+    ).length;
+  }
+
+  for (const acc of accessories) {
+    const typeName = acc.type.replace(/_/g, ' ');
+    const parentId = acc.properties.breakerParentId;
+
+    // Rule 1: no parent linked at all
+    if (!parentId) {
+      issues.push({
+        id: `breaker-acc-no-parent-${acc.id}`,
+        severity: 'warning',
+        message: `${typeName.replace(/\b\w/g, (c) => c.toUpperCase())} "${acc.label}" is not linked to any breaker. Set 'Parent Breaker' in its Properties panel.`,
+        componentIds: [acc.id],
+      });
+      continue;
+    }
+
+    const parent = componentById.get(parentId);
+
+    // Rule 2: parent deleted or not a breaker
+    if (!parent) {
+      issues.push({
+        id: `breaker-acc-missing-parent-${acc.id}`,
+        severity: 'error',
+        message: `${typeName.replace(/\b\w/g, (c) => c.toUpperCase())} "${acc.label}" references a parent breaker that no longer exists on this drawing.`,
+        componentIds: [acc.id],
+      });
+      continue;
+    }
+    if (!BREAKER_PARENT_TYPES.has(parent.type)) {
+      issues.push({
+        id: `breaker-acc-wrong-parent-${acc.id}`,
+        severity: 'error',
+        message: `${typeName.replace(/\b\w/g, (c) => c.toUpperCase())} "${acc.label}" is linked to "${parent.label}" which is not an MCCB or ACB. Re-select a valid breaker.`,
+        componentIds: [acc.id, parent.id],
+      });
+      continue;
+    }
+
+    // Rule 3: accessory has no wires at all (not connected to control circuit)
+    const wires = wireCountForComp(acc.id);
+    if (wires === 0) {
+      issues.push({
+        id: `breaker-acc-unwired-${acc.id}`,
+        severity: 'info',
+        message: `${typeName.replace(/\b\w/g, (c) => c.toUpperCase())} "${acc.label}" has no wires — connect it to a control supply to activate it.`,
+        componentIds: [acc.id],
+      });
+    }
+  }
+
+  // Rule 4: UVR not wired → parent breaker currently 'on' → will drop on simulate
+  const uvrAccessories = accessories.filter((a) => a.type === 'uvr_release');
+  for (const uvr of uvrAccessories) {
+    const parentId = uvr.properties.breakerParentId;
+    if (!parentId) continue;
+    const parent = componentById.get(parentId);
+    if (!parent || !BREAKER_PARENT_TYPES.has(parent.type)) continue;
+    const uvrWires = wireCountForComp(uvr.id);
+    if (uvrWires === 0 && parent.state === 'on') {
+      issues.push({
+        id: `uvr-no-supply-${uvr.id}`,
+        severity: 'warning',
+        message: `UVR release "${uvr.label}" has no control voltage — breaker "${parent.label}" will drop open when simulation runs.`,
+        componentIds: [uvr.id, parent.id],
+      });
+    }
+  }
+
+  // Rule 5: closing coil energizable but UVR on same breaker has no supply
+  const closingCoils = accessories.filter((a) => a.type === 'closing_coil');
+  for (const cc of closingCoils) {
+    const parentId = cc.properties.breakerParentId;
+    if (!parentId) continue;
+    const parent = componentById.get(parentId);
+    if (!parent || !BREAKER_PARENT_TYPES.has(parent.type)) continue;
+    // Find any UVR linked to the same parent with no wires
+    const uvrDeenergized = uvrAccessories.find(
+      (u) => u.properties.breakerParentId === parentId && wireCountForComp(u.id) === 0
+    );
+    if (uvrDeenergized && wireCountForComp(cc.id) > 0) {
+      issues.push({
+        id: `cc-vs-uvr-${cc.id}`,
+        severity: 'warning',
+        message: `Closing coil "${cc.label}" is wired but UVR release "${uvrDeenergized.label}" on the same breaker "${parent.label}" has no hold voltage — the breaker cannot stay closed.`,
+        componentIds: [cc.id, uvrDeenergized.id, parent.id],
+      });
+    }
+  }
+
+  return issues;
+}
+
+export function validateMeteringConnections(
+  circuit: Circuit
+): CircuitValidationIssue[] {
+  const issues: CircuitValidationIssue[] = [];
+  const graph = engine.getTerminalGraphForValidation(circuit);
+
+  const meters = circuit.components.filter(
+    (c) =>
+      c.type === 'energy_meter' ||
+      c.type === 'digital_multifunction_meter' ||
+      c.type === 'power_quality_analyzer'
+  );
+
+  const ctComponents = circuit.components.filter((c) => c.type === 'current_transformer');
+  const vtComponents = circuit.components.filter((c) => c.type === 'voltage_transformer');
+
+  // Wires connected to this component
+  function wireCountForComp(compId: string): number {
+    return circuit.wires.filter(
+      (w) => w.fromComponentId === compId || w.toComponentId === compId
+    ).length;
+  }
+
+  // 1. Check unwired CTs and VTs
+  for (const ct of ctComponents) {
+    if (wireCountForComp(ct.id) === 0) {
+      issues.push({
+        id: `ct-unwired-${ct.id}`,
+        severity: 'info',
+        message: `Current transformer "${ct.label}" is unwired — connect primary to line and secondary to meter.`,
+        componentIds: [ct.id],
+      });
+    } else {
+      // Check if secondary is unwired
+      const s1 = findTerminalByLabel(ct, 'SEC_S1');
+      const s2 = findTerminalByLabel(ct, 'SEC_S2');
+      const s1Wired = circuit.wires.some(
+        (w) =>
+          (w.fromComponentId === ct.id && w.fromPointId === s1?.split(':')[1]) ||
+          (w.toComponentId === ct.id && w.toPointId === s1?.split(':')[1])
+      );
+      const s2Wired = circuit.wires.some(
+        (w) =>
+          (w.fromComponentId === ct.id && w.fromPointId === s2?.split(':')[1]) ||
+          (w.toComponentId === ct.id && w.toPointId === s2?.split(':')[1])
+      );
+      if (!s1Wired || !s2Wired) {
+        issues.push({
+          id: `ct-sec-unwired-${ct.id}`,
+          severity: 'warning',
+          message: `Current transformer "${ct.label}" secondary terminals S1/S2 are not fully wired. Open CT secondaries can generate hazardous voltages.`,
+          componentIds: [ct.id],
+        });
+      }
+    }
+  }
+
+  for (const vt of vtComponents) {
+    if (wireCountForComp(vt.id) === 0) {
+      issues.push({
+        id: `vt-unwired-${vt.id}`,
+        severity: 'info',
+        message: `Voltage transformer "${vt.label}" is unwired.`,
+        componentIds: [vt.id],
+      });
+    }
+  }
+
+  for (const meter of meters) {
+    const mode = meter.properties.meterConnectionMode ?? 'direct';
+    const label = meter.label?.trim() || meter.type;
+
+    const ctL1 = findConnectedCtForPhase(meter.id, '1', '2', circuit, graph);
+    const ctL2 = findConnectedCtForPhase(meter.id, '3', '4', circuit, graph);
+    const ctL3 = findConnectedCtForPhase(meter.id, '5', '6', circuit, graph);
+    const connectedCts = [ctL1, ctL2, ctL3].filter(
+      (c): c is CircuitComponent => c !== null
+    );
+
+    const hasAnyCt = connectedCts.length > 0;
+
+    // Rule 1: configured for CT but wired directly (no CT)
+    if (mode === 'ct' && !hasAnyCt) {
+      issues.push({
+        id: `meter-ct-mode-direct-wired-${meter.id}`,
+        severity: 'warning',
+        message: `Meter "${label}" is configured for CT connection, but is wired directly without any Current Transformers.`,
+        componentIds: [meter.id],
+      });
+    }
+
+    // Rule 2: configured for direct but wired to a CT secondary
+    if (mode === 'direct' && hasAnyCt) {
+      const ctLabels = connectedCts.map((c) => c.label).join(', ');
+      issues.push({
+        id: `meter-direct-mode-ct-wired-${meter.id}`,
+        severity: 'warning',
+        message: `Meter "${label}" is configured for direct connection, but is wired via Current Transformer(s) (${ctLabels}). Toggle properties to CT-connected mode.`,
+        componentIds: [meter.id, ...connectedCts.map((c) => c.id)],
+      });
+    }
+
+    // Rule 3: CT ratio mismatch
+    if (mode === 'ct' && hasAnyCt) {
+      const meterCtPrimary = meter.properties.meterCtPrimary ?? 100;
+      for (const ct of connectedCts) {
+        const ctPrimary = ct.properties.meterCtPrimary ?? 100;
+        if (meterCtPrimary !== ctPrimary) {
+          issues.push({
+            id: `meter-ct-mismatch-${meter.id}-${ct.id}`,
+            severity: 'warning',
+            message: `CT ratio mismatch: Meter "${label}" is configured for CT primary of ${meterCtPrimary} A, but connected CT "${ct.label}" is rated ${ctPrimary} A. Displayed current will be incorrect.`,
+            componentIds: [meter.id, ct.id],
+          });
+        }
+      }
+    }
+
+    // Rule 4: Direct connection overcurrent
+    if (mode === 'direct') {
+      const clone = structuredClone(circuit);
+      const sim = engine.simulate(clone);
+      const node = sim.nodes[meter.id];
+      if (node && node.energized && node.currentA > 10) {
+        issues.push({
+          id: `meter-direct-high-current-${meter.id}`,
+          severity: 'warning',
+          message: `Direct connection warning: Meter "${label}" is directly connected and measuring ${node.currentA.toFixed(1)} A, which exceeds the direct-connection recommended limit (10 A). Use a Current Transformer (CT).`,
+          componentIds: [meter.id],
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
+function findConnectedCtForPhase(
+  meterId: string,
+  termIn: string,
+  termOut: string,
+  circuit: Circuit,
+  terminalGraph: Map<string, Set<string>>
+): CircuitComponent | null {
+  const meter = circuit.components.find((c) => c.id === meterId);
+  if (!meter) return null;
+  const inKey = findTerminalByLabel(meter, termIn);
+  const outKey = findTerminalByLabel(meter, termOut);
+  if (!inKey && !outKey) return null;
+
+  const starts = [inKey, outKey].filter((k): k is string => k !== null);
+  const reach = bfsFrom(terminalGraph, starts);
+
+  for (const c of circuit.components) {
+    if (c.type !== 'current_transformer') continue;
+    const s1 = findTerminalByLabel(c, 'SEC_S1');
+    const s2 = findTerminalByLabel(c, 'SEC_S2');
+    if ((s1 && reach.has(s1)) || (s2 && reach.has(s2))) {
+      return c;
+    }
+  }
+  return null;
+}
+
+
+export function validateInterlockingSafety(
+  circuit: Circuit
+): CircuitValidationIssue[] {
+  const issues: CircuitValidationIssue[] = [];
+
+  const pickup = engine.getContactorPickupForValidation(circuit);
+
+  const isContactorType = (type: string) =>
+    type === 'contactor' ||
+    type === 'three_phase_contactor' ||
+    type === 'four_phase_contactor';
+
+  const mechanicalInterlocks = circuit.components.filter(
+    (c) => c.type === 'mechanical_interlock'
+  );
+
+  for (const mi of mechanicalInterlocks) {
+    const id1 = mi.properties.interlockContactorId1;
+    const id2 = mi.properties.interlockContactorId2;
+    if (id1 && id2) {
+      const c1 = circuit.components.find((x) => x.id === id1);
+      const c2 = circuit.components.find((x) => x.id === id2);
+      if (c1 && c2 && pickup.has(id1) && pickup.has(id2)) {
+        issues.push({
+          id: `mech-interlock-collision-${mi.id}`,
+          severity: 'error',
+          message: `Physical collision / short circuit fault: Contactor "${c1.label}" and "${c2.label}" are closed simultaneously under mechanical interlock "${mi.label}".`,
+          componentIds: [mi.id, id1, id2],
+        });
+      }
+    }
+  }
+
+  const contactors = circuit.components.filter((c) => isContactorType(c.type));
+
+  for (let i = 0; i < contactors.length; i++) {
+    for (let j = i + 1; j < contactors.length; j++) {
+      const c1 = contactors[i];
+      const c2 = contactors[j];
+
+      const l1 = c1.label.toUpperCase();
+      const l2 = c2.label.toUpperCase();
+
+      let isPair = false;
+      let pairType = '';
+
+      const isFwd1 = l1.includes('FWD') || l1.includes('FORWARD');
+      const isRev1 = l1.includes('REV') || l1.includes('REVERSE');
+      const isFwd2 = l2.includes('FWD') || l2.includes('FORWARD');
+      const isRev2 = l2.includes('REV') || l2.includes('REVERSE');
+
+      if ((isFwd1 && isRev2) || (isRev1 && isFwd2)) {
+        isPair = true;
+        pairType = 'Forward-Reverse';
+      }
+
+      const isStar1 = l1.includes('STAR') || l1.endsWith('-Y') || l1.endsWith(' Y');
+      const isDelta1 = l1.includes('DELTA') || l1.endsWith('-D') || l1.endsWith(' D');
+      const isStar2 = l2.includes('STAR') || l2.endsWith('-Y') || l2.endsWith(' Y');
+      const isDelta2 = l2.includes('DELTA') || l2.endsWith('-D') || l2.endsWith(' D');
+
+      if ((isStar1 && isDelta2) || (isDelta1 && isStar2)) {
+        isPair = true;
+        pairType = 'Star-Delta';
+      }
+
+      if (isPair) {
+        const hasLinkedInterlock = mechanicalInterlocks.some(
+          (mi) =>
+            (mi.properties.interlockContactorId1 === c1.id &&
+              mi.properties.interlockContactorId2 === c2.id) ||
+            (mi.properties.interlockContactorId1 === c2.id &&
+              mi.properties.interlockContactorId2 === c1.id)
+        );
+
+        if (pickup.has(c1.id) && pickup.has(c2.id)) {
+          issues.push({
+            id: `contactor-pair-collision-${c1.id}-${c2.id}`,
+            severity: 'error',
+            message: `Physical collision / short circuit fault: Contactor "${c1.label}" and "${c2.label}" (${pairType} pair) are energized simultaneously!`,
+            componentIds: [c1.id, c2.id],
+          });
+        }
+
+        if (!hasLinkedInterlock) {
+          issues.push({
+            id: `contactor-pair-missing-interlock-${c1.id}-${c2.id}`,
+            severity: 'warning',
+            message: `Contactor pair "${c1.label}" and "${c2.label}" (${pairType}) requires a mechanical interlock to prevent simultaneous closing.`,
+            componentIds: [c1.id, c2.id],
+          });
+        }
+      }
+    }
+  }
+
+  const doorInterlocks = circuit.components.filter(
+    (c) => c.type === 'door_interlock'
+  );
+  const switchBreakerTypes = [
+    'switch',
+    'mcb',
+    'three_phase_mcb',
+    'four_phase_mcb',
+    'mccb',
+    'motorized_mccb',
+    'four_pole_motorized_mccb',
+    'air_circuit_breaker',
+  ];
+  const mainSwitches = circuit.components.filter(
+    (c) => switchBreakerTypes.includes(c.type) && c.state === 'on'
+  );
+
+  for (const di of doorInterlocks) {
+    if (di.state === 'off' && mainSwitches.length > 0) {
+      for (const sw of mainSwitches) {
+        issues.push({
+          id: `door-interlock-warning-${di.id}-${sw.id}`,
+          severity: 'warning',
+          message: `Safety Interlock: Panel door "${di.label}" is open but switch/breaker "${sw.label}" is closed! Restrict closing when panel door is open.`,
+          componentIds: [di.id, sw.id],
+        });
+      }
+    }
+  }
+
+  const keyInterlocks = circuit.components.filter(
+    (c) => c.type === 'key_interlock'
+  );
+  for (const ki of keyInterlocks) {
+    const targetId = ki.properties.keyInterlockSwitchId;
+    if (ki.state === 'off' && targetId) {
+      const sw = circuit.components.find((c) => c.id === targetId);
+      if (sw && sw.state === 'on') {
+        issues.push({
+          id: `key-interlock-warning-${ki.id}-${sw.id}`,
+          severity: 'warning',
+          message: `Key Interlock: Key is removed/open on "${ki.label}" but switch/breaker "${sw.label}" is closed! Key interlock restricts switch closing.`,
+          componentIds: [ki.id, sw.id],
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
 /**
  * Design-time checks shown before / alongside simulation. Uses a clone of the
  * circuit so contactor pickup resolution does not mutate the store.
@@ -478,6 +925,18 @@ export function runCircuitDesignValidation(
     graph,
     liveSeeds
   ).issues) {
+    push(iss);
+  }
+
+  for (const iss of validateInterlockingSafety(circuit)) {
+    push(iss);
+  }
+
+  for (const iss of validateBreakerAccessories(circuit)) {
+    push(iss);
+  }
+
+  for (const iss of validateMeteringConnections(circuit)) {
     push(iss);
   }
 

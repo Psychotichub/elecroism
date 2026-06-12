@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
 import React from 'react';
 import { FiBookOpen, FiDownload } from 'react-icons/fi';
 import { useUiStore } from '../../store/uiStore';

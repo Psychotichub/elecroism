@@ -402,7 +402,13 @@ export function validateAtsInstallation(
 
   if (config.interlockRequired) {
     const hasInterlock = circuit.components.some(
-      (c) => c.type === 'mechanical_interlock'
+      (c) =>
+        c.type === 'mechanical_interlock' &&
+        (((c.properties.interlockContactorId1 === config.utilityContactorId &&
+          c.properties.interlockContactorId2 === config.genContactorId) ||
+          (c.properties.interlockContactorId1 === config.genContactorId &&
+            c.properties.interlockContactorId2 === config.utilityContactorId)) ||
+          (!c.properties.interlockContactorId1 && !c.properties.interlockContactorId2))
     );
     if (!hasInterlock) {
       issues.push({

@@ -78,6 +78,8 @@ import {
 import { TerminalGraphCache } from './terminalGraphCache';
 import type { SimulateOverrides } from './simulateOverrides';
 import { mergeAtsSimulateOverrides } from './selectorSwitchRouting';
+import { applyBreakerAccessoryActions } from './breakerAccessoryActions';
+import { applyMeterScaling } from './meterScaling';
 
 export type { SimulateOverrides } from './simulateOverrides';
 
@@ -287,6 +289,14 @@ export class CircuitEngine {
       );
     }
 
+    // Breaker accessory actions (shunt trip / closing coil / UVR / motor operator)
+    const breakerAccResult = applyBreakerAccessoryActions(circuit, potentials, wallMs);
+    faults.push(...breakerAccResult.faults);
+    if (breakerAccResult.anyTripped) {
+      const next = this.simulate(circuit, depth + 1, wallMs, overrides);
+      return { ...next, faults: [...faults, ...next.faults] };
+    }
+
     // Fault detection
     const lnFaultAnchors = getLiveSideAnchorsOfLineNeutralCrossWires(circuit, potentials);
     const phaseFaultAnchors = getThreePhaseCrossPhaseAnchors(potentials);
@@ -427,6 +437,7 @@ export class CircuitEngine {
       return { ...next, faults: [...faults, ...next.faults] };
     }
 
+    applyMeterScaling(circuit, nodes, terminalGraph);
     const powerQuality = applyPowerQualityHarmonics(circuit, nodes);
     faults.push(...validateEthernetWires(circuit, wallMs));
     updateMultimeterCurrentReadings(circuit, nodes);
@@ -478,6 +489,16 @@ export class CircuitEngine {
       this.terminalGraphCache
     );
     return this.terminalGraphCache.build(circuit, null, pickup);
+  }
+
+  public getContactorPickupForValidation(circuit: Circuit): Set<string> {
+    return computeContactorPickupFixpoint(
+      circuit,
+      Date.now(),
+      propagatePotentials,
+      this.timerCoilEnergizedSinceMs,
+      this.terminalGraphCache
+    );
   }
 
   /* ------------------------------------------------------------------ */

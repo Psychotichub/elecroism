@@ -436,6 +436,14 @@ export interface ComponentProperties {
   meterCommAddress?: number;
   /** Whether the energy-meter symbol shows a kWh accumulator on the face. */
   meterShowKwh?: boolean;
+  /** Connection mode for metering devices: direct or via CT. */
+  meterConnectionMode?: 'direct' | 'ct';
+  /** Whether external VT (voltage transformer) scaling is enabled on the meter. */
+  meterVtEnabled?: boolean;
+  /** VT primary voltage rating (V) on the meter, e.g. 400. */
+  meterVtPrimary?: number;
+  /** VT secondary voltage rating (V) on the meter, e.g. 110. */
+  meterVtSecondary?: number;
   multimeterMode?: 'voltage' | 'current' | 'continuity';
   multimeterSignal?: 'auto' | 'ac' | 'dc';
   multimeterHighVoltage?: boolean;
@@ -479,6 +487,19 @@ export interface ComponentProperties {
   labelFontSize?: number;
   /** Off-page / cross-sheet navigation target (e.g. `=Sheet2!Q1`). */
   crossSheetRef?: string;
+  interlockContactorId1?: string;
+  interlockContactorId2?: string;
+  keyInterlockSwitchId?: string;
+  /**
+   * Breaker accessories (`shunt_trip_coil`, `closing_coil`, `uvr_release`,
+   * `motor_operator_kit`): the MCCB/ACB that this accessory physically operates.
+   */
+  breakerParentId?: string;
+  /**
+   * `motor_operator_kit` direction: 'close' closes the parent breaker when
+   * energized; 'open' opens it. Defaults to 'close'.
+   */
+  motorOperatorCommand?: 'close' | 'open';
 }
 
 /** Merged into `ComponentProperties` (declaration merge) for AC→DC converter faceplate fields. */
@@ -752,7 +773,7 @@ export interface SimulationResult {
 
 export interface FaultEvent {
   id: string;
-  type: 'overload' | 'short_circuit' | 'earth_fault' | 'arc_fault';
+  type: 'overload' | 'short_circuit' | 'earth_fault' | 'arc_fault' | 'trip';
   affectedComponentId: string;
   message: string;
   severity: 'warning' | 'critical';

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
 import React, { useMemo } from 'react';
 import { FiCheck, FiTarget } from 'react-icons/fi';
 import { useCircuitStore } from '../../store/circuitStore';

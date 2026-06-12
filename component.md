@@ -129,23 +129,27 @@ Programmable controllers and time-delay relays.
 - **Working Principle**: Timers implement ON-delay contact closure after coil energization (A1/A2); NC/NO swap when delay elapses. Smart relays read IN1/IN2 from terminal potentials and close T1↔T2 when A1/A2 is powered and the configured program (e.g. `OUT1 = IN1 AND NOT IN2`) evaluates true.
 - **Implemented**: Property-panel logic editor with presets; fixpoint graph includes smart-relay outputs; timer delay uses `simStepMs` for stepped simulation.
 
-### ⚠️ C6. Aux Contact Block (`aux_contact_block`)
+### ✅ C6. Aux Contact Block (`aux_contact_block`)
 Add-on auxiliary contacts mounted on contactors/relays.
 - **Working Principle**: Follows the state of its parent component.
-- **What to Improve**:
-  - Improve the link editor UI to make linking aux blocks to contactor IDs intuitive.
+- **Improved**: The link editor UI is updated with a dropdown showing both target designator/label and component type, and an interactive "Pick..." button for canvas-based target association. Valid target contactors are highlighted on the canvas with green dashed borders when picking mode is active.
 
-### ⚠️ C7. Interlocking Devices (`mechanical_interlock` / `door_interlock` / `key_interlock`)
+### ✅ C7. Interlocking Devices (`mechanical_interlock` / `door_interlock` / `key_interlock`)
 Safety interlocking mechanisms.
 - **Working Principle**: Prevents concurrent closing of two contactors (mechanical interlock) or restricts switch closing (door/key interlocks).
-- **What to Improve**:
-  - Hardcode specific mechanical interlocks between contactors (e.g., Star-Delta or Forward-Reverse contactor pairs) so that energizing both simultaneously causes a short circuit or physical collision fault in validation.
+- **Improved**:
+  - Mechanical interlocks can be configured using a property editor with selection dropdowns and interactive canvas picking. If two contactors linked by a mechanical interlock are energized simultaneously, a design-time validation collision error is raised.
+  - Forward-Reverse and Star-Delta contactor pairs are auto-detected by validation rules. A warning is raised if they lack a mechanical interlock, or if they are concurrently closed/energized.
+  - Door interlocks simulate the door state (Open/Closed). If the door is Open, closing the associated switch/breaker raises an interlock safety warning.
+  - Key interlocks track key state. If the key is removed/Open, closing the restricted switch/breaker raises an interlock safety warning.
 
-### ⚠️ C8. Breaker Accessories (`motor_operator_kit`, `shunt_trip_coil`, `closing_coil`, `uvr_release`)
+### ✅ C8. Breaker Accessories (`motor_operator_kit`, `shunt_trip_coil`, `closing_coil`, `uvr_release`)
 Breaker control accessories.
-- **Working Principle**: Rendered as passive labels or auxiliary components.
-- **What to Improve**:
-  - Currently, these are mostly documentation assets. They should act as physical children to breakers. For example, triggering a pulse on a Shunt Trip Coil must physically trip its parent MCCB/ACB.
+- **Working Principle**: Actively participates in simulation when energized (or de-energized for UVR). When linked to a parent breaker (MCCB or ACB), they trigger physical state changes on the parent breaker (shunt trip trips to `'tripped'`, closing coil closes/resets to `'on'`, UVR release de-energization drops open to `'off'`, motor operator drives the handle to `'on'` or `'off'` based on the configured command).
+- **Improved**:
+  - Configurable using a dedicated property editor that features parent breaker selection with both dropdowns and an interactive canvas picker (highlighting valid parent breakers in dashed blue borders).
+  - Integrates priority order logic: UVR hold voltage is checked first, then closing coil attempts (blocked if UVR is de-energized), then shunt trip commands (immediate re-tripping), then motor operator commands.
+  - Implements detailed design-time validation rules for unlinked accessories, invalid/deleted parent targets, unwired accessories, de-energized UVRs on active breakers, and fighting conflicts between closing coils and de-energized UVRs.
 
 ---
 
@@ -186,17 +190,20 @@ Digital multimeter (DMM) with draggable probes.
 - **What to Improve**:
   - The probe positioning and target selection can be finicky on dense sheets. Auto-snap probes to terminal blocks and component connections.
 
-### ⚠️ E2. Energy Meters (`energy_meter` / `digital_multifunction_meter` / `power_quality_analyzer`)
+### ✅ E2. Energy Meters (`energy_meter` / `digital_multifunction_meter` / `power_quality_analyzer`)
 Panel multifunction meters.
 - **Working Principle**: Reads simulation node voltage, current, power factor, active power, and harmonics.
-- **What to Improve**:
-  - **CT & VT Scaling**: Real meters do not measure line currents directly; they connect to Current Transformers (e.g. 100/5A). Warn if the user connects line current directly to the meter without a CT, or if the CT primary ratio is misconfigured.
+- **Improved**:
+  - **CT & VT Scaling**: Traces connections to wired CTs and VTs on the graph, scaling terminal values to match secondary ratios in the node result.
+  - **Telemetry Display**: Side-by-side table compares raw terminal values and scaled display values in the property panel.
+  - **Validation Warnings**: Raises warnings for ratio mismatches, unwired CT secondaries (hazardous open circuit voltages), and direct connection overcurrent (>10 A).
 
-### ⚠️ E3. Transducers (`current_transformer` / `voltage_transformer`)
+### ✅ E3. Transducers (`current_transformer` / `voltage_transformer`)
 Instrument transformers.
-- **Working Principle**: Passive indicators in schema.
-- **What to Improve**:
-  - **Signal Scaling**: Scale secondary current/voltage according to ratio (e.g., inputting 80A to a 100/5 CT must output 4A on the secondary terminal) and flow that value to connected measuring instruments.
+- **Working Principle**: Connects to and scales currents and voltages according to configured turn ratios.
+- **Improved**:
+  - Fully integrated into the connectivity graph for scaling panel meters.
+  - Triggers warning if secondary terminals are left unwired.
 
 ---
 

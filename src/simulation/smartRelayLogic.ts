@@ -26,27 +26,29 @@ export type ParsedSmartRelayProgram = {
 const DEFAULT_PROGRAM = 'OUT1 = IN1';
 
 function tokenize(src: string): string[] {
-  const re =
-    /\s*(OUT\d+|IN\d+|\(|\)|AND|OR|NOT|=|,)\s*/gi;
   const tokens: string[] = [];
   let rest = src.trim();
   while (rest.length > 0) {
     const m = rest.match(/^(OUT\d+|IN\d+|\(|\)|AND|OR|NOT|=)/i);
-    if (!m) break;
-    tokens.push(m[1]!.toUpperCase());
-    rest = rest.slice(m[1]!.length).trim();
+    if (!m || !m[1]) break;
+    tokens.push(m[1].toUpperCase());
+    rest = rest.slice(m[1].length).trim();
   }
   return tokens;
 }
 
 class Parser {
   private i = 0;
-  constructor(private readonly tokens: string[]) {}
+  private readonly tokens: string[];
+  constructor(tokens: string[]) {
+    this.tokens = tokens;
+  }
 
   parseProgram(): ParsedSmartRelayProgram | null {
-    if (this.tokens.length === 0) return null;
-    if (this.tokens[0]!.startsWith('OUT')) {
-      const output = this.tokens[0]!;
+    const firstToken = this.tokens[0];
+    if (!firstToken) return null;
+    if (firstToken.startsWith('OUT')) {
+      const output = firstToken;
       if (this.tokens[1] !== '=') return null;
       this.i = 2;
       const expr = this.parseOr();

@@ -22,7 +22,7 @@ export const DeviceBody: React.FC<DeviceBodyProps> = ({
   energized,
   cornerRadius = SymbolMetrics.bodyRadius,
 }) => {
-  const { stroke, strokeProps } = useSymbolStrokes();
+  const { strokeProps } = useSymbolStrokes();
   return (
     <>
       <Rect

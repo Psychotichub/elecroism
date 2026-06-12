@@ -218,8 +218,11 @@ interface UiStore {
   learningPanelMinimized: boolean;
   setLearningPanelPlacement: (placement: LearningPanelPlacement) => void;
   toggleLearningPanelPinned: () => void;
-  setLearningPanelMinimized: (minimized: boolean) => void;
   toggleLearningPanelMinimized: () => void;
+  setLearningPanelMinimized: (minimized: boolean) => void;
+  pickingTargetCoilId: string | null;
+  pickingTargetProperty: string | null;
+  setPickingTargetCoilId: (id: string | null, property?: string | null) => void;
 }
 
 const initialLearningPanelPrefs = loadLearningPanelPrefs();
@@ -535,7 +538,14 @@ export const useUiStore = create<UiStore>((set) => ({
         learningPanelMinimized: false,
       };
     }),
-  setLearningPanelMinimized: (minimized) => set({ learningPanelMinimized: minimized }),
+  setLearningPanelMinimized: (minimized: boolean) => set({ learningPanelMinimized: minimized }),
   toggleLearningPanelMinimized: () =>
     set((s) => ({ learningPanelMinimized: !s.learningPanelMinimized })),
+  pickingTargetCoilId: null,
+  pickingTargetProperty: null,
+  setPickingTargetCoilId: (id: string | null, property?: string | null) =>
+    set({
+      pickingTargetCoilId: id,
+      pickingTargetProperty: id ? (property || 'auxContactFollowContactorId') : null,
+    }),
 }));

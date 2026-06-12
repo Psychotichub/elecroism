@@ -84,11 +84,6 @@ export const TypeSpecificProps: React.FC<TypeSpecificPropsOptions> = ({
     case 'optocoupler_module': return <CommEditors.renderSignalIsolationProps />;
     case 'ups_module':
     case 'dc_battery_backup':
-    case 'motor_operator_kit':
-    case 'shunt_trip_coil':
-    case 'closing_coil':
-    case 'uvr_release':
-    case 'key_interlock':
     case 'neutral_link':
     case 'earth_link':
     case 'current_transformer':
@@ -103,6 +98,11 @@ export const TypeSpecificProps: React.FC<TypeSpecificPropsOptions> = ({
     case 'ms_gi_sheet_enclosure':
     case 'ip_rated_enclosure':
     case 'power_quality_analyzer': return <MeteringEditors.renderPowerAuxProps />;
+    case 'motor_operator_kit':
+    case 'shunt_trip_coil':
+    case 'closing_coil':
+    case 'uvr_release': return <ControlEditors.RenderBreakerAccessoryProps />;
+
     case 'terminal_block': return <TerminalBlockEditors.RenderTerminalBlockProps />;
     case 'busbar':
     case 'busbar_system':
@@ -112,17 +112,18 @@ export const TypeSpecificProps: React.FC<TypeSpecificPropsOptions> = ({
     case 'three_phase_motor': return <ThreePhaseEditors.renderThreePhaseMotorProps />;
     case 'three_phase_contactor':
     case 'four_phase_contactor': return <ThreePhaseEditors.renderThreePhaseContactorProps />;
-    case 'timer': return <ControlEditors.renderTimerProps />;
-    case 'smart_relay': return <ControlEditors.renderSmartRelayProps />;
+    case 'timer': return <ControlEditors.RenderTimerProps />;
+    case 'smart_relay': return <ControlEditors.RenderSmartRelayProps />;
     case 'estop': return <SwitchEditors.renderEStopProps />;
-    case 'door_interlock':
-    case 'mechanical_interlock': return <SwitchEditors.renderDoorInterlockProps />;
+    case 'door_interlock': return <SwitchEditors.renderDoorInterlockProps />;
+    case 'mechanical_interlock': return <ControlEditors.RenderMechanicalInterlockProps />;
+    case 'key_interlock': return <ControlEditors.RenderKeyInterlockProps />;
     case 'selector_switch': return <SwitchEditors.renderSelectorSwitchProps />;
     case 'indicator_lamp': return <LoadEditors.renderIndicatorLampProps />;
     case 'phase_indicator_bank': return <LoadEditors.renderPhaseIndicatorBankProps />;
     case 'smps': return <SourceEditors.renderSmpsProps />;
-    case 'interposing_relay': return <ControlEditors.renderInterposingRelayProps />;
-    case 'aux_contact_block': return <ControlEditors.renderAuxContactBlockProps />;
+    case 'interposing_relay': return <ControlEditors.RenderInterposingRelayProps />;
+    case 'aux_contact_block': return <ControlEditors.RenderAuxContactBlockProps />;
     case 'energy_meter':
     case 'digital_multifunction_meter': return <MeteringEditors.renderEnergyMeterProps />;
     case 'multimeter': return <MeteringEditors.renderMultimeterProps />;

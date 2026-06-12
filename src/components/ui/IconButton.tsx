@@ -21,7 +21,6 @@ const IconButton = React.forwardRef<HTMLButtonElement, Props>(
       className,
       children,
       type = 'button',
-      title: _title,
       ...rest
     },
     ref

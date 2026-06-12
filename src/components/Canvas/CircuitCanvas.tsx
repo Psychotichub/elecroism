@@ -348,6 +348,8 @@ const CircuitCanvas: React.FC = () => {
   const setPendingReviewComment = useUiStore((s) => s.setPendingReviewComment);
   const learningMode = useUiStore((s) => s.learningMode);
   const validationFocusIssueId = useUiStore((s) => s.validationFocusIssueId);
+  const pickingTargetCoilId = useUiStore((s) => s.pickingTargetCoilId);
+  const pickingTargetProperty = useUiStore((s) => s.pickingTargetProperty);
   const addReviewCommentAtPoint = useCircuitStore((s) => s.addReviewCommentAtPoint);
 
   const validationIssues = useMemo(
@@ -801,6 +803,16 @@ const CircuitCanvas: React.FC = () => {
       ro?.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      if (pickingTargetCoilId) {
+        containerRef.current.style.cursor = 'crosshair';
+      } else {
+        containerRef.current.style.cursor = '';
+      }
+    }
+  }, [pickingTargetCoilId]);
 
   useEffect(() => {
     const restoreCursor = () => {
@@ -1322,6 +1334,83 @@ const CircuitCanvas: React.FC = () => {
 
   const handleComponentSelect = useCallback(
     (id: string) => {
+      const pickingTargetCoilId = useUiStore.getState().pickingTargetCoilId;
+      const pickingTargetProperty = useUiStore.getState().pickingTargetProperty;
+      if (pickingTargetCoilId) {
+        const comp = useCircuitStore
+          .getState()
+          .circuit.components.find((c) => c.id === id);
+        const followCoilTypes = [
+          'contactor',
+          'relay',
+          'smart_relay',
+          'timer',
+          'three_phase_contactor',
+          'four_phase_contactor',
+          'interposing_relay',
+        ];
+        const switchBreakerTypes = [
+          'switch',
+          'mcb',
+          'three_phase_mcb',
+          'four_phase_mcb',
+          'mccb',
+          'motorized_mccb',
+          'four_pole_motorized_mccb',
+          'air_circuit_breaker',
+        ];
+
+        const isBreakerParentProp = pickingTargetProperty === 'breakerParentId';
+        const breakerParentTypes = [
+          'mccb',
+          'motorized_mccb',
+          'four_pole_motorized_mccb',
+          'air_circuit_breaker',
+          'three_phase_mcb',
+          'motor_protection_circuit_breaker',
+        ];
+
+        const isCoilProp =
+          pickingTargetProperty === 'auxContactFollowContactorId' ||
+          pickingTargetProperty === 'interlockContactorId1' ||
+          pickingTargetProperty === 'interlockContactorId2';
+        const isSwitchProp = pickingTargetProperty === 'keyInterlockSwitchId';
+
+        const isValid = comp && (
+          (isCoilProp && followCoilTypes.includes(comp.type)) ||
+          (isSwitchProp && switchBreakerTypes.includes(comp.type)) ||
+          (isBreakerParentProp && breakerParentTypes.includes(comp.type))
+        );
+
+        if (isValid) {
+          const pickerOwner = useCircuitStore.getState().circuit.components.find((c) => c.id === pickingTargetCoilId);
+          if (pickerOwner) {
+            useCircuitStore.getState().updateComponent(pickingTargetCoilId, {
+              properties: {
+                ...pickerOwner.properties,
+                [pickingTargetProperty]: comp.id,
+              },
+            });
+            const propName = pickingTargetProperty === 'keyInterlockSwitchId'
+              ? 'switch/breaker'
+              : pickingTargetProperty === 'breakerParentId'
+                ? 'parent breaker'
+                : 'contactor/relay';
+            useCircuitStore.getState().pushHistory(`Linked target ${propName} to ${comp.label}`);
+            useUiStore.getState().setCanvasStatusMessage(`Linked target ${propName} to "${comp.label}"`);
+          }
+          useUiStore.getState().setPickingTargetCoilId(null);
+        } else {
+          const expectedType = isSwitchProp
+            ? 'switch or breaker'
+            : isBreakerParentProp
+              ? 'MCCB or ACB breaker'
+              : 'contactor, relay, or timer';
+          useUiStore.getState().setCanvasStatusMessage(`Invalid target: clicked component must be a ${expectedType}.`);
+        }
+        return;
+      }
+
       const comp = useCircuitStore
         .getState()
         .circuit.components.find((c) => c.id === id);
@@ -1909,6 +1998,13 @@ const CircuitCanvas: React.FC = () => {
         return;
       }
       if (e.key === 'Escape') {
+        const targetCoilId = useUiStore.getState().pickingTargetCoilId;
+        if (targetCoilId) {
+          useUiStore.getState().setPickingTargetCoilId(null);
+          useUiStore.getState().setCanvasStatusMessage('');
+          e.preventDefault();
+          return;
+        }
         const st = useCircuitStore.getState();
         if (st.wireCadEditMode) {
           st.clearWireCadEditMode();
@@ -2114,15 +2210,78 @@ const CircuitCanvas: React.FC = () => {
               />
 
               <Group listening>
-                {visibleComponents.map((comp) => (
-                  <DrawingLayerFrame
-                    key={comp.id}
-                    layerId={resolveComponentDrawingLayer(comp)}
-                    component={comp}
-                  >
-                    {renderComponent(comp)}
-                  </DrawingLayerFrame>
-                ))}
+                {visibleComponents.map((comp) => {
+                  const isTargetMode = !!pickingTargetCoilId;
+                  const followCoilTypes = [
+                    'contactor',
+                    'relay',
+                    'smart_relay',
+                    'timer',
+                    'three_phase_contactor',
+                    'four_phase_contactor',
+                    'interposing_relay',
+                  ];
+                  const switchBreakerTypes = [
+                    'switch',
+                    'mcb',
+                    'three_phase_mcb',
+                    'four_phase_mcb',
+                    'mccb',
+                    'motorized_mccb',
+                    'four_pole_motorized_mccb',
+                    'air_circuit_breaker',
+                  ];
+                  const isCoilProp =
+                    pickingTargetProperty === 'auxContactFollowContactorId' ||
+                    pickingTargetProperty === 'interlockContactorId1' ||
+                    pickingTargetProperty === 'interlockContactorId2';
+                  const isSwitchProp = pickingTargetProperty === 'keyInterlockSwitchId';
+
+                  const isValidTarget = isTargetMode && (
+                    (isCoilProp && followCoilTypes.includes(comp.type)) ||
+                    (isSwitchProp && switchBreakerTypes.includes(comp.type))
+                  );
+                  
+                  let highlightRect = null;
+                  if (isValidTarget) {
+                    const pts = comp.connectionPoints.map((cp) =>
+                      connectionPointWorld(comp, cp)
+                    );
+                    pts.push({ x: comp.x, y: comp.y });
+                    const xs = pts.map((p) => p.x);
+                    const ys = pts.map((p) => p.y);
+                    const pad = 10;
+                    const bx = Math.min(...xs) - pad;
+                    const by = Math.min(...ys) - pad;
+                    const bw = Math.max(...xs) - Math.min(...xs) + pad * 2;
+                    const bh = Math.max(...ys) - Math.min(...ys) + pad * 2;
+                    
+                    highlightRect = (
+                      <Rect
+                        x={bx}
+                        y={by}
+                        width={bw}
+                        height={bh}
+                        stroke="#10B981"
+                        strokeWidth={2}
+                        dash={[4, 4]}
+                        cornerRadius={4}
+                        listening={false}
+                      />
+                    );
+                  }
+
+                  return (
+                    <DrawingLayerFrame
+                      key={comp.id}
+                      layerId={resolveComponentDrawingLayer(comp)}
+                      component={comp}
+                    >
+                      {renderComponent(comp)}
+                      {highlightRect}
+                    </DrawingLayerFrame>
+                  );
+                })}
               </Group>
               <Group listening>
                 {visibleComponents.map((comp) => (

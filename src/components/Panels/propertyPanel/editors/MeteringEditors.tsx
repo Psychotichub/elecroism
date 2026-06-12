@@ -3,8 +3,22 @@ import { Label } from '../PropertyPanelLabel';
 import type { ComponentProperties } from '../../../../types';
 import PqaLiveReadings from './PqaLiveReadings';
 
-// eslint-disable-next-line react-hooks/rules-of-hooks
-export const renderEnergyMeterProps = () => { const { selectedComp, tc, updateProp } = usePPCtx(); return (
+export const renderEnergyMeterProps = () => {
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { selectedComp, tc, updateProp, nodeResult } = usePPCtx();
+  if (!selectedComp) return null;
+
+  const mode = selectedComp.properties.meterConnectionMode ?? 'direct';
+  const isCtMode = mode === 'ct';
+  const meterCtPrimary = selectedComp.properties.meterCtPrimary ?? 100;
+  const ctRatio = isCtMode ? meterCtPrimary / 5 : 1;
+
+  const vtEnabled = !!selectedComp.properties.meterVtEnabled;
+  const meterVtPrimary = selectedComp.properties.meterVtPrimary ?? 400;
+  const meterVtSecondary = selectedComp.properties.meterVtSecondary ?? 110;
+  const vtRatio = vtEnabled ? meterVtPrimary / meterVtSecondary : 1;
+
+  return (
     <>
       <Label text="Line voltage U_L-L">
         <div className="flex gap-1 flex-wrap">
@@ -14,7 +28,7 @@ export const renderEnergyMeterProps = () => { const { selectedComp, tc, updatePr
               type="button"
               onClick={() => updateProp({ lineVoltage: v })}
               className={`px-2 py-1 rounded es-typo-body ${
-                (selectedComp!.properties.lineVoltage ?? 400) === v
+                (selectedComp.properties.lineVoltage ?? 400) === v
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-600 text-gray-300'
               }`}
@@ -24,26 +38,93 @@ export const renderEnergyMeterProps = () => { const { selectedComp, tc, updatePr
           ))}
         </div>
       </Label>
-      <Label text="CT primary (A)">
-        <input
-          type="number"
-          value={selectedComp!.properties.meterCtPrimary ?? 100}
-          onChange={(e) =>
-            updateProp({
-              meterCtPrimary: Math.max(1, Number(e.target.value) || 1),
-            })
-          }
-          className="input-field"
-          min={1}
-        />
+
+      <Label text="Connection mode">
+        <div className="flex gap-1">
+          {([
+            { v: 'direct', l: 'Direct' },
+            { v: 'ct', l: 'CT-Connected' },
+          ] as const).map((m) => (
+            <button
+              key={m.v}
+              type="button"
+              onClick={() => updateProp({ meterConnectionMode: m.v })}
+              className={`flex-1 px-2 py-1 rounded es-typo-body ${
+                mode === m.v
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300'
+              }`}
+            >
+              {m.l}
+            </button>
+          ))}
+        </div>
       </Label>
+
+      {isCtMode && (
+        <Label text="CT primary rating (A)">
+          <input
+            type="number"
+            value={meterCtPrimary}
+            onChange={(e) =>
+              updateProp({
+                meterCtPrimary: Math.max(1, Number(e.target.value) || 1),
+              })
+            }
+            className="input-field"
+            min={1}
+          />
+        </Label>
+      )}
+
+      <Label text="Voltage transformer (VT) scaling">
+        <label className="flex items-center gap-2 es-typo-body">
+          <input
+            type="checkbox"
+            checked={vtEnabled}
+            onChange={(e) => updateProp({ meterVtEnabled: e.target.checked })}
+          />
+          Enable VT scaling
+        </label>
+      </Label>
+
+      {vtEnabled && (
+        <div className="grid grid-cols-2 gap-2">
+          <Label text="VT Primary (V)">
+            <input
+              type="number"
+              value={meterVtPrimary}
+              onChange={(e) =>
+                updateProp({
+                  meterVtPrimary: Math.max(1, Number(e.target.value) || 1),
+                })
+              }
+              className="input-field"
+              min={1}
+            />
+          </Label>
+          <Label text="VT Secondary (V)">
+            <input
+              type="number"
+              value={meterVtSecondary}
+              onChange={(e) =>
+                updateProp({
+                  meterVtSecondary: Math.max(1, Number(e.target.value) || 1),
+                })
+              }
+              className="input-field"
+              min={1}
+            />
+          </Label>
+        </div>
+      )}
+
       <Label text="Field bus protocol">
         <select
-          value={selectedComp!.properties.meterProtocol ?? 'modbus_rtu'}
+          value={selectedComp.properties.meterProtocol ?? 'modbus_rtu'}
           onChange={(e) =>
             updateProp({
-              meterProtocol: e.target
-                .value as ComponentProperties['meterProtocol'],
+              meterProtocol: e.target.value as ComponentProperties['meterProtocol'],
             })
           }
           className="input-field"
@@ -54,11 +135,12 @@ export const renderEnergyMeterProps = () => { const { selectedComp, tc, updatePr
           <option value="bacnet_ip">BACnet IP</option>
         </select>
       </Label>
-      {(selectedComp!.properties.meterProtocol ?? 'modbus_rtu') !== 'none' && (
+
+      {(selectedComp.properties.meterProtocol ?? 'modbus_rtu') !== 'none' && (
         <Label text="Address / Unit ID">
           <input
             type="number"
-            value={selectedComp!.properties.meterCommAddress ?? 1}
+            value={selectedComp.properties.meterCommAddress ?? 1}
             onChange={(e) =>
               updateProp({
                 meterCommAddress: Math.max(0, Number(e.target.value) || 0),
@@ -70,13 +152,45 @@ export const renderEnergyMeterProps = () => { const { selectedComp, tc, updatePr
           />
         </Label>
       )}
-      <p className={`es-typo-caption ${tc.textMuted} leading-snug`}>
-        Pass-through 3φ + N meter — wires straight through the bus. The
-        display shows live U / I / kW from the simulator. CTs are clamped on
-        each pole; their primary rating is documentation only.
+
+      {/* Live Readout Comparison */}
+      {nodeResult?.energized && (
+        <div className={`mt-3 p-2 rounded border es-typo-caption bg-es-chrome2/30 ${tc.border}`}>
+          <div className={`font-semibold mb-1.5 ${tc.textBright}`}>Active Meter Readings</div>
+          <div className="grid grid-cols-3 gap-1 text-right mt-1 border-b border-es-borderSubtle pb-1 font-semibold text-es-secondary">
+            <span className="text-left">Parameter</span>
+            <span>Terminal</span>
+            <span>Scaled</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1 text-right es-tabular-nums mt-1.5 leading-normal">
+            <span className="text-left text-es-secondary">Voltage</span>
+            <span>{(nodeResult.voltageV / vtRatio).toFixed(1)} V</span>
+            <span className="text-es-primary font-semibold">{nodeResult.voltageV.toFixed(1)} V</span>
+            
+            <span className="text-left text-es-secondary">Current</span>
+            <span>{(nodeResult.currentA / ctRatio).toFixed(2)} A</span>
+            <span className="text-es-primary font-semibold">{nodeResult.currentA.toFixed(2)} A</span>
+
+            <span className="text-left text-es-secondary">Active Power</span>
+            <span>{((nodeResult.powerW ?? 0) / (ctRatio * vtRatio)).toFixed(0)} W</span>
+            <span className="text-es-primary font-semibold">{nodeResult.powerW.toFixed(0)} W</span>
+          </div>
+          {(isCtMode || vtEnabled) && (
+            <div className={`mt-2 text-[10px] ${tc.textMuted} leading-normal border-t border-es-borderSubtle/50 pt-1.5`}>
+              {isCtMode && <div>• CT Ratio: {meterCtPrimary}/5A ({ctRatio}x)</div>}
+              {vtEnabled && <div>• VT Ratio: {meterVtPrimary}/{meterVtSecondary}V ({vtRatio.toFixed(2)}x)</div>}
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className={`es-typo-caption ${tc.textMuted} leading-snug mt-2`}>
+        Multifunction energy meter. Displays live currents, voltages, and active power.
+        Supports direct connection (up to 10 A) or external current transformers (CTs).
       </p>
     </>
-  )};
+  );
+};
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
 export const renderMultimeterProps = () => { const { selectedComp, tc, updateProp } = usePPCtx(); return (
@@ -176,27 +290,15 @@ export const renderMultimeterProps = () => { const { selectedComp, tc, updatePro
   )};
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
-export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp, toggleComponent } = usePPCtx(); return (
+export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp } = usePPCtx(); return (
     <>
       {(selectedComp!.type === 'ups_module' ||
-        selectedComp!.type === 'dc_battery_backup' ||
-        selectedComp!.type === 'motor_operator_kit' ||
-        selectedComp!.type === 'shunt_trip_coil' ||
-        selectedComp!.type === 'closing_coil' ||
-        selectedComp!.type === 'uvr_release') && (
+        selectedComp!.type === 'dc_battery_backup') && (
         <Label
           text={
             selectedComp!.type === 'ups_module'
               ? 'Output rating (A)'
-              : selectedComp!.type === 'dc_battery_backup'
-                ? 'Battery voltage (V)'
-                : selectedComp!.type === 'motor_operator_kit'
-                  ? 'Motor operator voltage (V)'
-                  : selectedComp!.type === 'shunt_trip_coil'
-                    ? 'Shunt trip coil voltage (V)'
-                    : selectedComp!.type === 'closing_coil'
-                      ? 'Closing coil voltage (V)'
-                      : 'UVR hold voltage (V)'
+              : 'Battery voltage (V)'
           }
         >
           <input
@@ -204,11 +306,7 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
             value={
               selectedComp!.type === 'ups_module'
                 ? selectedComp!.properties.ratingAmps ?? 10
-                : selectedComp!.type === 'dc_battery_backup'
-                  ? selectedComp!.properties.voltage ?? 24
-                  : selectedComp!.type === 'motor_operator_kit'
-                    ? selectedComp!.properties.voltage ?? 230
-                    : selectedComp!.properties.voltage ?? 24
+                : selectedComp!.properties.voltage ?? 24
             }
             onChange={(e) =>
               selectedComp!.type === 'ups_module'
@@ -335,21 +433,6 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
           </p>
         </>
       )}
-      {selectedComp!.type === 'key_interlock' && (
-        <Label text="Interlock state">
-          <button
-            type="button"
-            onClick={() => toggleComponent(selectedComp!.id)}
-            className={`w-full px-3 py-2 rounded es-typo-body font-semibold ${
-              selectedComp!.state === 'on'
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-600 text-white hover:bg-gray-700'
-            }`}
-          >
-            {selectedComp!.state === 'on' ? 'Closed (key engaged)' : 'Open (key removed)'}
-          </button>
-        </Label>
-      )}
       {selectedComp!.type === 'current_transformer' && (
         <Label text="CT primary /5A">
           <input
@@ -391,6 +474,86 @@ export const renderPowerAuxProps = () => { const { selectedComp, tc, updateProp,
       )}
       {selectedComp!.type === 'power_quality_analyzer' && (
         <>
+          <Label text="Connection mode">
+            <div className="flex gap-1">
+              {([
+                { v: 'direct', l: 'Direct' },
+                { v: 'ct', l: 'CT-Connected' },
+              ] as const).map((m) => (
+                <button
+                  key={m.v}
+                  type="button"
+                  onClick={() => updateProp({ meterConnectionMode: m.v })}
+                  className={`flex-1 px-2 py-1 rounded es-typo-body ${
+                    (selectedComp!.properties.meterConnectionMode ?? 'direct') === m.v
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-600 text-gray-300'
+                  }`}
+                >
+                  {m.l}
+                </button>
+              ))}
+            </div>
+          </Label>
+
+          {(selectedComp!.properties.meterConnectionMode ?? 'direct') === 'ct' && (
+            <Label text="CT primary rating (A)">
+              <input
+                type="number"
+                value={selectedComp!.properties.meterCtPrimary ?? 100}
+                onChange={(e) =>
+                  updateProp({
+                    meterCtPrimary: Math.max(1, Number(e.target.value) || 1),
+                  })
+                }
+                className="input-field"
+                min={1}
+              />
+            </Label>
+          )}
+
+          <Label text="Voltage transformer (VT) scaling">
+            <label className="flex items-center gap-2 es-typo-body">
+              <input
+                type="checkbox"
+                checked={!!selectedComp!.properties.meterVtEnabled}
+                onChange={(e) => updateProp({ meterVtEnabled: e.target.checked })}
+              />
+              Enable VT scaling
+            </label>
+          </Label>
+
+          {!!selectedComp!.properties.meterVtEnabled && (
+            <div className="grid grid-cols-2 gap-2">
+              <Label text="VT Primary (V)">
+                <input
+                  type="number"
+                  value={selectedComp!.properties.meterVtPrimary ?? 400}
+                  onChange={(e) =>
+                    updateProp({
+                      meterVtPrimary: Math.max(1, Number(e.target.value) || 1),
+                    })
+                  }
+                  className="input-field"
+                  min={1}
+                />
+              </Label>
+              <Label text="VT Secondary (V)">
+                <input
+                  type="number"
+                  value={selectedComp!.properties.meterVtSecondary ?? 110}
+                  onChange={(e) =>
+                    updateProp({
+                      meterVtSecondary: Math.max(1, Number(e.target.value) || 1),
+                    })
+                  }
+                  className="input-field"
+                  min={1}
+                />
+              </Label>
+            </div>
+          )}
+
           <Label text="Protocol tag">
             <select
               value={selectedComp!.properties.meterProtocol ?? 'modbus_tcp'}

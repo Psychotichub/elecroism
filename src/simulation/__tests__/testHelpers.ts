@@ -293,6 +293,8 @@ function defaultConnectionPoints(
         cp(20, -22, 'L3'), cp(0, 22, 'N'),
       ];
     case 'three_phase_mcb':
+    case 'mccb':
+    case 'motor_protection_circuit_breaker':
       return [
         cp(-20, -25, '1'), cp(-20, 25, '2'),
         cp(0, -25, '3'), cp(0, 25, '4'),
@@ -363,6 +365,45 @@ function defaultConnectionPoints(
         cp(30, -2, 'AC_OUT_N'),
         cp(-10, 24, 'BAT_POS'),
         cp(10, 24, 'BAT_NEG'),
+      ];
+    case 'current_transformer':
+      return [
+        cp(-30, -10, 'PRI_P1'),
+        cp(-30, 2, 'PRI_P2'),
+        cp(30, -10, 'SEC_S1'),
+        cp(30, 2, 'SEC_S2'),
+      ];
+    case 'voltage_transformer':
+      return [
+        cp(-30, -10, 'PRI_L'),
+        cp(-30, 2, 'PRI_N'),
+        cp(30, -10, 'SEC_L'),
+        cp(30, 2, 'SEC_N'),
+      ];
+    case 'energy_meter':
+    case 'digital_multifunction_meter':
+      return [
+        cp(-30, -25, '1'), cp(-30, 25, '2'),
+        cp(-10, -25, '3'), cp(-10, 25, '4'),
+        cp(10, -25, '5'), cp(10, 25, '6'),
+        cp(30, -25, '7'), cp(30, 25, '8'),
+      ];
+    case 'power_quality_analyzer':
+      return [
+        cp(-30, -12, '1'), cp(-30, -4, '3'), cp(-30, 4, '5'), cp(-30, 12, '7'),
+        cp(30, -12, '2'), cp(30, -4, '4'), cp(30, 4, '6'), cp(30, 12, '8'),
+        cp(-10, -24, 'AUX_24V'), cp(10, -24, 'AUX_0V'),
+        cp(0, 24, 'RS485_A'), cp(16, 24, 'RS485_B'),
+      ];
+    case 'shunt_trip_coil':
+    case 'closing_coil':
+    case 'uvr_release':
+      return [cp(-14, -22, 'A1'), cp(14, -22, 'A2')];
+    case 'motor_operator_kit':
+      return [
+        cp(-20, -22, 'CTRL_L'),
+        cp(0, -22, 'CTRL_N'),
+        cp(20, -22, 'MOTOR_OUT'),
       ];
     default:
       return [cp(0, -20, 'T1'), cp(0, 20, 'T2')];
